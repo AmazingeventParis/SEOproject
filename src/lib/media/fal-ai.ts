@@ -1,6 +1,25 @@
 import { fal } from "@fal-ai/client";
+import { getServerClient } from "@/lib/supabase/client";
 
-// The fal client reads FAL_KEY from process.env automatically
+// Configure fal.ai API key from env var or seo_config
+async function ensureFalKey(): Promise<void> {
+  if (process.env.FAL_KEY) return;
+
+  try {
+    const supabase = getServerClient();
+    const { data, error } = await supabase
+      .from("seo_config")
+      .select("value")
+      .eq("key", "fal_api_key")
+      .single();
+
+    if (!error && data?.value && typeof data.value === "string") {
+      process.env.FAL_KEY = data.value;
+    }
+  } catch {
+    // fall through
+  }
+}
 
 interface GenerateImageResult {
   url: string;
@@ -43,6 +62,8 @@ export async function generateImage(
   const fullPrompt = options?.style
     ? `${prompt}. Style: ${options.style}`
     : prompt;
+
+  await ensureFalKey();
 
   try {
     const result = await fal.subscribe("fal-ai/flux/schnell", {

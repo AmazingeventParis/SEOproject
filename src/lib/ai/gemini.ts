@@ -5,21 +5,44 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { AIMessage, AIResponse } from './types'
+import { getServerClient } from '@/lib/supabase/client'
 
-// ---- Singleton client ----
+// ---- Client factory ----
 
 let genai: GoogleGenerativeAI | null = null
+let cachedKey: string | null = null
 
-function getClient(): GoogleGenerativeAI {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    throw new Error(
-      'GEMINI_API_KEY non configure. ' +
-      'Ajoutez-le dans les variables d\'environnement ou dans Settings > Cles API.'
-    )
+async function resolveApiKey(): Promise<string> {
+  const envKey = process.env.GEMINI_API_KEY
+  if (envKey) return envKey
+
+  try {
+    const supabase = getServerClient()
+    const { data, error } = await supabase
+      .from('seo_config')
+      .select('value')
+      .eq('key', 'gemini_api_key')
+      .single()
+
+    if (!error && data?.value) {
+      const val = data.value as unknown
+      if (typeof val === 'string' && val.length > 0) return val
+    }
+  } catch {
+    // fall through
   }
-  if (!genai) {
+
+  throw new Error(
+    'Cle API Gemini non configuree. ' +
+    'Configurez-la dans Settings ou via la variable GEMINI_API_KEY.'
+  )
+}
+
+async function getClient(): Promise<GoogleGenerativeAI> {
+  const apiKey = await resolveApiKey()
+  if (!genai || cachedKey !== apiKey) {
     genai = new GoogleGenerativeAI(apiKey)
+    cachedKey = apiKey
   }
   return genai
 }
@@ -40,7 +63,7 @@ export async function callGemini(options: {
   temperature?: number
 }): Promise<AIResponse> {
   const start = Date.now()
-  const client = getClient()
+  const client = await getClient()
 
   const modelName = options.model || 'gemini-2.0-flash'
   const model = client.getGenerativeModel({
@@ -138,7 +161,7 @@ export async function generateWithGemini(
   }
 ): Promise<AIResponse> {
   const start = Date.now()
-  const client = getClient()
+  const client = await getClient()
 
   const modelName = options?.model || 'gemini-2.0-flash'
   const model = client.getGenerativeModel({

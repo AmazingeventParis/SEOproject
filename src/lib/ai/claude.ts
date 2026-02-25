@@ -5,21 +5,46 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import type { AIMessage, AIResponse } from './types'
+import { getServerClient } from '@/lib/supabase/client'
 
-// ---- Singleton client ----
+// ---- Client factory ----
 
 let client: Anthropic | null = null
+let cachedKey: string | null = null
 
-function getClient(): Anthropic {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    throw new Error(
-      'ANTHROPIC_API_KEY non configure. ' +
-      'Ajoutez-le dans les variables d\'environnement ou dans Settings > Cles API.'
-    )
+async function resolveApiKey(): Promise<string> {
+  // 1. Env var
+  const envKey = process.env.ANTHROPIC_API_KEY
+  if (envKey) return envKey
+
+  // 2. seo_config table (saved by Settings page as "anthropic_api_key")
+  try {
+    const supabase = getServerClient()
+    const { data, error } = await supabase
+      .from('seo_config')
+      .select('value')
+      .eq('key', 'anthropic_api_key')
+      .single()
+
+    if (!error && data?.value) {
+      const val = data.value as unknown
+      if (typeof val === 'string' && val.length > 0) return val
+    }
+  } catch {
+    // fall through
   }
-  if (!client) {
+
+  throw new Error(
+    'Cle API Anthropic non configuree. ' +
+    'Configurez-la dans Settings ou via la variable ANTHROPIC_API_KEY.'
+  )
+}
+
+async function getClient(): Promise<Anthropic> {
+  const apiKey = await resolveApiKey()
+  if (!client || cachedKey !== apiKey) {
     client = new Anthropic({ apiKey })
+    cachedKey = apiKey
   }
   return client
 }
@@ -40,7 +65,7 @@ export async function callClaude(options: {
   temperature?: number
 }): Promise<AIResponse> {
   const start = Date.now()
-  const anthropic = getClient()
+  const anthropic = await getClient()
 
   const response = await anthropic.messages.create({
     model: options.model || 'claude-sonnet-4-20250514',
@@ -88,11 +113,12 @@ export function streamClaude(options: {
   temperature?: number
 }): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder()
-  const anthropic = getClient()
+  let anthropic: Anthropic
 
   return new ReadableStream({
     async start(controller) {
       try {
+        anthropic = await getClient()
         const stream = anthropic.messages.stream({
           model: options.model || 'claude-sonnet-4-20250514',
           max_tokens: options.maxTokens || 4096,

@@ -50,26 +50,32 @@ async function getSerperApiKey(): Promise<string> {
   const envKey = process.env.SERPER_API_KEY
   if (envKey) return envKey
 
-  // 2. Fall back to seo_config table
+  // 2. Fall back to seo_config table (key saved by Settings page as "serper_api_key")
   try {
     const supabase = getServerClient()
     const { data, error } = await supabase
       .from('seo_config')
       .select('value')
-      .eq('key', 'serper')
+      .eq('key', 'serper_api_key')
       .single()
 
-    if (!error && data?.value && typeof data.value === 'object' && 'api_key' in data.value) {
-      const key = (data.value as { api_key: string }).api_key
-      if (key) return key
+    if (!error && data?.value) {
+      const val = data.value as unknown
+      // Settings page stores the value as a plain string
+      if (typeof val === 'string' && val.length > 0) return val
+      // Also support nested object format {"api_key": "..."}
+      if (typeof val === 'object' && 'api_key' in (val as Record<string, unknown>)) {
+        const key = (val as { api_key: string }).api_key
+        if (key) return key
+      }
     }
   } catch {
     // Supabase not available or table missing - fall through
   }
 
   throw new Error(
-    'Serper API key not found. Set the SERPER_API_KEY environment variable ' +
-    'or insert a row in seo_config with key="serper" and value={"api_key":"your-key"}.'
+    'Cle API Serper non configuree. ' +
+    'Configurez-la dans Settings ou via la variable SERPER_API_KEY.'
   )
 }
 

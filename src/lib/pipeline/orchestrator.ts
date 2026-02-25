@@ -158,7 +158,7 @@ async function executeAnalyze(
   } catch (error) {
     // SERP analysis is optional - continue if API key not set
     const msg = error instanceof Error ? error.message : String(error)
-    if (!msg.includes('non configure')) throw error
+    if (!msg.includes('non configur') && !msg.includes('not found')) throw error
   }
 
   // 2. Cannibalization check
