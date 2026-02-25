@@ -22,8 +22,8 @@ import { callOpenAI } from './openai'
  */
 const TASK_ROUTING: Record<AITask, ModelConfig> = {
   plan_article: {
-    provider: 'anthropic',
-    model: 'claude-sonnet-4-20250514',
+    provider: 'google',
+    model: 'gemini-3.1-pro-preview',
     maxTokens: 4096,
     temperature: 0.7,
   },
