@@ -11,6 +11,8 @@ const createSiteSchema = z.object({
   wp_app_password: z.string().min(1, "Le mot de passe applicatif est requis"),
   gsc_property: z.string().nullable().optional(),
   niche: z.string().nullable().optional(),
+  money_page_url: z.string().nullable().optional(),
+  money_page_description: z.string().nullable().optional(),
 });
 
 // GET /api/sites - List all sites

@@ -12,6 +12,7 @@ interface PlanArchitectParams {
     role: string
     tone_description: string | null
     bio: string | null
+    writing_style_examples: Record<string, unknown>[]
   }
   serpData?: {
     organic: { position: number; title: string; snippet: string; domain: string }[]
@@ -20,6 +21,7 @@ interface PlanArchitectParams {
   }
   nuggets: { id: string; content: string; tags: string[] }[]
   existingSiloArticles?: { title: string | null; keyword: string; slug: string | null }[]
+  moneyPage?: { url: string; description: string } | null
   competitorContent?: {
     avgWordCount: number
     commonHeadings: string[]
@@ -56,7 +58,11 @@ interface PlanArchitectPrompt {
  *       "content_html": "",
  *       "nugget_ids": [],
  *       "word_count": 300,
- *       "status": "pending"
+ *       "status": "pending",
+ *       "writing_directive": "...",
+ *       "format_hint": "prose" | "bullets" | "table" | "mixed",
+ *       "generate_image": true | false,
+ *       "image_prompt_hint": "..."
  *     }
  *   ]
  * }
@@ -64,87 +70,152 @@ interface PlanArchitectPrompt {
 export function buildPlanArchitectPrompt(
   params: PlanArchitectParams
 ): PlanArchitectPrompt {
-  const { keyword, searchIntent, persona, serpData, nuggets, existingSiloArticles, competitorContent, semanticAnalysis } = params
+  const { keyword, searchIntent, persona, serpData, nuggets, existingSiloArticles, moneyPage, competitorContent, semanticAnalysis } = params
 
   // ---- System prompt ----
-  const system = `Tu es un architecte de contenu SEO expert, specialise dans la creation de plans d'articles optimises pour le referencement naturel Google.
+  const system = `Tu es un architecte de contenu SEO expert, specialise dans la creation de plans d'articles optimises pour le referencement naturel Google. Tu produis des plans qui rankent ET qui sont utiles a lire.
 
 ## TON ROLE
-Tu generes des plans d'articles structures, complets et optimises SEO. Tu dois produire un plan qui permettra a un redacteur de creer un contenu de haute qualite qui se positionnera en premiere page Google.
+Tu generes des plans d'articles structures en PYRAMIDE INVERSEE, complets et optimises SEO. Le plan doit permettre a un redacteur de creer un contenu de haute qualite qui se positionnera en premiere page Google.
 
-## REGLES SEO FONDAMENTALES
+## STRUCTURE PYRAMIDE INVERSEE (OBLIGATOIRE)
 
-### Structure Hn (hierarchie des titres)
-- Le H1 (title) doit contenir le mot-cle principal de maniere naturelle
-- Utilise 3 a 6 sections H2 pour structurer l'article
-- Chaque H2 peut avoir 1 a 3 sous-sections H3
-- Les H2/H3 doivent integrer des variantes du mot-cle et des mots-cles secondaires
-- Ne saute JAMAIS un niveau de titre (pas de H3 sans H2 parent)
+### Principe fondamental
+L'article doit repondre a l'intention de recherche DES LE PREMIER H2. Le lecteur obtient la reponse immediatement, puis chaque section approfondit ou elargit le sujet.
 
-### Optimisation E-E-A-T (Experience, Expertise, Autorite, Fiabilite)
-- Integre des elements qui demontrent l'EXPERIENCE reelle du persona (anecdotes, cas concrets)
-- Montre l'EXPERTISE avec des donnees precises, des definitions claires, des analyses approfondies
-- Renforce l'AUTORITE en citant des sources, en faisant reference a des etudes
-- Assure la FIABILITE avec des informations a jour, des avertissements quand necessaire
+### Ordre des sections
+1. **Premier H2** : Repond DIRECTEMENT a l'intention de recherche (la reponse, le comparatif, la solution)
+2. **H2 suivants** : Approfondissent, detaillent, donnent des cas concrets
+3. **Avant-dernier H2** : Section optionnelle (erreurs a eviter, conseils avances, etc.)
+4. **Dernier bloc** : FAQ (si PAA disponibles)
 
-### Intention de recherche
-- Adapte la structure au type d'intention de recherche :
-  - "informational" / "traffic" : guide complet, tutoriel, explication detaillee
-  - "commercial" / "comparison" / "review" : comparatif, avantages/inconvenients, tableaux
-  - "transactional" / "lead_gen" : page orientee conversion, CTA, benefices
-  - "discover" : contenu exploratoire, tendances, nouveautes
+### INTERDIT en premier H2
+- "Qu'est-ce que..." / "Definition de..."
+- "Introduction a..."
+- "Contexte de..."
+- "Historique de..."
+Ces elements peuvent apparaitre en H3 sous un H2 pertinent, mais JAMAIS en ouverture d'article.
 
-### Contenu
-- Vise entre 1500 et 3000 mots au total (somme des word_count de chaque bloc)
-- Chaque bloc doit avoir un word_count realiste (150-500 mots par bloc)
-- Inclus TOUJOURS une section FAQ basee sur les questions "People Also Ask" si disponibles
-- La FAQ doit avoir entre 3 et 6 questions pertinentes
-- Prevois des blocs de type "list" pour les elements enumeratifs (avantages, etapes, etc.)
+## Hn SEMANTIQUES (TITRES OPTIMISES)
 
-### Nuggets (contenus authentiques du persona)
-- Si des nuggets sont fournis, assigne-les aux blocs les plus pertinents via nugget_ids
-- Les nuggets apportent authenticite et E-E-A-T - utilise-les strategiquement
-- Ne force pas l'utilisation de nuggets non pertinents
+### Regles H2
+- Chaque H2 doit etre une QUESTION ou une PROMESSE claire (pas de titres vagues)
+- Chaque H2 doit etre comprehensible DE FACON ISOLEE (pense featured snippet Google)
+- Integre des mots-cles secondaires naturellement dans les H2
+- 3 a 6 sections H2 par article
+- Exemples BONS : "Quel budget prevoir pour une renovation de salle de bain ?"
+- Exemples MAUVAIS : "Le budget", "Parlons argent", "Introduction"
 
-### Analyse concurrentielle (si disponible)
-- Couvre TOUS les H2 communs identifies chez les concurrents — ne laisse aucun sujet important de cote
-- Integre les termes du champ semantique TF-IDF naturellement dans le contenu
-- Comble les lacunes de contenu (content gaps) identifiees par l'analyse
-- Depasse la moyenne de mots des concurrents d'au moins 20%
-- Utilise les H2 recommandes comme base de ta structure, en les adaptant au persona
+### Regles H3
+- Chaque H3 = sous-aspect CONCRET du H2 parent
+- 1 a 3 H3 par H2 maximum
+- Les H3 doivent integrer des variantes du mot-cle
+- Ne saute JAMAIS un niveau (pas de H3 sans H2 parent)
+
+## DIRECTIVES D'ECRITURE PAR BLOC (OBLIGATOIRE)
+
+Chaque bloc DOIT avoir :
+- **writing_directive** : 1-2 phrases expliquant COMMENT maximiser la transmission d'info pour ce bloc specifique. Ex: "Presente sous forme de tableau comparatif 3 colonnes : critere, option A, option B. Ajoute une phrase d'intro."
+- **format_hint** : le format recommande parmi 'prose', 'bullets', 'table', 'mixed'
+
+### Regles de choix du format_hint
+- **'table'** : si la section compare >2 elements OU liste >4 criteres avec des donnees structurees
+- **'bullets'** : si la section enumere des etapes, avantages, inconvenients, ou une liste d'elements
+- **'mixed'** : si la section necessite du contexte narratif + un element visuel (tableau ou liste)
+- **'prose'** : pour les sections narratives, analytiques, ou explicatives
+
+## DECISION IMAGE PAR H2 (OBLIGATOIRE)
+
+Pour chaque bloc de type H2, tu DOIS decider si une illustration est pertinente :
+- **generate_image: true** : pour les sections qui beneficient d'un visuel (concepts abstraits, processus, produits, avant/apres)
+- **generate_image: false** : pour les FAQ, les tableaux de comparaison purs, les listes simples
+- Si true, fournis **image_prompt_hint** : description de la scene/concept a illustrer (en anglais, style photo editoriale)
+
+## OPTIMISATION E-E-A-T
+- Integre des elements montrant l'EXPERIENCE reelle du persona (anecdotes, cas concrets)
+- Montre l'EXPERTISE avec des donnees precises, des analyses approfondies
+- Renforce l'AUTORITE en citant des sources, des etudes
+- Assure la FIABILITE avec des informations a jour
+
+## INTENTION DE RECHERCHE
+Adapte la structure au type d'intention :
+- "informational" / "traffic" : guide complet, tutoriel, explication detaillee
+- "commercial" / "comparison" / "review" : comparatif, tableaux, avantages/inconvenients
+- "transactional" / "lead_gen" : page conversion, CTA, benefices
+- "discover" : contenu exploratoire, tendances, nouveautes
+
+## CONTENU
+- Vise entre 1500 et 3000 mots au total (somme des word_count)
+- Chaque bloc : 150-500 mots
+- TOUJOURS une section FAQ basee sur les "People Also Ask" (3-6 questions)
+- Blocs "list" pour les elements enumeratifs
+
+## NUGGETS (contenus authentiques du persona)
+- Assigne les nuggets pertinents via nugget_ids
+- Ne force pas les nuggets non pertinents
+
+## ANALYSE CONCURRENTIELLE (si disponible)
+- Couvre TOUS les H2 communs des concurrents
+- Integre les termes TF-IDF naturellement
+- Comble les lacunes de contenu (content gaps)
+- Depasse la moyenne de mots des concurrents de 20%+
 - Traite les questions incontournables dans le contenu ou la FAQ
 
-### Maillage interne (silo)
-- Si des articles existants du meme silo sont fournis, prevois des opportunites de liens internes
-- Mentionne dans les headings ou descriptions les sujets connexes qui pourraient etre lies
+## MAILLAGE INTERNE STRATEGIQUE
+
+Pour chaque bloc H2, definis "internal_link_targets" (tableau, peut etre vide []).
+
+Regles :
+- Chaque entree : { "target_slug", "target_title", "suggested_anchor_context", "is_money_page" }
+- "suggested_anchor_context" = indication sur COMMENT integrer le lien naturellement
+- Un meme target_slug ne peut apparaitre qu'1 fois dans tout l'article
+- Max 2-3 liens internes par H2 (pas de sur-optimisation)
+- Place les liens la ou c'est NATUREL par rapport au sujet de la section
+- L'ancre finale sera decidee par le redacteur — donne juste le contexte d'insertion
 
 ## FORMAT DE SORTIE
 Tu DOIS retourner UNIQUEMENT un objet JSON valide, sans texte avant ou apres, sans bloc de code markdown.
 
-Structure exacte attendue :
 {
   "title": "Titre H1 optimise SEO (50-65 caracteres ideal)",
   "meta_description": "Meta description engageante (140-160 caracteres)",
   "slug": "url-slug-optimise",
   "content_blocks": [
     {
-      "id": "genere un UUID v4 unique pour chaque bloc",
+      "id": "genere un UUID v4 unique",
       "type": "h2 | h3 | paragraph | list | faq",
-      "heading": "Titre de la section (pour h2, h3, faq) ou null pour paragraph/list",
+      "heading": "Titre de la section (pour h2, h3, faq) ou null",
       "content_html": "",
-      "nugget_ids": ["ids des nuggets a integrer dans ce bloc"],
+      "nugget_ids": ["ids des nuggets"],
       "word_count": 300,
-      "status": "pending"
+      "status": "pending",
+      "writing_directive": "Directive d'ecriture specifique pour ce bloc",
+      "format_hint": "prose | bullets | table | mixed",
+      "generate_image": true,
+      "image_prompt_hint": "Editorial photo showing...",
+      "internal_link_targets": [
+        {
+          "target_slug": "slug-de-larticle-cible",
+          "target_title": "Titre de l'article cible",
+          "suggested_anchor_context": "Comment integrer le lien naturellement dans cette section",
+          "is_money_page": false
+        }
+      ]
     }
   ]
 }
 
 IMPORTANT :
-- Le champ "content_html" doit TOUJOURS etre une chaine vide "" (le contenu sera genere ensuite)
-- Le champ "status" doit TOUJOURS etre "pending"
+- "content_html" doit TOUJOURS etre "" (le contenu sera genere ensuite)
+- "status" doit TOUJOURS etre "pending"
 - Genere de vrais UUID v4 pour chaque "id" (format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx)
 - Le slug doit etre en minuscules, sans accents, avec des tirets
-- La meta_description doit inciter au clic et contenir le mot-cle principal`
+- La meta_description doit inciter au clic et contenir le mot-cle principal
+- "writing_directive" est OBLIGATOIRE sur chaque bloc
+- "format_hint" est OBLIGATOIRE sur chaque bloc
+- "generate_image" est OBLIGATOIRE sur les blocs de type "h2" (false pour les autres types)
+- "image_prompt_hint" est requis uniquement si generate_image est true
+- "internal_link_targets" est OBLIGATOIRE sur les blocs de type "h2" (tableau vide [] si aucun lien pertinent)`
 
   // ---- User prompt ----
   let user = `## MISSION
@@ -165,6 +236,20 @@ ${searchIntent}
   }
   if (persona.bio) {
     user += `\n- Bio : ${persona.bio}`
+  }
+
+  // Add writing style examples if available
+  if (persona.writing_style_examples && persona.writing_style_examples.length > 0) {
+    user += `\n\n## STYLE D'ECRITURE DU PERSONA (exemples reels)
+Voici des extraits authentiques de ${persona.name}. Adapte la structure du plan au niveau d'expertise et au style de ce persona :`
+    for (const example of persona.writing_style_examples.slice(0, 3)) {
+      const text = (example as Record<string, unknown>).text || (example as Record<string, unknown>).content || JSON.stringify(example)
+      user += `\n\n> ${String(text).slice(0, 500)}`
+    }
+    user += `\n\nTiens compte de ce style pour :
+- Le niveau de technicite des H2/H3 (vocabulaire adapte au persona)
+- Le type de contenu privilegie (analytique, pratique, narratif, etc.)
+- La densite d'information par section (word_count adapte)`
   }
 
   // Add SERP data if available
@@ -214,6 +299,15 @@ Prevois des opportunites de maillage interne avec ces articles :`
     for (const article of existingSiloArticles) {
       user += `\n- "${article.title || article.keyword}" (/${article.slug || ''})`
     }
+  }
+
+  // Add money page if configured
+  if (moneyPage) {
+    user += `\n\n## PAGE PRIORITAIRE (MONEY PAGE)
+URL : ${moneyPage.url}
+Description : ${moneyPage.description}
+Tu DOIS placer un lien vers cette page dans 1 a 2 sections H2 pertinentes.
+Marque ces entrees avec "is_money_page": true dans internal_link_targets.`
   }
 
   // Add competitor content analysis if available
@@ -280,12 +374,15 @@ Prevois des opportunites de maillage interne avec ces articles :`
   }
 
   user += `\n\n## INSTRUCTIONS FINALES
-1. Analyse les resultats SERP pour comprendre ce qui fonctionne actuellement
-2. Cree un plan qui surpasse les contenus existants en profondeur et en valeur
-3. Integre les questions PAA dans une section FAQ dediee
-4. Assigne les nuggets pertinents aux blocs appropriss
-5. Assure-toi que le titre (H1) et la meta description sont optimises
-6. Vise un total de 1500-3000 mots repartis de maniere equilibree
+1. PYRAMIDE INVERSEE : le premier H2 repond DIRECTEMENT a l'intention de recherche
+2. Hn SEMANTIQUES : chaque H2 est une question ou promesse claire, comprehensible isolement
+3. WRITING DIRECTIVES : chaque bloc a une directive d'ecriture specifique et un format_hint
+4. IMAGES : decide pour chaque H2 si une image est pertinente (generate_image + image_prompt_hint)
+5. Analyse les SERP pour surpasser les contenus existants en profondeur et en valeur
+6. Integre les questions PAA dans une section FAQ dediee
+7. Assigne les nuggets pertinents aux blocs appropries
+8. Titre (H1) et meta description optimises
+9. Vise 1500-3000 mots repartis equilibrement
 
 Retourne UNIQUEMENT le JSON, rien d'autre.`
 

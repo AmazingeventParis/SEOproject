@@ -22,6 +22,7 @@ export interface PersonaFormData {
   tone_description: string;
   bio: string;
   avatar_reference_url: string;
+  writing_style_examples: string;
 }
 
 interface PersonaFormProps {
@@ -44,6 +45,15 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
   const [avatarUrl, setAvatarUrl] = useState(
     persona?.avatar_reference_url ?? ""
   );
+  const [writingExamples, setWritingExamples] = useState(() => {
+    if (persona?.writing_style_examples && persona.writing_style_examples.length > 0) {
+      return persona.writing_style_examples
+        .map((ex) => (ex as Record<string, unknown>).text || "")
+        .filter(Boolean)
+        .join("\n\n---\n\n");
+    }
+    return "";
+  });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -74,6 +84,16 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
       setToneDescription(persona.tone_description ?? "");
       setBio(persona.bio ?? "");
       setAvatarUrl(persona.avatar_reference_url ?? "");
+      if (persona.writing_style_examples && persona.writing_style_examples.length > 0) {
+        setWritingExamples(
+          persona.writing_style_examples
+            .map((ex) => (ex as Record<string, unknown>).text || "")
+            .filter(Boolean)
+            .join("\n\n---\n\n")
+        );
+      } else {
+        setWritingExamples("");
+      }
     }
   }, [persona]);
 
@@ -105,6 +125,7 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
       tone_description: toneDescription.trim(),
       bio: bio.trim(),
       avatar_reference_url: avatarUrl.trim(),
+      writing_style_examples: writingExamples.trim(),
     });
   }
 
@@ -192,6 +213,21 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
           onChange={(e) => setBio(e.target.value)}
           placeholder="Courte biographie pour renforcer l'expertise et l'autorite..."
           rows={3}
+        />
+      </div>
+
+      {/* Writing style examples */}
+      <div className="space-y-2">
+        <Label htmlFor="writing_style_examples">Exemples de style d&apos;ecriture</Label>
+        <p className="text-xs text-muted-foreground">
+          Collez des extraits de textes ecrits par ce persona. Separez chaque extrait par &quot;---&quot; sur une ligne seule. Ces exemples servent de reference stylistique pour l&apos;IA.
+        </p>
+        <Textarea
+          id="writing_style_examples"
+          value={writingExamples}
+          onChange={(e) => setWritingExamples(e.target.value)}
+          placeholder={"Premier extrait de texte du persona...\n\n---\n\nDeuxieme extrait..."}
+          rows={6}
         />
       </div>
 

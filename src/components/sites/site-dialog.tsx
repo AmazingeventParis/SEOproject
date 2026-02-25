@@ -27,6 +27,8 @@ export function SiteDialog({ open, onOpenChange, site, onSuccess }: SiteDialogPr
       ...data,
       gsc_property: data.gsc_property || null,
       niche: data.niche || null,
+      money_page_url: data.money_page_url || null,
+      money_page_description: data.money_page_description || null,
     };
 
     try {

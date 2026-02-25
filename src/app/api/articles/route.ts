@@ -25,6 +25,7 @@ const createArticleSchema = z.object({
     .default("traffic"),
   persona_id: z.string().uuid("persona_id doit etre un UUID valide").nullable().optional(),
   silo_id: z.string().uuid("silo_id doit etre un UUID valide").nullable().optional(),
+  link_to_money_page: z.boolean().optional().default(false),
 });
 
 // GET /api/articles - List articles with filters and joins
@@ -98,6 +99,7 @@ export async function POST(request: NextRequest) {
     search_intent: parsed.data.search_intent,
     persona_id: parsed.data.persona_id ?? null,
     silo_id: parsed.data.silo_id ?? null,
+    link_to_money_page: parsed.data.link_to_money_page,
     status: "draft" as ArticleStatus,
   };
 

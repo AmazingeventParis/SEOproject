@@ -12,6 +12,16 @@ const contentBlockSchema = z.object({
   word_count: z.number(),
   model_used: z.string().optional(),
   status: z.enum(["pending", "written", "approved"]),
+  writing_directive: z.string().optional(),
+  format_hint: z.enum(["prose", "bullets", "table", "mixed"]).optional(),
+  generate_image: z.boolean().optional(),
+  image_prompt_hint: z.string().optional(),
+  internal_link_targets: z.array(z.object({
+    target_slug: z.string(),
+    target_title: z.string(),
+    suggested_anchor_context: z.string(),
+    is_money_page: z.boolean().optional(),
+  })).optional(),
 });
 
 const updateArticleSchema = z.object({

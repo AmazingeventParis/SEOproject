@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import type {
   Article,
@@ -35,6 +35,8 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { ModelSelector } from "@/components/articles/model-selector";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
@@ -52,6 +54,10 @@ import {
   PenLine,
   Eye,
   AlertCircle,
+  Trash2,
+  Save,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -150,15 +156,54 @@ function SerpDataDisplay({ serpData }: { serpData: Record<string, unknown> }) {
   );
 }
 
+// Group blocks into H2 sections: each section starts with an H2 and includes all following blocks until the next H2
+interface H2Section {
+  h2Block: ContentBlock;
+  h2Index: number;
+  children: { block: ContentBlock; index: number }[];
+}
+
+function groupBlocksByH2(blocks: ContentBlock[]): { sections: H2Section[]; orphans: { block: ContentBlock; index: number }[] } {
+  const sections: H2Section[] = [];
+  const orphans: { block: ContentBlock; index: number }[] = [];
+  let current: H2Section | null = null;
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    if (block.type === "h2") {
+      current = { h2Block: block, h2Index: i, children: [] };
+      sections.push(current);
+    } else if (block.type === "faq") {
+      // FAQ is a standalone section, not nested under an H2
+      sections.push({ h2Block: block, h2Index: i, children: [] });
+      current = null;
+    } else if (current) {
+      current.children.push({ block, index: i });
+    } else {
+      orphans.push({ block, index: i });
+    }
+  }
+  return { sections, orphans };
+}
+
 export default function ArticleDetailPage() {
   const params = useParams();
   const articleId = params.articleId as string;
+  const router = useRouter();
   const { toast } = useToast();
 
   const [article, setArticle] = useState<ArticleWithRelations | null>(null);
   const [pipelineRuns, setPipelineRuns] = useState<PipelineRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [streamingBlockId, setStreamingBlockId] = useState<string | null>(null);
+  const [streamingContent, setStreamingContent] = useState<string>("");
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+  const [editingHtml, setEditingHtml] = useState<string>("");
+  const [savingBlock, setSavingBlock] = useState<string | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const fetchArticle = useCallback(async () => {
     try {
@@ -197,9 +242,19 @@ export default function ArticleDetailPage() {
   async function runPipelineAction(endpoint: string, label: string) {
     setActionLoading(label);
     try {
-      const res = await fetch(`/api/articles/${articleId}/${endpoint}`, {
+      const fetchOptions: RequestInit = {
         method: "POST",
-      });
+        ...(selectedModel
+          ? {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ model: selectedModel }),
+            }
+          : {}),
+      };
+      const res = await fetch(
+        `/api/articles/${articleId}/${endpoint}`,
+        fetchOptions
+      );
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || "Erreur");
@@ -223,20 +278,91 @@ export default function ArticleDetailPage() {
   }
 
   async function writeBlock(blockId: string) {
+    const currentBlocks: ContentBlock[] = article?.content_blocks ?? [];
+    const blockIndex = currentBlocks.findIndex((b) => b.id === blockId);
+
+    // Try streaming first (only works with Anthropic models)
+    const canStream = !selectedModel || selectedModel.includes("claude");
+
+    if (canStream && blockIndex >= 0) {
+      setStreamingBlockId(blockId);
+      setStreamingContent("");
+      setActionLoading(`block-${blockId}`);
+
+      try {
+        const res = await fetch(`/api/articles/${articleId}/stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ blockIndex }),
+        });
+
+        if (!res.ok || !res.body) {
+          throw new Error("stream-fallback");
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulated = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          // Parse SSE events: "event: content_block_delta\ndata: {...}\n\n"
+          const lines = chunk.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const parsed = JSON.parse(line.slice(6));
+                if (parsed.type === "content_block_delta" && parsed.delta?.text) {
+                  accumulated += parsed.delta.text;
+                  setStreamingContent(accumulated);
+                }
+              } catch {
+                // Not valid JSON - might be partial, skip
+              }
+            }
+          }
+        }
+
+        // Stream finished — save the block via regular endpoint
+        setStreamingBlockId(null);
+        setStreamingContent("");
+        // Use the regular write-block to persist (will re-generate but ensures DB consistency)
+        await fetch(`/api/articles/${articleId}/write-block`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ block_id: blockId, ...(selectedModel ? { model: selectedModel } : {}) }),
+        });
+        await Promise.all([fetchArticle(), fetchPipelineRuns()]);
+        setActionLoading(null);
+        return;
+      } catch (err) {
+        // Streaming failed — fall back to regular write
+        setStreamingBlockId(null);
+        setStreamingContent("");
+        if (err instanceof Error && err.message !== "stream-fallback") {
+          // Genuine error — still try regular write below
+        }
+      }
+    }
+
+    // Regular (non-streaming) write
     setActionLoading(`block-${blockId}`);
     try {
       const res = await fetch(`/api/articles/${articleId}/write-block`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ block_id: blockId }),
+        body: JSON.stringify({ block_id: blockId, ...(selectedModel ? { model: selectedModel } : {}) }),
       });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || "Erreur");
       }
       toast({
-        title: "Bloc en cours de redaction",
-        description: "La redaction du bloc a ete lancee.",
+        title: "Bloc redige",
+        description: "La redaction du bloc est terminee.",
       });
       await Promise.all([fetchArticle(), fetchPipelineRuns()]);
     } catch (err) {
@@ -249,6 +375,75 @@ export default function ArticleDetailPage() {
     } finally {
       setActionLoading(null);
     }
+  }
+
+  // Write all blocks in an H2 section sequentially
+  async function writeSection(sectionBlockIds: string[]) {
+    const label = `section-${sectionBlockIds[0]}`;
+    setActionLoading(label);
+    try {
+      for (const blockId of sectionBlockIds) {
+        await writeBlock(blockId);
+      }
+      toast({ title: "Section redigee", description: `${sectionBlockIds.length} bloc(s) redige(s).` });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description: err instanceof Error ? err.message : "Erreur lors de la redaction.",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  // Save manual edit of a block's content_html
+  async function saveBlockEdit(blockId: string, newHtml: string) {
+    setSavingBlock(blockId);
+    try {
+      const currentBlocks: ContentBlock[] = article?.content_blocks ?? [];
+      const updatedBlocks = currentBlocks.map((b) =>
+        b.id === blockId ? { ...b, content_html: newHtml } : b
+      );
+      const res = await fetch(`/api/articles/${articleId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content_blocks: updatedBlocks }),
+      });
+      if (!res.ok) throw new Error("Erreur de sauvegarde");
+      setEditingBlockId(null);
+      setEditingHtml("");
+      toast({ title: "Bloc mis a jour", description: "Le contenu a ete sauvegarde." });
+      await fetchArticle();
+    } catch {
+      toast({ variant: "destructive", title: "Erreur", description: "Impossible de sauvegarder." });
+    } finally {
+      setSavingBlock(null);
+    }
+  }
+
+  // Delete article
+  async function handleDelete() {
+    if (!confirm("Supprimer cet article et toutes ses donnees pipeline ? Cette action est irreversible.")) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/articles/${articleId}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) throw new Error("Erreur");
+      toast({ title: "Article supprime" });
+      router.push("/dashboard/articles");
+    } catch {
+      toast({ variant: "destructive", title: "Erreur", description: "Impossible de supprimer l'article." });
+      setDeleting(false);
+    }
+  }
+
+  function toggleSection(sectionId: string) {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) next.delete(sectionId);
+      else next.add(sectionId);
+      return next;
+    });
   }
 
   if (loading) {
@@ -318,8 +513,18 @@ export default function ArticleDetailPage() {
             </div>
           </div>
 
-          {/* Action buttons */}
+          {/* Model selector + Action buttons */}
           <div className="flex items-center gap-2 flex-wrap">
+            {(article.status === "draft" ||
+              article.status === "analyzing" ||
+              article.status === "planning" ||
+              article.status === "writing") && (
+              <ModelSelector
+                value={selectedModel}
+                onChange={setSelectedModel}
+                step={article.status === "planning" || article.status === "writing" ? "write" : "plan"}
+              />
+            )}
             {article.status === "draft" && (
               <Button
                 onClick={() => runPipelineAction("analyze", "Analyse")}
@@ -350,11 +555,17 @@ export default function ArticleDetailPage() {
             )}
             {article.status === "planning" && (
               <>
+                {!article.persona_id && (
+                  <div className="flex items-center gap-1.5 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    Assignez un persona avant de rediger
+                  </div>
+                )}
                 <Button
                   onClick={() =>
                     runPipelineAction("write-all", "Redaction")
                   }
-                  disabled={!!actionLoading}
+                  disabled={!!actionLoading || !article.persona_id}
                 >
                   {actionLoading === "Redaction" ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -384,7 +595,7 @@ export default function ArticleDetailPage() {
                 onClick={() =>
                   runPipelineAction("write-all", "Redaction")
                 }
-                disabled={!!actionLoading}
+                disabled={!!actionLoading || !article.persona_id}
               >
                 {actionLoading === "Redaction" ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -409,7 +620,7 @@ export default function ArticleDetailPage() {
                 Generer les medias
               </Button>
             )}
-            {article.status === "media" && (
+            {(article.status === "media" || article.status === "seo_check") && (
               <Button
                 onClick={() =>
                   runPipelineAction("seo", "Verification SEO")
@@ -463,6 +674,21 @@ export default function ArticleDetailPage() {
             >
               <RefreshCw className="h-4 w-4" />
             </Button>
+            {/* Delete button */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleDelete}
+              disabled={deleting}
+              title="Supprimer l'article"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+            >
+              {deleting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+            </Button>
           </div>
         </div>
 
@@ -509,99 +735,252 @@ export default function ArticleDetailPage() {
                 </p>
               </CardContent>
             </Card>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  {blocks.length} blocs - {writtenBlocks.length} ecrits,{" "}
-                  {pendingBlocks.length} en attente
-                </p>
-              </div>
-              {blocks.map((block, index) => (
-                <Card key={block.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge
-                            variant="outline"
-                            className={
-                              BLOCK_TYPE_COLORS[block.type] ?? ""
-                            }
-                          >
-                            {BLOCK_TYPE_LABELS[block.type] ?? block.type}
-                          </Badge>
-                          <Badge
-                            variant={
-                              block.status === "written"
-                                ? "default"
-                                : block.status === "approved"
-                                ? "default"
-                                : "secondary"
-                            }
-                            className={
-                              block.status === "written"
-                                ? "bg-green-100 text-green-700 border-green-200"
-                                : block.status === "approved"
-                                ? "bg-blue-100 text-blue-700 border-blue-200"
-                                : ""
-                            }
-                          >
-                            {BLOCK_STATUS_LABELS[block.status] ??
-                              block.status}
-                          </Badge>
-                          {block.word_count > 0 && (
-                            <span className="text-xs text-muted-foreground">
-                              {block.word_count} mots
-                            </span>
+          ) : (() => {
+            const { sections, orphans } = groupBlocksByH2(blocks);
+            return (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {sections.length} sections - {writtenBlocks.length}/{blocks.length} blocs ecrits
+                  </p>
+                </div>
+
+                {/* Orphan blocks (before first H2) */}
+                {orphans.map(({ block, index }) => (
+                  <Card key={block.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className={BLOCK_TYPE_COLORS[block.type] ?? ""}>
+                          {BLOCK_TYPE_LABELS[block.type] ?? block.type}
+                        </Badge>
+                        <Badge
+                          variant="secondary"
+                          className={
+                            block.status === "written"
+                              ? "bg-green-100 text-green-700 border-green-200"
+                              : block.status === "approved"
+                              ? "bg-blue-100 text-blue-700 border-blue-200"
+                              : ""
+                          }
+                        >
+                          {BLOCK_STATUS_LABELS[block.status] ?? block.status}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">#{index + 1}</span>
+                      </div>
+                      {block.heading && <p className="font-medium mt-2">{block.heading}</p>}
+                      {block.status !== "pending" && block.content_html && (
+                        <div
+                          className="text-sm text-muted-foreground prose prose-sm max-w-none mt-2"
+                          dangerouslySetInnerHTML={{ __html: block.content_html }}
+                        />
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+
+                {/* H2 Sections */}
+                {sections.map((section) => {
+                  const allBlocksInSection = [
+                    { block: section.h2Block, index: section.h2Index },
+                    ...section.children,
+                  ];
+                  const sectionBlockIds = allBlocksInSection.map((b) => b.block.id);
+                  const sectionPending = allBlocksInSection.filter((b) => b.block.status === "pending");
+                  const sectionWritten = allBlocksInSection.filter((b) => b.block.status !== "pending");
+                  const isExpanded = expandedSections.has(section.h2Block.id);
+                  const isSectionLoading = actionLoading === `section-${sectionBlockIds[0]}`;
+                  const sectionHeading = section.h2Block.heading || (section.h2Block.type === "faq" ? "FAQ" : `Section #${section.h2Index + 1}`);
+                  const allWritten = sectionPending.length === 0;
+
+                  return (
+                    <Card key={section.h2Block.id} className="overflow-hidden">
+                      {/* Section header - always visible */}
+                      <div
+                        className="flex items-center justify-between gap-3 p-4 cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => toggleSection(section.h2Block.id)}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
                           )}
-                          <span className="text-xs text-muted-foreground">
-                            #{index + 1}
+                          <Badge variant="outline" className={BLOCK_TYPE_COLORS[section.h2Block.type] ?? ""}>
+                            {BLOCK_TYPE_LABELS[section.h2Block.type] ?? section.h2Block.type}
+                          </Badge>
+                          <span className="font-semibold truncate">{sectionHeading}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {sectionWritten.length}/{allBlocksInSection.length} blocs
                           </span>
+                          {allWritten && (
+                            <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200 shrink-0">
+                              Ecrit
+                            </Badge>
+                          )}
+                          {section.h2Block.format_hint && (
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              {section.h2Block.format_hint}
+                            </Badge>
+                          )}
                         </div>
 
-                        {block.heading && (
-                          <p className="font-medium">{block.heading}</p>
-                        )}
-
-                        {block.status !== "pending" &&
-                          block.content_html && (
-                            <div
-                              className="text-sm text-muted-foreground line-clamp-3 prose prose-sm max-w-none"
-                              dangerouslySetInnerHTML={{
-                                __html: block.content_html.substring(
-                                  0,
-                                  300
-                                ),
+                        {/* Write section button */}
+                        {sectionPending.length > 0 &&
+                          (article.status === "writing" || article.status === "planning") && (
+                            <Button
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                writeSection(sectionBlockIds.filter((id) => {
+                                  const b = blocks.find((bl) => bl.id === id);
+                                  return b?.status === "pending";
+                                }));
                               }}
-                            />
+                              disabled={!!actionLoading || !article.persona_id}
+                            >
+                              {isSectionLoading ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <PenLine className="mr-1.5 h-3.5 w-3.5" />
+                              )}
+                              Ecrire cette section ({sectionPending.length})
+                            </Button>
                           )}
                       </div>
 
-                      {/* Write button for pending blocks */}
-                      {block.status === "pending" &&
-                        (article.status === "writing" ||
-                          article.status === "planning") && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => writeBlock(block.id)}
-                            disabled={!!actionLoading}
-                          >
-                            {actionLoading === `block-${block.id}` ? (
-                              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                            ) : (
-                              <PenLine className="mr-1 h-3 w-3" />
-                            )}
-                            Ecrire ce bloc
-                          </Button>
-                        )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+                      {/* Expanded content */}
+                      {isExpanded && (
+                        <div className="border-t">
+                          {/* Writing directive */}
+                          {section.h2Block.writing_directive && (
+                            <div className="bg-amber-50 dark:bg-amber-950/20 px-4 py-2 text-xs text-amber-700 dark:text-amber-400 border-b">
+                              <span className="font-medium">Directive :</span> {section.h2Block.writing_directive}
+                            </div>
+                          )}
+
+                          {/* Each block in the section */}
+                          {allBlocksInSection.map(({ block, index }) => (
+                            <div key={block.id} className="border-b last:border-b-0 px-4 py-3">
+                              {/* Block header */}
+                              <div className="flex items-center gap-2 flex-wrap mb-2">
+                                <Badge variant="outline" className={`text-xs ${BLOCK_TYPE_COLORS[block.type] ?? ""}`}>
+                                  {BLOCK_TYPE_LABELS[block.type] ?? block.type}
+                                </Badge>
+                                <Badge
+                                  variant="secondary"
+                                  className={`text-xs ${
+                                    block.status === "written"
+                                      ? "bg-green-100 text-green-700 border-green-200"
+                                      : block.status === "approved"
+                                      ? "bg-blue-100 text-blue-700 border-blue-200"
+                                      : ""
+                                  }`}
+                                >
+                                  {BLOCK_STATUS_LABELS[block.status] ?? block.status}
+                                </Badge>
+                                {block.word_count > 0 && (
+                                  <span className="text-xs text-muted-foreground">{block.word_count} mots</span>
+                                )}
+                                <span className="text-xs text-muted-foreground">#{index + 1}</span>
+                                {block.format_hint && block.type !== "h2" && (
+                                  <Badge variant="outline" className="text-xs">{block.format_hint}</Badge>
+                                )}
+
+                                {/* Edit / Save buttons for written blocks */}
+                                {block.status !== "pending" && block.content_html && (
+                                  <div className="ml-auto flex items-center gap-1">
+                                    {editingBlockId === block.id ? (
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-7 px-2 text-xs"
+                                          onClick={() => { setEditingBlockId(null); setEditingHtml(""); }}
+                                        >
+                                          Annuler
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          className="h-7 px-2 text-xs"
+                                          onClick={() => saveBlockEdit(block.id, editingHtml)}
+                                          disabled={savingBlock === block.id}
+                                        >
+                                          {savingBlock === block.id ? (
+                                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                          ) : (
+                                            <Save className="mr-1 h-3 w-3" />
+                                          )}
+                                          Sauvegarder
+                                        </Button>
+                                      </>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 px-2 text-xs"
+                                        onClick={() => { setEditingBlockId(block.id); setEditingHtml(block.content_html); }}
+                                      >
+                                        <PenLine className="mr-1 h-3 w-3" />
+                                        Modifier
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Block heading */}
+                              {block.heading && (
+                                <p className={`font-medium mb-2 ${block.type === "h2" ? "text-lg" : "text-base"}`}>
+                                  {block.heading}
+                                </p>
+                              )}
+
+                              {/* Writing directive for child blocks */}
+                              {block.writing_directive && block.type !== "h2" && (
+                                <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
+                                  <span className="font-medium">Directive :</span> {block.writing_directive}
+                                </p>
+                              )}
+
+                              {/* Streaming preview */}
+                              {streamingBlockId === block.id && streamingContent && (
+                                <div className="text-sm prose prose-sm max-w-none border-l-2 border-blue-400 pl-3 animate-pulse">
+                                  <div dangerouslySetInnerHTML={{ __html: streamingContent.substring(0, 500) }} />
+                                  <span className="inline-block w-2 h-4 bg-blue-400 animate-pulse ml-0.5" />
+                                </div>
+                              )}
+
+                              {/* Content display or editor */}
+                              {block.status !== "pending" && block.content_html && streamingBlockId !== block.id && (
+                                editingBlockId === block.id ? (
+                                  <Textarea
+                                    value={editingHtml}
+                                    onChange={(e) => setEditingHtml(e.target.value)}
+                                    className="font-mono text-xs min-h-[200px]"
+                                    rows={12}
+                                  />
+                                ) : (
+                                  <div
+                                    className="text-sm prose prose-sm max-w-none dark:prose-invert"
+                                    dangerouslySetInnerHTML={{ __html: block.content_html }}
+                                  />
+                                )
+                              )}
+
+                              {/* Pending placeholder */}
+                              {block.status === "pending" && !streamingContent && (
+                                <p className="text-xs text-muted-foreground italic">En attente de redaction...</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </TabsContent>
 
         {/* ========== CONTENT TAB ========== */}

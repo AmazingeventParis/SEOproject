@@ -71,6 +71,7 @@ export async function callClaude(options: {
     model: options.model || 'claude-sonnet-4-20250514',
     max_tokens: options.maxTokens || 4096,
     temperature: options.temperature ?? 0.7,
+    cache_control: { type: 'ephemeral' },
     system: options.system || undefined,
     messages: options.messages.map((m) => ({
       role: m.role as 'user' | 'assistant',
@@ -88,6 +89,8 @@ export async function callClaude(options: {
     tokensIn: response.usage.input_tokens,
     tokensOut: response.usage.output_tokens,
     durationMs: Date.now() - start,
+    cacheCreationTokens: response.usage.cache_creation_input_tokens ?? undefined,
+    cacheReadTokens: response.usage.cache_read_input_tokens ?? undefined,
   }
 }
 
@@ -123,6 +126,7 @@ export function streamClaude(options: {
           model: options.model || 'claude-sonnet-4-20250514',
           max_tokens: options.maxTokens || 4096,
           temperature: options.temperature ?? 0.7,
+          cache_control: { type: 'ephemeral' },
           system: options.system || undefined,
           messages: options.messages.map((m) => ({
             role: m.role as 'user' | 'assistant',
@@ -145,6 +149,8 @@ export function streamClaude(options: {
           model: finalMessage.model,
           tokensIn: finalMessage.usage.input_tokens,
           tokensOut: finalMessage.usage.output_tokens,
+          cacheCreationTokens: finalMessage.usage.cache_creation_input_tokens ?? 0,
+          cacheReadTokens: finalMessage.usage.cache_read_input_tokens ?? 0,
         })
         controller.enqueue(encoder.encode(`data: ${doneEvent}\n\n`))
         controller.close()

@@ -25,6 +25,15 @@ export type SearchIntent =
   | 'lead_gen'
   | 'informational'
 
+// ---- Internal link target (used in content blocks for strategic linking) ----
+
+export interface InternalLinkTarget {
+  target_slug: string
+  target_title: string
+  suggested_anchor_context: string
+  is_money_page?: boolean
+}
+
 // ---- Content block (JSONB stored inside seo_articles.content_blocks) ----
 
 export interface ContentBlock {
@@ -36,6 +45,11 @@ export interface ContentBlock {
   word_count: number
   model_used?: string
   status: 'pending' | 'written' | 'approved'
+  writing_directive?: string
+  format_hint?: 'prose' | 'bullets' | 'table' | 'mixed'
+  generate_image?: boolean
+  image_prompt_hint?: string
+  internal_link_targets?: InternalLinkTarget[]
 }
 
 // ---- Database type ----
@@ -54,6 +68,8 @@ export type Database = {
           gsc_property: string | null
           niche: string | null
           default_persona_id: string | null
+          money_page_url: string | null
+          money_page_description: string | null
           active: boolean
           created_at: string
           updated_at: string
@@ -68,6 +84,8 @@ export type Database = {
           gsc_property?: string | null
           niche?: string | null
           default_persona_id?: string | null
+          money_page_url?: string | null
+          money_page_description?: string | null
           active?: boolean
           created_at?: string
           updated_at?: string
@@ -82,6 +100,8 @@ export type Database = {
           gsc_property?: string | null
           niche?: string | null
           default_persona_id?: string | null
+          money_page_url?: string | null
+          money_page_description?: string | null
           active?: boolean
           created_at?: string
           updated_at?: string
@@ -250,6 +270,7 @@ export type Database = {
           json_ld: Record<string, unknown> | null
           serp_data: Record<string, unknown> | null
           nugget_density_score: number
+          link_to_money_page: boolean
           created_at: string
           updated_at: string
           published_at: string | null
@@ -273,6 +294,7 @@ export type Database = {
           json_ld?: Record<string, unknown> | null
           serp_data?: Record<string, unknown> | null
           nugget_density_score?: number
+          link_to_money_page?: boolean
           created_at?: string
           updated_at?: string
           published_at?: string | null
@@ -296,6 +318,7 @@ export type Database = {
           json_ld?: Record<string, unknown> | null
           serp_data?: Record<string, unknown> | null
           nugget_density_score?: number
+          link_to_money_page?: boolean
           created_at?: string
           updated_at?: string
           published_at?: string | null

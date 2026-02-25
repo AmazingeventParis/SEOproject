@@ -8,7 +8,23 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
-import { Save, Key, Brain, Search, ImageIcon, Loader2, CheckCircle, XCircle } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Save, Key, Brain, Search, ImageIcon, Loader2, CheckCircle, XCircle, Cpu } from "lucide-react"
+
+const AVAILABLE_MODELS = [
+  { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4", tag: "Recommande" },
+  { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", tag: "Equilibre" },
+  { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", tag: "Puissant" },
+  { id: "gemini-3-flash-preview", label: "Gemini 3 Flash", tag: "Rapide" },
+  { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash", tag: "Economique" },
+  { id: "gpt-4o-mini", label: "GPT-4o mini", tag: "Economique+" },
+  { id: "gpt-4o", label: "GPT-4o", tag: "Premium" },
+]
+
+const DEFAULT_MODEL_FIELDS = [
+  { key: "default_model_plan", label: "Planification (plan)", description: "Modele utilise pour generer le plan de l'article", defaultValue: "claude-sonnet-4-20250514" },
+  { key: "default_model_write", label: "Redaction (write)", description: "Modele utilise pour rediger les blocs de contenu", defaultValue: "claude-sonnet-4-20250514" },
+]
 
 interface ConfigEntry {
   key: string
@@ -18,6 +34,7 @@ interface ConfigEntry {
 const API_KEY_FIELDS = [
   { key: "anthropic_api_key", label: "Anthropic (Claude)", icon: Brain, placeholder: "sk-ant-..." },
   { key: "gemini_api_key", label: "Google Gemini", icon: Brain, placeholder: "AIza..." },
+  { key: "openai_api_key", label: "OpenAI (GPT)", icon: Brain, placeholder: "sk-proj-..." },
   { key: "serper_api_key", label: "Serper.dev (SERP)", icon: Search, placeholder: "Cle API Serper" },
   { key: "fal_api_key", label: "Fal.ai (Images)", icon: ImageIcon, placeholder: "fal-..." },
   { key: "gsc_client_email", label: "GSC Service Account Email", icon: Key, placeholder: "xxx@project.iam.gserviceaccount.com" },
@@ -148,6 +165,57 @@ export default function SettingsPage() {
                     <Save className="h-4 w-4" />
                   )}
                 </Button>
+              </div>
+            )
+          })}
+        </CardContent>
+      </Card>
+
+      <Separator />
+
+      {/* Default Models */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Cpu className="h-5 w-5" />
+            Modeles par defaut
+          </CardTitle>
+          <CardDescription>
+            Modeles IA utilises par defaut dans le pipeline (modifiable par article)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {DEFAULT_MODEL_FIELDS.map((field) => {
+            const currentValue = (config[field.key] as string) || field.defaultValue
+            return (
+              <div key={field.key} className="space-y-1.5">
+                <Label htmlFor={field.key}>{field.label}</Label>
+                <p className="text-xs text-muted-foreground">{field.description}</p>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={currentValue}
+                    onValueChange={(val) => saveConfig(field.key, val)}
+                  >
+                    <SelectTrigger className="w-[320px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AVAILABLE_MODELS.map((model) => (
+                        <SelectItem key={model.id} value={model.id}>
+                          <div className="flex items-center gap-2">
+                            <span>{model.label}</span>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                              {model.tag}
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {saving === field.key && (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
               </div>
             )
           })}

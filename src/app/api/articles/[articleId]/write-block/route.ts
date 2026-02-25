@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getServerClient } from "@/lib/supabase/client";
 import { executeStep } from "@/lib/pipeline/orchestrator";
+import { modelIdToOverride } from "@/lib/ai/router";
 import type { ContentBlock } from "@/lib/supabase/types";
 
 const writeBlockSchema = z.object({
   block_id: z.string().uuid("block_id doit etre un UUID valide"),
+  model: z.string().optional(),
 });
 
 interface RouteContext {
@@ -63,7 +65,11 @@ export async function POST(
   }
 
   try {
-    const result = await executeStep(articleId, "write_block", { blockIndex });
+    const override = parsed.data.model ? modelIdToOverride(parsed.data.model) : undefined;
+    const result = await executeStep(articleId, "write_block", {
+      blockIndex,
+      ...(override ? { modelOverride: override } : {}),
+    });
 
     if (!result.success) {
       return NextResponse.json(

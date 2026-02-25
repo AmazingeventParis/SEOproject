@@ -62,6 +62,17 @@ export function PersonaDialog({
         body.avatar_reference_url = null;
       }
 
+      // Parse writing style examples from text (separated by ---) into JSON array
+      if (formData.writing_style_examples) {
+        body.writing_style_examples = formData.writing_style_examples
+          .split(/\n---\n/)
+          .map((text) => text.trim())
+          .filter(Boolean)
+          .map((text) => ({ text }));
+      } else {
+        body.writing_style_examples = [];
+      }
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },

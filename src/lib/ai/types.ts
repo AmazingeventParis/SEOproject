@@ -2,7 +2,7 @@
 // Common AI types for the SEO pipeline
 // ============================================================
 
-export type AIProvider = 'anthropic' | 'google'
+export type AIProvider = 'anthropic' | 'google' | 'openai'
 
 export type AITask =
   | 'plan_article'       // Generate article outline -> Claude
@@ -27,6 +27,8 @@ export interface AIResponse {
   tokensIn: number
   tokensOut: number
   durationMs: number
+  cacheCreationTokens?: number
+  cacheReadTokens?: number
 }
 
 export interface AIStreamCallbacks {

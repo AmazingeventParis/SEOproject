@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getServerClient } from "@/lib/supabase/client";
 import { executeStep } from "@/lib/pipeline/orchestrator";
+import { modelIdToOverride } from "@/lib/ai/router";
 
 const contentBlockSchema = z.object({
   id: z.string(),
@@ -30,7 +31,19 @@ export async function POST(
   const { articleId } = params;
 
   try {
-    const result = await executeStep(articleId, "plan");
+    // Read optional model override from body
+    let modelOverride: Record<string, unknown> | undefined;
+    try {
+      const body = await _request.json();
+      if (body?.model) {
+        const override = modelIdToOverride(body.model);
+        if (override) modelOverride = { modelOverride: override };
+      }
+    } catch {
+      // No body or invalid JSON — use default model
+    }
+
+    const result = await executeStep(articleId, "plan", modelOverride);
 
     if (!result.success) {
       return NextResponse.json(

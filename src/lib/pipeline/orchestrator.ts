@@ -4,15 +4,16 @@ import type { PipelineStep, PipelineContext, PipelineRunResult } from './types'
 
 // Article with joined relations from Supabase query
 type ArticleWithRelations = Article & {
-  seo_personas: { name: string; role: string; tone_description: string | null; bio: string | null } | null
-  seo_sites: { name: string; domain: string; niche: string | null } | null
+  seo_personas: { name: string; role: string; tone_description: string | null; bio: string | null; writing_style_examples: Record<string, unknown>[] } | null
+  seo_sites: { name: string; domain: string; niche: string | null; money_page_url: string | null; money_page_description: string | null } | null
 }
 import { validateTransition, getNextStatus } from './state-machine'
 import { analyzeSERP, extractCompetitorInsights } from '@/lib/seo/serper'
 import { checkCannibalization } from '@/lib/seo/anti-cannibal'
 import { analyzeCompetitorContent, buildCompetitorAnalysisPrompt } from '@/lib/seo/competitor-scraper'
 import type { CompetitorContentAnalysis } from '@/lib/seo/competitor-scraper'
-import { routeAI } from '@/lib/ai/router'
+import { routeAI, routeAIWithOverrides, modelIdToOverride } from '@/lib/ai/router'
+import type { ModelConfig } from '@/lib/ai/types'
 import { buildPlanArchitectPrompt } from '@/lib/ai/prompts/plan-architect'
 import { buildBlockWriterPrompt } from '@/lib/ai/prompts/block-writer'
 import { generateImage, buildImagePrompt, generateHeroImage } from '@/lib/media/fal-ai'
@@ -21,6 +22,31 @@ import { generateSeoFilename, generateAltText } from '@/lib/media/seo-rename'
 import { generateArticleSchema, generateFAQSchema, generateBreadcrumbSchema, assembleJsonLd } from '@/lib/seo/json-ld'
 import { generateInternalLinks, injectLinksIntoHtml } from '@/lib/seo/internal-links'
 import { createPost, updatePost, uploadMedia } from '@/lib/wordpress/client'
+
+/**
+ * Resolve default model override from seo_config for a given step.
+ * Returns undefined if no default is configured.
+ */
+async function resolveDefaultModel(step: PipelineStep): Promise<Partial<ModelConfig> | undefined> {
+  const configKey = step === 'plan' ? 'default_model_plan' : step === 'write_block' ? 'default_model_write' : null
+  if (!configKey) return undefined
+
+  try {
+    const supabase = getServerClient()
+    const { data } = await supabase
+      .from('seo_config')
+      .select('value')
+      .eq('key', configKey)
+      .single()
+
+    if (data?.value && typeof data.value === 'string') {
+      return modelIdToOverride(data.value)
+    }
+  } catch {
+    // fall through to hardcoded defaults
+  }
+  return undefined
+}
 
 /**
  * Execute a pipeline step for an article
@@ -36,7 +62,7 @@ export async function executeStep(
   // Fetch article with persona and site
   const { data: article, error: fetchError } = await supabase
     .from('seo_articles')
-    .select('*, seo_personas!seo_articles_persona_id_fkey(name, role, tone_description, bio), seo_sites!seo_articles_site_id_fkey(name, domain, niche)')
+    .select('*, seo_personas!seo_articles_persona_id_fkey(name, role, tone_description, bio, writing_style_examples), seo_sites!seo_articles_site_id_fkey(name, domain, niche, money_page_url, money_page_description)')
     .eq('id', articleId)
     .single()
 
@@ -74,6 +100,10 @@ export async function executeStep(
     return { success: false, runId: '', error: `Impossible de creer le run: ${runError?.message}` }
   }
 
+  // Extract modelOverride from input, or resolve default from seo_config
+  const modelOverride = (input?.modelOverride as Partial<ModelConfig> | undefined)
+    || await resolveDefaultModel(step)
+
   try {
     let result: PipelineRunResult
 
@@ -82,10 +112,10 @@ export async function executeStep(
         result = await executeAnalyze(article as ArticleWithRelations)
         break
       case 'plan':
-        result = await executePlan(article as ArticleWithRelations)
+        result = await executePlan(article as ArticleWithRelations, modelOverride)
         break
       case 'write_block':
-        result = await executeWriteBlock(article as ArticleWithRelations, input)
+        result = await executeWriteBlock(article as ArticleWithRelations, input, modelOverride)
         break
       case 'media':
         result = await executeMedia(article as ArticleWithRelations)
@@ -266,6 +296,7 @@ async function executeAnalyze(
 
 async function executePlan(
   article: ArticleWithRelations,
+  modelOverride?: Partial<ModelConfig>,
 ): Promise<PipelineRunResult> {
   const supabase = getServerClient()
 
@@ -288,26 +319,35 @@ async function executePlan(
     siloArticles = (data || []) as { keyword: string; title: string | null; slug: string | null }[]
   }
 
-  const persona = article.seo_personas as { name: string; role: string; tone_description: string | null; bio: string | null } | null
+  const persona = article.seo_personas as { name: string; role: string; tone_description: string | null; bio: string | null; writing_style_examples: Record<string, unknown>[] } | null
   const serpDataRaw = article.serp_data as {
     serp?: { organic: { title: string; snippet: string }[]; peopleAlsoAsk: { question: string }[] }
     competitorContent?: { avgWordCount: number; commonHeadings: string[]; tfidfKeywords: { term: string; tfidf: number; df: number }[] }
     semanticAnalysis?: { contentGaps: string[]; semanticField: string[]; recommendedWordCount: number; recommendedH2Structure: string[]; keyDifferentiators: string[]; mustAnswerQuestions: string[] }
   } | null
 
+  // Build money page config if applicable
+  const site = article.seo_sites
+  const moneyPage = article.link_to_money_page && site?.money_page_url
+    ? { url: site.money_page_url, description: site.money_page_description || '' }
+    : null
+
   // Build prompt and call AI
   const prompt = buildPlanArchitectPrompt({
     keyword: article.keyword,
     searchIntent: article.search_intent,
-    persona: persona || { name: 'Expert', role: 'Redacteur', tone_description: null, bio: null },
+    persona: persona || { name: 'Expert', role: 'Redacteur', tone_description: null, bio: null, writing_style_examples: [] },
     serpData: serpDataRaw?.serp as Parameters<typeof buildPlanArchitectPrompt>[0]['serpData'],
     nuggets: (nuggets || []).map((n) => ({ id: n.id, content: n.content, tags: n.tags })),
     existingSiloArticles: siloArticles,
+    moneyPage,
     competitorContent: serpDataRaw?.competitorContent,
     semanticAnalysis: serpDataRaw?.semanticAnalysis,
   })
 
-  const aiResponse = await routeAI('plan_article', [{ role: 'user', content: prompt.user }], prompt.system)
+  const aiResponse = modelOverride
+    ? await routeAIWithOverrides('plan_article', [{ role: 'user', content: prompt.user }], prompt.system, modelOverride)
+    : await routeAI('plan_article', [{ role: 'user', content: prompt.user }], prompt.system)
 
   // Parse the AI response as JSON plan
   let plan: { title: string; meta_description: string; slug: string; content_blocks: ContentBlock[] }
@@ -354,7 +394,8 @@ async function executePlan(
 
 async function executeWriteBlock(
   article: ArticleWithRelations,
-  input?: Record<string, unknown>
+  input?: Record<string, unknown>,
+  modelOverride?: Partial<ModelConfig>,
 ): Promise<PipelineRunResult> {
   const supabase = getServerClient()
   const blockIndex = (input?.blockIndex as number) ?? 0
@@ -372,22 +413,36 @@ async function executeWriteBlock(
     .or(`site_id.eq.${article.site_id},site_id.is.null`)
     .limit(5)
 
-  const persona = article.seo_personas as { name: string; role: string; tone_description: string | null; bio: string | null } | null
+  const persona = article.seo_personas as { name: string; role: string; tone_description: string | null; bio: string | null; writing_style_examples: Record<string, unknown>[] } | null
   const previousHeadings = contentBlocks
     .slice(0, blockIndex)
     .filter((b: ContentBlock) => b.heading)
     .map((b: ContentBlock) => b.heading!)
 
+  // Extract internal link targets from the block (set by the plan)
+  const internalLinkTargets = block.internal_link_targets || []
+  const siteDomain = article.seo_sites?.domain
+
   const prompt = buildBlockWriterPrompt({
     keyword: article.keyword,
-    persona: persona || { name: 'Expert', role: 'Redacteur', tone_description: null, bio: null },
-    block: { type: block.type, heading: block.heading ?? null, word_count: block.word_count },
+    persona: persona || { name: 'Expert', role: 'Redacteur', tone_description: null, bio: null, writing_style_examples: [] },
+    block: {
+      type: block.type,
+      heading: block.heading ?? null,
+      word_count: block.word_count,
+      writing_directive: block.writing_directive,
+      format_hint: block.format_hint,
+    },
     nuggets: (nuggets || []).map((n: { id: string; content: string; tags: string[] }) => ({ id: n.id, content: n.content, tags: n.tags })),
     previousHeadings,
     articleTitle: article.title || article.keyword,
+    internalLinkTargets,
+    siteDomain: siteDomain || undefined,
   })
 
-  const aiResponse = await routeAI('write_block', [{ role: 'user', content: prompt.user }], prompt.system)
+  const aiResponse = modelOverride
+    ? await routeAIWithOverrides('write_block', [{ role: 'user', content: prompt.user }], prompt.system, modelOverride)
+    : await routeAI('write_block', [{ role: 'user', content: prompt.user }], prompt.system)
 
   // Update the specific block
   const updatedBlocks = [...contentBlocks]
@@ -460,16 +515,21 @@ async function executeMedia(
     if (!msg.includes('non configure') && !msg.includes('FAL_KEY')) throw error
   }
 
-  // 2. Generate images for 'image' type blocks
+  // 2. Generate images for 'image' type blocks AND H2 blocks with generate_image === true
   const updatedBlocks = [...contentBlocks]
   for (let i = 0; i < updatedBlocks.length; i++) {
     const block = updatedBlocks[i]
-    if (block.type !== 'image' || (block.content_html && block.content_html.includes('<img'))) {
+
+    const isImageBlock = block.type === 'image' && !(block.content_html && block.content_html.includes('<img'))
+    const isH2WithImage = block.type === 'h2' && block.generate_image === true && !(block.content_html && block.content_html.includes('<img'))
+
+    if (!isImageBlock && !isH2WithImage) {
       continue
     }
 
     try {
-      const prompt = buildImagePrompt(article.keyword, block.heading || '', article.title || article.keyword)
+      const promptContext = block.image_prompt_hint || block.heading || ''
+      const prompt = buildImagePrompt(article.keyword, promptContext, article.title || article.keyword)
       const imageResult = await generateImage(prompt, { width: 1200, height: 800 })
       const imgBuffer = await fetch(imageResult.url).then(r => r.arrayBuffer())
       const optimized = await optimizeForWeb(Buffer.from(imgBuffer))
@@ -482,10 +542,20 @@ async function executeMedia(
         altText,
       })
 
-      updatedBlocks[i] = {
-        ...block,
-        content_html: `<figure><img src="${wpMedia.url}" alt="${altText}" width="${optimized.width}" height="${optimized.height}" loading="lazy" />${block.heading ? `<figcaption>${block.heading}</figcaption>` : ''}</figure>`,
-        status: 'written' as const,
+      if (isImageBlock) {
+        // For dedicated image blocks: replace content entirely
+        updatedBlocks[i] = {
+          ...block,
+          content_html: `<figure><img src="${wpMedia.url}" alt="${altText}" width="${optimized.width}" height="${optimized.height}" loading="lazy" />${block.heading ? `<figcaption>${block.heading}</figcaption>` : ''}</figure>`,
+          status: 'written' as const,
+        }
+      } else {
+        // For H2 blocks: prepend image before existing content
+        const imageHtml = `<figure class="section-image"><img src="${wpMedia.url}" alt="${altText}" width="${optimized.width}" height="${optimized.height}" loading="lazy" /></figure>`
+        updatedBlocks[i] = {
+          ...block,
+          content_html: imageHtml + (block.content_html || ''),
+        }
       }
 
       uploadedImages.push({ blockIndex: i, url: wpMedia.url, mediaId: wpMedia.mediaId })
@@ -763,6 +833,12 @@ function estimateCost(tokensIn: number, tokensOut: number, model: string): numbe
   }
   if (model.includes('gemini')) {
     return (tokensIn * 0.075 + tokensOut * 0.3) / 1_000_000
+  }
+  if (model.includes('gpt')) {
+    if (model.includes('mini')) {
+      return (tokensIn * 0.15 + tokensOut * 0.6) / 1_000_000
+    }
+    return (tokensIn * 2.5 + tokensOut * 10) / 1_000_000
   }
   return 0
 }

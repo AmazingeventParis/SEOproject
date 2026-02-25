@@ -22,6 +22,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
 const SEARCH_INTENT_OPTIONS: { value: SearchIntent; label: string }[] = [
@@ -50,6 +51,10 @@ export default function NewArticlePage() {
   const [siteId, setSiteId] = useState("");
   const [searchIntent, setSearchIntent] = useState<SearchIntent>("traffic");
   const [personaId, setPersonaId] = useState<string>("");
+  const [linkToMoneyPage, setLinkToMoneyPage] = useState(false);
+
+  // Derive selected site
+  const selectedSite = sites.find((s) => s.id === siteId);
 
   const fetchSites = useCallback(async () => {
     try {
@@ -85,9 +90,10 @@ export default function NewArticlePage() {
     ? personas.filter((p) => p.site_id === siteId)
     : [];
 
-  // Reset persona when site changes
+  // Reset persona and money page when site changes
   useEffect(() => {
     setPersonaId("");
+    setLinkToMoneyPage(false);
   }, [siteId]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -118,6 +124,7 @@ export default function NewArticlePage() {
         keyword: keyword.trim(),
         site_id: siteId,
         search_intent: searchIntent,
+        link_to_money_page: linkToMoneyPage,
       };
       if (personaId) {
         payload.persona_id = personaId;
@@ -269,6 +276,23 @@ export default function NewArticlePage() {
                 assigne plus tard.
               </p>
             </div>
+
+            {/* Money Page Link */}
+            {selectedSite?.money_page_url && (
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <Label htmlFor="money-page">Lier vers la page prioritaire</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Inclura un lien vers {selectedSite.money_page_url} dans l&apos;article
+                  </p>
+                </div>
+                <Switch
+                  id="money-page"
+                  checked={linkToMoneyPage}
+                  onCheckedChange={setLinkToMoneyPage}
+                />
+              </div>
+            )}
 
             {/* Submit */}
             <div className="flex justify-end gap-3 pt-2">

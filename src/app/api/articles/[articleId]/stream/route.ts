@@ -45,7 +45,7 @@ export async function POST(
   const { data: article, error: fetchError } = await supabase
     .from("seo_articles")
     .select(
-      "*, seo_sites!seo_articles_site_id_fkey(name, domain, niche), seo_personas!seo_articles_persona_id_fkey(name, role, tone_description, bio)"
+      "*, seo_sites!seo_articles_site_id_fkey(name, domain, niche), seo_personas!seo_articles_persona_id_fkey(name, role, tone_description, bio, writing_style_examples)"
     )
     .eq("id", articleId)
     .single();
@@ -84,6 +84,7 @@ export async function POST(
     role: string;
     tone_description: string | null;
     bio: string | null;
+    writing_style_examples: Record<string, unknown>[];
   } | null;
 
   const previousHeadings = contentBlocks
@@ -99,11 +100,14 @@ export async function POST(
       role: "Redacteur",
       tone_description: null,
       bio: null,
+      writing_style_examples: [],
     },
     block: {
       type: block.type,
       heading: block.heading || null,
       word_count: block.word_count,
+      writing_directive: block.writing_directive,
+      format_hint: block.format_hint,
     },
     nuggets: (nuggets || []).map((n) => ({
       id: n.id,

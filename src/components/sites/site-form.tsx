@@ -31,6 +31,8 @@ export interface SiteFormData {
   wp_app_password: string;
   gsc_property: string;
   niche: string;
+  money_page_url: string;
+  money_page_description: string;
 }
 
 interface SiteFormProps {
@@ -51,6 +53,8 @@ export function SiteForm({ site, onSubmit, submitLabel = "Enregistrer" }: SiteFo
     wp_app_password: site?.wp_app_password ?? "",
     gsc_property: site?.gsc_property ?? "",
     niche: site?.niche ?? "",
+    money_page_url: site?.money_page_url ?? "",
+    money_page_description: site?.money_page_description ?? "",
   });
 
   function handleChange(field: keyof SiteFormData, value: string) {
@@ -195,6 +199,29 @@ export function SiteForm({ site, onSubmit, submitLabel = "Enregistrer" }: SiteFo
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Money Page */}
+      <div className="border-t pt-4 space-y-4">
+        <p className="text-sm font-medium text-muted-foreground">Page prioritaire (Money Page)</p>
+        <div className="space-y-2">
+          <Label htmlFor="money_page_url">URL page prioritaire (optionnel)</Label>
+          <Input
+            id="money_page_url"
+            placeholder="/location-photobooth/"
+            value={formData.money_page_url}
+            onChange={(e) => handleChange("money_page_url", e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="money_page_description">Description de la page</Label>
+          <Input
+            id="money_page_description"
+            placeholder="Page de location de photobooth pour evenements"
+            value={formData.money_page_description}
+            onChange={(e) => handleChange("money_page_description", e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Submit */}

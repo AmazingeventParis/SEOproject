@@ -43,13 +43,13 @@ const TRANSITIONS: PipelineTransition[] = [
       return true
     },
   },
-  // Media -> SEO Check (generate JSON-LD, meta tags)
+  // Media -> Reviewing (generate JSON-LD, meta tags, internal links → ready for review)
   {
     from: 'media',
-    to: 'seo_check',
+    to: 'reviewing',
     step: 'seo',
   },
-  // SEO Check -> Reviewing (human review)
+  // Allow re-running SEO from seo_check (legacy articles already in this status)
   {
     from: 'seo_check',
     to: 'reviewing',

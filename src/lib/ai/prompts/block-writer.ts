@@ -11,15 +11,20 @@ interface BlockWriterParams {
     role: string
     tone_description: string | null
     bio: string | null
+    writing_style_examples: Record<string, unknown>[]
   }
   block: {
     type: 'h2' | 'h3' | 'paragraph' | 'list' | 'faq' | 'callout' | 'image'
     heading: string | null
     word_count: number
+    writing_directive?: string
+    format_hint?: 'prose' | 'bullets' | 'table' | 'mixed'
   }
   nuggets: { id: string; content: string; tags: string[] }[]
   previousHeadings: string[]
   articleTitle: string
+  internalLinkTargets?: { target_slug: string; target_title: string; suggested_anchor_context: string; is_money_page?: boolean }[]
+  siteDomain?: string
 }
 
 interface BlockWriterPrompt {
@@ -36,7 +41,7 @@ interface BlockWriterPrompt {
 export function buildBlockWriterPrompt(
   params: BlockWriterParams
 ): BlockWriterPrompt {
-  const { keyword, persona, block, nuggets, previousHeadings, articleTitle } = params
+  const { keyword, persona, block, nuggets, previousHeadings, articleTitle, internalLinkTargets, siteDomain } = params
 
   // ---- System prompt ----
   const system = `Tu es un redacteur web expert en SEO, specialise dans la creation de contenu de haute qualite optimise pour le referencement naturel.
@@ -45,6 +50,14 @@ export function buildBlockWriterPrompt(
 Tu ecris en tant que "${persona.name}", ${persona.role}.${persona.tone_description ? `\nTon editorial : ${persona.tone_description}` : ''}${persona.bio ? `\nBio : ${persona.bio}` : ''}
 
 Tu dois ecrire EXACTEMENT comme cette personne parlerait - avec sa voix, son expertise, ses expressions.
+
+### Regles d'incarnation du persona
+- Adopte le NIVEAU DE LANGUE du persona (technique, vulgarise, mixte)
+- Reproduis la STRUCTURE DE PHRASE typique (courte/punchy si expert terrain, longue/analytique si academique)
+- Utilise le VOCABULAIRE METIER propre au domaine du persona
+- Integre des tournures personnelles : "dans mon experience", "ce que je constate souvent", "un piege classique"
+- JAMAIS de formulations generiques de chatbot : "Il convient de", "Force est de constater", "Dans un premier temps"
+- Si le persona a un style direct, sois direct. Si c'est un style pedagogique, explique pas a pas.
 
 ## REGLES DE REDACTION
 
@@ -107,6 +120,40 @@ Ecris un encadre informatif ou d'alerte en HTML.
 Format : <div class="callout callout-info"><p>Contenu...</p></div>
 Variantes : callout-info, callout-warning, callout-tip, callout-important
 
+### Pour un format "table"
+Cree un tableau HTML responsive dans un style moderne :
+<div class="table-responsive">
+  <table class="info-table">
+    <thead><tr><th>...</th></tr></thead>
+    <tbody><tr><td>...</td></tr></tbody>
+  </table>
+</div>
+Regles tableaux :
+- Max 4-5 colonnes pour rester lisible sur mobile
+- Headers clairs et concis
+- Cellules courtes (pas de paragraphes dans les cellules)
+- Ajoute une phrase d'introduction avant le tableau si pertinent
+
+### Pour un format "mixed"
+Combine prose + elements visuels (liste ou tableau) :
+- Commence par 1-2 paragraphes de contexte
+- Puis un tableau ou une liste structuree
+- Termine par 1 paragraphe de synthese si pertinent
+
+### Pour un format "bullets"
+Structure le contenu sous forme de liste a puces ou numerotee :
+- Chaque item doit etre detaille (pas juste un mot)
+- Utilise <strong> pour mettre en avant le point cle de chaque item
+- Ajoute une phrase d'introduction avant la liste
+
+### Maillage interne
+- Si des cibles de liens internes sont fournies, integre-les naturellement dans le texte
+- Genere le HTML <a href="URL">ancre variee</a> directement dans ta sortie
+- L'ancre ne doit JAMAIS etre le titre exact, ni l'URL, ni le slug de la page cible
+- L'ancre = expression naturelle de 2-6 mots integree dans la phrase
+- JAMAIS de "cliquez ici" ou "en savoir plus" comme ancre
+- Chaque lien doit apporter de la valeur au lecteur
+
 ## REGLES STRICTES
 - Retourne UNIQUEMENT du HTML propre, sans markdown, sans blocs de code
 - Respecte EXACTEMENT le nombre de mots demande (tolerance +/- 15%)
@@ -151,9 +198,45 @@ Les nuggets suivants doivent etre integres naturellement dans ce bloc :`
     user += `\n\nIntegre chaque nugget de maniere fluide dans le texte. Le lecteur ne doit pas sentir qu'il s'agit d'un element "plaque" - cela doit couler naturellement.`
   }
 
+  // Inject writing style examples as few-shot references
+  if (persona.writing_style_examples && persona.writing_style_examples.length > 0) {
+    user += `\n\n## EXEMPLES DU STYLE D'ECRITURE DE ${persona.name.toUpperCase()}
+Voici des extraits authentiques. Imite ce style, ce vocabulaire, cette structure de phrase :`
+    for (const example of persona.writing_style_examples.slice(0, 3)) {
+      const text = (example as Record<string, unknown>).text || (example as Record<string, unknown>).content || JSON.stringify(example)
+      user += `\n\n---\n${String(text).slice(0, 600)}\n---`
+    }
+    user += `\n\nCes extraits sont ta REFERENCE STYLISTIQUE. Le texte que tu produis doit sembler ecrit par la meme personne.`
+  }
+
+  // Inject writing directive if available
+  if (block.writing_directive || block.format_hint) {
+    user += `\n\n## DIRECTIVE D'ECRITURE POUR CE BLOC`
+    if (block.writing_directive) {
+      user += `\n${block.writing_directive}`
+    }
+    if (block.format_hint) {
+      user += `\nFormat recommande : ${block.format_hint}`
+    }
+  }
+
+  // Inject internal link targets if available
+  if (internalLinkTargets && internalLinkTargets.length > 0) {
+    user += `\n\n## LIENS INTERNES A INTEGRER`
+    for (const link of internalLinkTargets) {
+      const fullUrl = siteDomain ? `https://${siteDomain}/${link.target_slug.replace(/^\//, '')}` : `/${link.target_slug}`
+      user += `\n- Cible : "${link.target_title}" → ${fullUrl}`
+      user += `\n  Contexte : ${link.suggested_anchor_context}`
+      if (link.is_money_page) {
+        user += `\n  (Page prioritaire)`
+      }
+    }
+    user += `\nIMPORTANT : L'ancre doit etre UNIQUE et NATURELLE — pas le titre exact.`
+  }
+
   user += `\n\n## RAPPEL
 - Ecris exactement ~${block.word_count} mots
-- Type de bloc : ${block.type}
+- Type de bloc : ${block.type}${block.format_hint ? ` (format: ${block.format_hint})` : ''}
 - Retourne UNIQUEMENT du HTML propre
 - Ecris en tant que ${persona.name} (${persona.role})
 - Integre le mot-cle "${keyword}" naturellement 1-2 fois`

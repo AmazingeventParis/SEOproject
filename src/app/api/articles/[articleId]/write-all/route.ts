@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerClient } from "@/lib/supabase/client";
 import { executeStep } from "@/lib/pipeline/orchestrator";
+import { modelIdToOverride } from "@/lib/ai/router";
 import type { ContentBlock } from "@/lib/supabase/types";
 import type { PipelineRunResult } from "@/lib/pipeline/types";
 
@@ -15,6 +16,18 @@ export async function POST(
 ) {
   const supabase = getServerClient();
   const { articleId } = params;
+
+  // Read optional model override from body
+  let modelOverrideInput: Record<string, unknown> = {};
+  try {
+    const body = await _request.json();
+    if (body?.model) {
+      const override = modelIdToOverride(body.model);
+      if (override) modelOverrideInput = { modelOverride: override };
+    }
+  } catch {
+    // No body or invalid JSON — use default model
+  }
 
   // Fetch article to get content_blocks
   const { data: article, error: fetchError } = await supabase
@@ -77,7 +90,7 @@ export async function POST(
       const result: PipelineRunResult = await executeStep(
         articleId,
         "write_block",
-        { blockIndex }
+        { blockIndex, ...modelOverrideInput }
       );
 
       results.push({
