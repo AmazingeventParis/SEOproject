@@ -349,19 +349,35 @@ export default function ArticleDetailPage() {
               </Button>
             )}
             {article.status === "planning" && (
-              <Button
-                onClick={() =>
-                  runPipelineAction("write-all", "Redaction")
-                }
-                disabled={!!actionLoading}
-              >
-                {actionLoading === "Redaction" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <PenLine className="mr-2 h-4 w-4" />
-                )}
-                Rediger
-              </Button>
+              <>
+                <Button
+                  onClick={() =>
+                    runPipelineAction("write-all", "Redaction")
+                  }
+                  disabled={!!actionLoading}
+                >
+                  {actionLoading === "Redaction" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <PenLine className="mr-2 h-4 w-4" />
+                  )}
+                  Rediger
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    runPipelineAction("plan", "Regeneration du plan")
+                  }
+                  disabled={!!actionLoading}
+                >
+                  {actionLoading === "Regeneration du plan" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-2 h-4 w-4" />
+                  )}
+                  Regenerer le plan
+                </Button>
+              </>
             )}
             {article.status === "writing" && pendingBlocks.length > 0 && (
               <Button

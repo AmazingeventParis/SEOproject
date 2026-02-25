@@ -85,9 +85,10 @@ const TRANSITIONS: PipelineTransition[] = [
     to: 'draft',
     step: 'analyze',
   },
+  // Allow re-generating plan from planning (regenerate)
   {
     from: 'planning',
-    to: 'draft',
+    to: 'planning',
     step: 'plan',
   },
 ]
