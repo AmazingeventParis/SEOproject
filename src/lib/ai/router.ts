@@ -66,6 +66,12 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     maxTokens: 2048,
     temperature: 0.3,
   },
+  analyze_competitor_content: {
+    provider: 'google',
+    model: 'gemini-2.0-flash',
+    maxTokens: 2048,
+    temperature: 0.2,
+  },
 }
 
 // ---- Main routing functions ----

@@ -10,6 +10,8 @@ type ArticleWithRelations = Article & {
 import { validateTransition, getNextStatus } from './state-machine'
 import { analyzeSERP, extractCompetitorInsights } from '@/lib/seo/serper'
 import { checkCannibalization } from '@/lib/seo/anti-cannibal'
+import { analyzeCompetitorContent, buildCompetitorAnalysisPrompt } from '@/lib/seo/competitor-scraper'
+import type { CompetitorContentAnalysis } from '@/lib/seo/competitor-scraper'
 import { routeAI } from '@/lib/ai/router'
 import { buildPlanArchitectPrompt } from '@/lib/ai/prompts/plan-architect'
 import { buildBlockWriterPrompt } from '@/lib/ai/prompts/block-writer'
@@ -161,14 +163,77 @@ async function executeAnalyze(
     if (!msg.includes('non configur') && !msg.includes('not found')) throw error
   }
 
-  // 2. Cannibalization check
+  // 2. Competitor content scraping + TF-IDF + Gemini semantic analysis
+  let competitorContent: CompetitorContentAnalysis | null = null
+  let semanticAnalysis: Record<string, unknown> | null = null
+  let competitorCostUsd = 0
+  let competitorTokensIn = 0
+  let competitorTokensOut = 0
+  let competitorModel: string | undefined
+
+  try {
+    if (serpData?.organic && serpData.organic.length > 0) {
+      const siteDomain = (article as ArticleWithRelations).seo_sites?.domain
+      competitorContent = await analyzeCompetitorContent(
+        serpData.organic.map((r: { title: string; link: string; domain: string }) => ({
+          link: r.link,
+          domain: r.domain,
+          title: r.title,
+        })),
+        siteDomain || undefined
+      )
+
+      // Run Gemini semantic analysis if we got scraped content
+      if (competitorContent.scrapedCount > 0) {
+        try {
+          const prompt = buildCompetitorAnalysisPrompt(article.keyword, competitorContent)
+          const aiResponse = await routeAI(
+            'analyze_competitor_content',
+            [{ role: 'user', content: prompt }]
+          )
+          competitorTokensIn = aiResponse.tokensIn
+          competitorTokensOut = aiResponse.tokensOut
+          competitorModel = aiResponse.model
+          competitorCostUsd = estimateCost(aiResponse.tokensIn, aiResponse.tokensOut, aiResponse.model)
+
+          const cleaned = aiResponse.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+          semanticAnalysis = JSON.parse(cleaned)
+        } catch {
+          // Gemini analysis failed — continue without it
+        }
+      }
+    }
+  } catch {
+    // Competitor scraping failed entirely — continue without it
+  }
+
+  // 3. Cannibalization check
   const cannibalization = await checkCannibalization(article.keyword, article.site_id, article.id)
 
-  // 3. Update article with SERP data
+  // 4. Build serp_data payload with optional competitor data
+  const serpDataPayload: Record<string, unknown> = {}
+  if (serpData) {
+    serpDataPayload.serp = serpData
+    serpDataPayload.insights = competitorInsights
+  }
+  if (competitorContent) {
+    serpDataPayload.competitorContent = {
+      avgWordCount: competitorContent.avgWordCount,
+      commonHeadings: competitorContent.commonHeadings,
+      tfidfKeywords: competitorContent.tfidfKeywords,
+      scrapedCount: competitorContent.scrapedCount,
+      totalCount: competitorContent.totalCount,
+    }
+  }
+  if (semanticAnalysis) {
+    serpDataPayload.semanticAnalysis = semanticAnalysis
+  }
+
+  // 5. Update article with SERP data
   await supabase
     .from('seo_articles')
     .update({
-      serp_data: serpData ? { serp: serpData, insights: competitorInsights } : null,
+      serp_data: Object.keys(serpDataPayload).length > 0 ? serpDataPayload : null,
       status: 'analyzing' as ArticleStatus,
     })
     .eq('id', article.id)
@@ -184,7 +249,18 @@ async function executeAnalyze(
         recommendation: cannibalization.recommendation,
       },
       competitorInsights,
+      competitorContent: competitorContent ? {
+        scrapedCount: competitorContent.scrapedCount,
+        totalCount: competitorContent.totalCount,
+        avgWordCount: competitorContent.avgWordCount,
+        tfidfKeywordsCount: competitorContent.tfidfKeywords.length,
+      } : null,
+      semanticAnalysis: semanticAnalysis ? 'generated' : null,
     },
+    tokensIn: competitorTokensIn,
+    tokensOut: competitorTokensOut,
+    costUsd: competitorCostUsd,
+    modelUsed: competitorModel,
   }
 }
 
@@ -213,7 +289,11 @@ async function executePlan(
   }
 
   const persona = article.seo_personas as { name: string; role: string; tone_description: string | null; bio: string | null } | null
-  const serpDataRaw = article.serp_data as { serp?: { organic: { title: string; snippet: string }[]; peopleAlsoAsk: { question: string }[] } } | null
+  const serpDataRaw = article.serp_data as {
+    serp?: { organic: { title: string; snippet: string }[]; peopleAlsoAsk: { question: string }[] }
+    competitorContent?: { avgWordCount: number; commonHeadings: string[]; tfidfKeywords: { term: string; tfidf: number; df: number }[] }
+    semanticAnalysis?: { contentGaps: string[]; semanticField: string[]; recommendedWordCount: number; recommendedH2Structure: string[]; keyDifferentiators: string[]; mustAnswerQuestions: string[] }
+  } | null
 
   // Build prompt and call AI
   const prompt = buildPlanArchitectPrompt({
@@ -223,6 +303,8 @@ async function executePlan(
     serpData: serpDataRaw?.serp as Parameters<typeof buildPlanArchitectPrompt>[0]['serpData'],
     nuggets: (nuggets || []).map((n) => ({ id: n.id, content: n.content, tags: n.tags })),
     existingSiloArticles: siloArticles,
+    competitorContent: serpDataRaw?.competitorContent,
+    semanticAnalysis: serpDataRaw?.semanticAnalysis,
   })
 
   const aiResponse = await routeAI('plan_article', [{ role: 'user', content: prompt.user }], prompt.system)

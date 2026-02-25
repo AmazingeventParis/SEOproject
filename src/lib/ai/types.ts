@@ -13,6 +13,7 @@ export type AITask =
   | 'extract_keywords'   // Extract keywords from text -> Gemini Flash
   | 'summarize'          // Summarize content -> Gemini Flash
   | 'analyze_serp'       // Analyze SERP competitors -> Gemini Flash
+  | 'analyze_competitor_content' // Deep competitor content analysis -> Gemini Flash
 
 export interface AIMessage {
   role: 'user' | 'assistant' | 'system'

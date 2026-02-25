@@ -20,6 +20,19 @@ interface PlanArchitectParams {
   }
   nuggets: { id: string; content: string; tags: string[] }[]
   existingSiloArticles?: { title: string | null; keyword: string; slug: string | null }[]
+  competitorContent?: {
+    avgWordCount: number
+    commonHeadings: string[]
+    tfidfKeywords: { term: string; tfidf: number; df: number }[]
+  }
+  semanticAnalysis?: {
+    contentGaps: string[]
+    semanticField: string[]
+    recommendedWordCount: number
+    recommendedH2Structure: string[]
+    keyDifferentiators: string[]
+    mustAnswerQuestions: string[]
+  }
 }
 
 interface PlanArchitectPrompt {
@@ -51,7 +64,7 @@ interface PlanArchitectPrompt {
 export function buildPlanArchitectPrompt(
   params: PlanArchitectParams
 ): PlanArchitectPrompt {
-  const { keyword, searchIntent, persona, serpData, nuggets, existingSiloArticles } = params
+  const { keyword, searchIntent, persona, serpData, nuggets, existingSiloArticles, competitorContent, semanticAnalysis } = params
 
   // ---- System prompt ----
   const system = `Tu es un architecte de contenu SEO expert, specialise dans la creation de plans d'articles optimises pour le referencement naturel Google.
@@ -92,6 +105,14 @@ Tu generes des plans d'articles structures, complets et optimises SEO. Tu dois p
 - Si des nuggets sont fournis, assigne-les aux blocs les plus pertinents via nugget_ids
 - Les nuggets apportent authenticite et E-E-A-T - utilise-les strategiquement
 - Ne force pas l'utilisation de nuggets non pertinents
+
+### Analyse concurrentielle (si disponible)
+- Couvre TOUS les H2 communs identifies chez les concurrents — ne laisse aucun sujet important de cote
+- Integre les termes du champ semantique TF-IDF naturellement dans le contenu
+- Comble les lacunes de contenu (content gaps) identifiees par l'analyse
+- Depasse la moyenne de mots des concurrents d'au moins 20%
+- Utilise les H2 recommandes comme base de ta structure, en les adaptant au persona
+- Traite les questions incontournables dans le contenu ou la FAQ
 
 ### Maillage interne (silo)
 - Si des articles existants du meme silo sont fournis, prevois des opportunites de liens internes
@@ -192,6 +213,69 @@ Prevois des opportunites de maillage interne avec ces articles :`
 
     for (const article of existingSiloArticles) {
       user += `\n- "${article.title || article.keyword}" (/${article.slug || ''})`
+    }
+  }
+
+  // Add competitor content analysis if available
+  if (competitorContent || semanticAnalysis) {
+    user += `\n\n## ANALYSE APPROFONDIE DES CONCURRENTS`
+
+    if (competitorContent) {
+      user += `\n\n### Metriques du contenu concurrent`
+      user += `\n- Nombre de mots moyen : ${competitorContent.avgWordCount}`
+
+      if (competitorContent.commonHeadings.length > 0) {
+        user += `\n\n### H2 recurrents chez les concurrents :`
+        for (const heading of competitorContent.commonHeadings) {
+          user += `\n- ${heading}`
+        }
+      }
+
+      if (competitorContent.tfidfKeywords.length > 0) {
+        user += `\n\n### Termes TF-IDF les plus importants (top 20) :`
+        for (const term of competitorContent.tfidfKeywords.slice(0, 20)) {
+          user += `\n- "${term.term}" (score: ${term.tfidf.toFixed(4)}, ${term.df} pages)`
+        }
+      }
+    }
+
+    if (semanticAnalysis) {
+      if (semanticAnalysis.contentGaps.length > 0) {
+        user += `\n\n### Lacunes de contenu a combler :`
+        for (const gap of semanticAnalysis.contentGaps) {
+          user += `\n- ${gap}`
+        }
+      }
+
+      if (semanticAnalysis.semanticField.length > 0) {
+        user += `\n\n### Champ semantique a integrer :`
+        user += `\n${semanticAnalysis.semanticField.join(', ')}`
+      }
+
+      if (semanticAnalysis.recommendedH2Structure.length > 0) {
+        user += `\n\n### Structure H2 recommandee :`
+        for (const h2 of semanticAnalysis.recommendedH2Structure) {
+          user += `\n- ${h2}`
+        }
+      }
+
+      if (semanticAnalysis.keyDifferentiators.length > 0) {
+        user += `\n\n### Angles differenciateurs :`
+        for (const diff of semanticAnalysis.keyDifferentiators) {
+          user += `\n- ${diff}`
+        }
+      }
+
+      if (semanticAnalysis.mustAnswerQuestions.length > 0) {
+        user += `\n\n### Questions incontournables :`
+        for (const q of semanticAnalysis.mustAnswerQuestions) {
+          user += `\n- ${q}`
+        }
+      }
+
+      if (semanticAnalysis.recommendedWordCount) {
+        user += `\n\n### Nombre de mots recommande : ${semanticAnalysis.recommendedWordCount}`
+      }
     }
   }
 
