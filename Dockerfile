@@ -1,16 +1,10 @@
-# ---- Stage 1: Install dependencies ----
-FROM node:20-slim AS deps
-WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev
-
-# ---- Stage 2: Build the application ----
+# ---- Stage 1: Build the application ----
 FROM node:20-slim AS builder
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json* ./
+RUN npm ci
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_ENV=production
 RUN npm run build
 
 # ---- Stage 3: Production image ----
