@@ -53,6 +53,12 @@ const updateArticleSchema = z.object({
   json_ld: z.record(z.string(), z.unknown()).nullable().optional(),
   serp_data: z.record(z.string(), z.unknown()).nullable().optional(),
   nugget_density_score: z.number().optional(),
+  title_suggestions: z.array(z.object({
+    title: z.string(),
+    slug: z.string(),
+    seo_rationale: z.string(),
+    selected: z.boolean(),
+  })).nullable().optional(),
 });
 
 interface RouteContext {

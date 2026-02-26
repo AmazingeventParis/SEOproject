@@ -42,7 +42,7 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
   generate_title: {
     provider: 'google',
     model: 'gemini-2.0-flash',
-    maxTokens: 256,
+    maxTokens: 512,
     temperature: 0.7,
   },
   generate_meta: {

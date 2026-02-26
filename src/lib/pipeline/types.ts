@@ -25,6 +25,7 @@ export interface PipelineContext {
   nuggetDensityScore?: number
   contentBlocksCount?: number
   writtenBlocksCount?: number
+  titleSelected?: boolean
 }
 
 export interface PipelineRunInput {

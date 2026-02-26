@@ -81,6 +81,7 @@ export async function executeStep(
     nuggetDensityScore: article.nugget_density_score,
     contentBlocksCount: contentBlocks.length,
     writtenBlocksCount: contentBlocks.filter((b: ContentBlock) => b.status === 'written' || b.status === 'approved').length,
+    titleSelected: !!article.title,
   }
 
   // Validate transition
@@ -350,7 +351,7 @@ async function executePlan(
     : await routeAI('plan_article', [{ role: 'user', content: prompt.user }], prompt.system)
 
   // Parse the AI response as JSON plan
-  let plan: { title: string; meta_description: string; slug: string; content_blocks: ContentBlock[] }
+  let plan: { title_suggestions: { title: string; slug: string; seo_rationale: string }[]; meta_description: string; content_blocks: ContentBlock[] }
   try {
     const cleaned = aiResponse.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     plan = JSON.parse(cleaned)
@@ -365,14 +366,23 @@ async function executePlan(
     }
   }
 
-  // Update article with the generated plan
+  // Build title suggestions with selected: false
+  const titleSuggestions = (plan.title_suggestions || []).map(s => ({
+    title: s.title,
+    slug: s.slug,
+    seo_rationale: s.seo_rationale,
+    selected: false,
+  }))
+
+  // Update article with the generated plan — title and slug are null until user selects one
   await supabase
     .from('seo_articles')
     .update({
-      title: plan.title,
+      title: null,
+      slug: null,
       meta_description: plan.meta_description,
-      slug: plan.slug,
       content_blocks: plan.content_blocks,
+      title_suggestions: titleSuggestions,
       status: 'planning' as ArticleStatus,
     })
     .eq('id', article.id)
@@ -381,7 +391,7 @@ async function executePlan(
     success: true,
     runId: '',
     output: {
-      title: plan.title,
+      titleSuggestions,
       blocksCount: plan.content_blocks.length,
       estimatedWordCount: plan.content_blocks.reduce((sum: number, b: ContentBlock) => sum + (b.word_count || 0), 0),
     },

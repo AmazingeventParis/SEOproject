@@ -173,13 +173,40 @@ Regles :
 - Place les liens la ou c'est NATUREL par rapport au sujet de la section
 - L'ancre finale sera decidee par le redacteur — donne juste le contexte d'insertion
 
+## SUGGESTIONS DE TITRE H1 (OBLIGATOIRE)
+
+Tu DOIS proposer exactement 3 variantes de titre H1, chacune avec une strategie differente :
+1. **Question** : formule le titre comme une question (cible le featured snippet Google)
+2. **Promesse** : formule le titre comme une promesse de valeur claire pour le lecteur
+3. **Specifique** : utilise des chiffres, donnees concretes ou l'annee en cours
+
+Chaque suggestion doit inclure :
+- "title" : le titre H1 (50-65 caracteres ideal)
+- "slug" : le slug URL correspondant (minuscules, sans accents, tirets)
+- "seo_rationale" : 1 phrase expliquant pourquoi ce titre est optimise SEO
+
 ## FORMAT DE SORTIE
 Tu DOIS retourner UNIQUEMENT un objet JSON valide, sans texte avant ou apres, sans bloc de code markdown.
 
 {
-  "title": "Titre H1 optimise SEO (50-65 caracteres ideal)",
+  "title_suggestions": [
+    {
+      "title": "Titre variante Question (cible featured snippet)",
+      "slug": "slug-question",
+      "seo_rationale": "Explication SEO"
+    },
+    {
+      "title": "Titre variante Promesse (valeur lecteur)",
+      "slug": "slug-promesse",
+      "seo_rationale": "Explication SEO"
+    },
+    {
+      "title": "Titre variante Specifique (chiffres/annee)",
+      "slug": "slug-specifique",
+      "seo_rationale": "Explication SEO"
+    }
+  ],
   "meta_description": "Meta description engageante (140-160 caracteres)",
-  "slug": "url-slug-optimise",
   "content_blocks": [
     {
       "id": "genere un UUID v4 unique",
@@ -206,10 +233,11 @@ Tu DOIS retourner UNIQUEMENT un objet JSON valide, sans texte avant ou apres, sa
 }
 
 IMPORTANT :
+- "title_suggestions" doit contenir EXACTEMENT 3 suggestions avec 3 strategies differentes (question, promesse, specifique)
 - "content_html" doit TOUJOURS etre "" (le contenu sera genere ensuite)
 - "status" doit TOUJOURS etre "pending"
 - Genere de vrais UUID v4 pour chaque "id" (format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx)
-- Le slug doit etre en minuscules, sans accents, avec des tirets
+- Les slugs doivent etre en minuscules, sans accents, avec des tirets
 - La meta_description doit inciter au clic et contenir le mot-cle principal
 - "writing_directive" est OBLIGATOIRE sur chaque bloc
 - "format_hint" est OBLIGATOIRE sur chaque bloc
@@ -381,7 +409,7 @@ Marque ces entrees avec "is_money_page": true dans internal_link_targets.`
 5. Analyse les SERP pour surpasser les contenus existants en profondeur et en valeur
 6. Integre les questions PAA dans une section FAQ dediee
 7. Assigne les nuggets pertinents aux blocs appropries
-8. Titre (H1) et meta description optimises
+8. Propose 3 variantes de titre H1 (question, promesse, specifique) + meta description optimisee
 9. Vise 1500-3000 mots repartis equilibrement
 
 Retourne UNIQUEMENT le JSON, rien d'autre.`

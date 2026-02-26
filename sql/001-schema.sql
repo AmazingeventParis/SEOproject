@@ -136,6 +136,8 @@ CREATE TABLE seo_articles (
   json_ld              jsonb,
   serp_data            jsonb,
   nugget_density_score real               DEFAULT 0,
+  link_to_money_page   boolean            DEFAULT false,
+  title_suggestions    jsonb,
   created_at           timestamptz        DEFAULT now(),
   updated_at           timestamptz        DEFAULT now(),
   published_at         timestamptz

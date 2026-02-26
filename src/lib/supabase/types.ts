@@ -34,6 +34,15 @@ export interface InternalLinkTarget {
   is_money_page?: boolean
 }
 
+// ---- Title suggestion (JSONB stored inside seo_articles.title_suggestions) ----
+
+export interface TitleSuggestion {
+  title: string
+  slug: string
+  seo_rationale: string
+  selected: boolean
+}
+
 // ---- Content block (JSONB stored inside seo_articles.content_blocks) ----
 
 export interface ContentBlock {
@@ -271,6 +280,7 @@ export type Database = {
           serp_data: Record<string, unknown> | null
           nugget_density_score: number
           link_to_money_page: boolean
+          title_suggestions: TitleSuggestion[] | null
           created_at: string
           updated_at: string
           published_at: string | null
@@ -295,6 +305,7 @@ export type Database = {
           serp_data?: Record<string, unknown> | null
           nugget_density_score?: number
           link_to_money_page?: boolean
+          title_suggestions?: TitleSuggestion[] | null
           created_at?: string
           updated_at?: string
           published_at?: string | null
@@ -319,6 +330,7 @@ export type Database = {
           serp_data?: Record<string, unknown> | null
           nugget_density_score?: number
           link_to_money_page?: boolean
+          title_suggestions?: TitleSuggestion[] | null
           created_at?: string
           updated_at?: string
           published_at?: string | null

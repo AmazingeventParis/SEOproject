@@ -7,6 +7,7 @@ import type {
   Article,
   ContentBlock,
   PipelineRun,
+  TitleSuggestion,
 } from "@/lib/supabase/types";
 import { getStepLabel } from "@/lib/pipeline/state-machine";
 import { StatusBadge } from "@/components/articles/status-badge";
@@ -58,6 +59,7 @@ import {
   Save,
   ChevronDown,
   ChevronUp,
+  Check,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -184,6 +186,110 @@ function groupBlocksByH2(blocks: ContentBlock[]): { sections: H2Section[]; orpha
     }
   }
   return { sections, orphans };
+}
+
+// ---- Title Selection Card ----
+function TitleSelectionCard({
+  suggestions,
+  onSelect,
+  onRegenerate,
+  isLoading,
+  isRegenerating,
+}: {
+  suggestions: TitleSuggestion[];
+  onSelect: (index: number) => void;
+  onRegenerate: () => void;
+  isLoading: boolean;
+  isRegenerating: boolean;
+}) {
+  return (
+    <Card className="border-blue-200 bg-blue-50/50">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-blue-600" />
+          Choisissez un titre H1
+        </CardTitle>
+        <CardDescription>
+          3 variantes optimisees SEO — selectionnez celle qui convient le mieux
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {suggestions.map((suggestion, index) => {
+          const isSelected = suggestion.selected;
+          const strategyLabels = ["Question", "Promesse", "Specifique"];
+
+          return (
+            <button
+              key={index}
+              onClick={() => onSelect(index)}
+              disabled={isLoading}
+              className={`w-full text-left rounded-lg border-2 p-3 transition-all ${
+                isSelected
+                  ? "border-blue-500 bg-blue-100/80 ring-1 ring-blue-500/30"
+                  : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/30"
+              } ${isLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge
+                      variant="secondary"
+                      className={`text-xs ${
+                        index === 0
+                          ? "bg-purple-100 text-purple-700"
+                          : index === 1
+                          ? "bg-green-100 text-green-700"
+                          : "bg-orange-100 text-orange-700"
+                      }`}
+                    >
+                      {strategyLabels[index] || `Option ${index + 1}`}
+                    </Badge>
+                    {isSelected && (
+                      <Badge className="bg-blue-600 text-white text-xs">
+                        <Check className="h-3 w-3 mr-1" />
+                        Selectionne
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="font-medium text-sm">{suggestion.title}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    /{suggestion.slug}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1 italic">
+                    {suggestion.seo_rationale}
+                  </p>
+                </div>
+                <div
+                  className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center mt-1 ${
+                    isSelected
+                      ? "border-blue-500 bg-blue-500"
+                      : "border-gray-300"
+                  }`}
+                >
+                  {isSelected && <Check className="h-3 w-3 text-white" />}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+        <div className="pt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRegenerate}
+            disabled={isRegenerating}
+          >
+            {isRegenerating ? (
+              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-3.5 w-3.5" />
+            )}
+            Regenerer les suggestions de titre
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function ArticleDetailPage() {
@@ -561,11 +667,17 @@ export default function ArticleDetailPage() {
                     Assignez un persona avant de rediger
                   </div>
                 )}
+                {!article.title && (
+                  <div className="flex items-center gap-1.5 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    Selectionnez un titre H1 avant de rediger
+                  </div>
+                )}
                 <Button
                   onClick={() =>
                     runPipelineAction("write-all", "Redaction")
                   }
-                  disabled={!!actionLoading || !article.persona_id}
+                  disabled={!!actionLoading || !article.persona_id || !article.title}
                 >
                   {actionLoading === "Redaction" ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -744,6 +856,69 @@ export default function ArticleDetailPage() {
                     {sections.length} sections - {writtenBlocks.length}/{blocks.length} blocs ecrits
                   </p>
                 </div>
+
+                {/* Title Selection */}
+                {article.title_suggestions &&
+                  (article.title_suggestions as TitleSuggestion[]).length > 0 && (
+                    <TitleSelectionCard
+                      suggestions={article.title_suggestions as TitleSuggestion[]}
+                      onSelect={async (index) => {
+                        try {
+                          setActionLoading("select-title");
+                          const res = await fetch(
+                            `/api/articles/${articleId}/select-title`,
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ title_index: index }),
+                            }
+                          );
+                          if (!res.ok) throw new Error("Erreur");
+                          const data = await res.json();
+                          setArticle(data);
+                          toast({
+                            title: "Titre selectionne",
+                            description: data.title,
+                          });
+                        } catch {
+                          toast({
+                            variant: "destructive",
+                            title: "Erreur",
+                            description: "Impossible de selectionner le titre.",
+                          });
+                        } finally {
+                          setActionLoading(null);
+                        }
+                      }}
+                      onRegenerate={async () => {
+                        try {
+                          setActionLoading("regenerate-titles");
+                          const res = await fetch(
+                            `/api/articles/${articleId}/suggest-titles`,
+                            { method: "POST" }
+                          );
+                          if (!res.ok) throw new Error("Erreur");
+                          const data = await res.json();
+                          setArticle(data);
+                          toast({
+                            title: "Suggestions regenerees",
+                            description: "Choisissez parmi les nouvelles suggestions.",
+                          });
+                        } catch {
+                          toast({
+                            variant: "destructive",
+                            title: "Erreur",
+                            description:
+                              "Impossible de regenerer les suggestions.",
+                          });
+                        } finally {
+                          setActionLoading(null);
+                        }
+                      }}
+                      isLoading={actionLoading === "select-title"}
+                      isRegenerating={actionLoading === "regenerate-titles"}
+                    />
+                  )}
 
                 {/* Orphan blocks (before first H2) */}
                 {orphans.map(({ block, index }) => (

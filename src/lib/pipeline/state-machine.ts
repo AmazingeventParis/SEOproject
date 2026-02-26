@@ -22,6 +22,7 @@ const TRANSITIONS: PipelineTransition[] = [
     step: 'write_block',
     guard: (ctx) => {
       if (!ctx.personaId) return 'Un persona doit etre assigne avant la redaction'
+      if (!ctx.titleSelected) return 'Un titre H1 doit etre selectionne avant la redaction'
       return true
     },
   },
