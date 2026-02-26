@@ -5,7 +5,6 @@ const MIGRATION_SQL =
   "ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS title_suggestions jsonb DEFAULT NULL;";
 
 // POST /api/migrate — Run pending schema migrations
-// Tries multiple hostnames to find the Supabase DB container
 export async function POST() {
   const dbPassword = process.env.POSTGRES_PASSWORD;
 
@@ -21,50 +20,44 @@ export async function POST() {
     );
   }
 
-  // Try multiple possible hostnames for the supabase-db container
-  const customHost = process.env.POSTGRES_HOST;
-  const hosts = [
-    ...(customHost ? [customHost] : []),
-    "supabase-db",
-    "z4oc8k4k8o4wswkog084o0g4-supabase-db",
-    "z4oc8k4k8o4wswkog084o0g4-supabase-db-1",
-    "host.docker.internal",
-  ];
-
+  const host = process.env.POSTGRES_HOST || "supabase-db";
   const errors: string[] = [];
 
-  for (const host of hosts) {
+  // Try with multiple user/password combinations
+  const users = [
+    { user: "supabase_admin", password: dbPassword },
+    { user: "postgres", password: dbPassword },
+  ];
+
+  for (const { user, password } of users) {
     const pool = new Pool({
       host,
       port: 5432,
-      user: "postgres",
-      password: dbPassword,
+      user,
+      password,
       database: "postgres",
       ssl: false,
       connectionTimeoutMillis: 3000,
     });
 
     try {
-      // Set role to supabase_admin which owns the tables in Supabase self-hosted
-      await pool.query("SET ROLE supabase_admin;");
       await pool.query(MIGRATION_SQL);
       await pool.end();
       return NextResponse.json({
         status: "ok",
-        message: `Migration applied via ${host} — title_suggestions column added.`,
-        host,
+        message: `Migration applied as ${user}@${host} — title_suggestions column added.`,
       });
     } catch (error) {
       await pool.end().catch(() => {});
       const msg = error instanceof Error ? error.message : String(error);
-      errors.push(`${host}: ${msg}`);
+      errors.push(`${user}@${host}: ${msg}`);
     }
   }
 
   return NextResponse.json(
     {
       status: "error",
-      message: "Could not connect to PostgreSQL on any host",
+      message: "Could not run migration",
       tried: errors,
       sql: MIGRATION_SQL,
     },
