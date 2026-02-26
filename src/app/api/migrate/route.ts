@@ -45,6 +45,8 @@ export async function POST() {
     });
 
     try {
+      // Set role to supabase_admin which owns the tables in Supabase self-hosted
+      await pool.query("SET ROLE supabase_admin;");
       await pool.query(MIGRATION_SQL);
       await pool.end();
       return NextResponse.json({
