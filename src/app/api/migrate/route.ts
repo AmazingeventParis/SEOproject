@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
+const MIGRATION_SQL =
+  "ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS title_suggestions jsonb DEFAULT NULL;";
+
 // POST /api/migrate — Run pending schema migrations
-// Connects directly to PostgreSQL to run DDL statements
-// Safe to call multiple times (idempotent via IF NOT EXISTS)
+// Tries multiple hostnames to find the Supabase DB container
 export async function POST() {
-  const dbHost = process.env.POSTGRES_HOST || "supabase-db";
-  const dbPort = parseInt(process.env.POSTGRES_PORT || "5432");
   const dbPassword = process.env.POSTGRES_PASSWORD;
 
   if (!dbPassword) {
@@ -14,43 +14,58 @@ export async function POST() {
       {
         status: "error",
         message:
-          "POSTGRES_PASSWORD env var not set. Add it to Coolify env vars, or run the SQL manually in Supabase SQL Editor:",
-        sql: "ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS title_suggestions jsonb DEFAULT NULL;",
+          "POSTGRES_PASSWORD env var not set. Run the SQL manually in Supabase SQL Editor:",
+        sql: MIGRATION_SQL,
       },
       { status: 500 }
     );
   }
 
-  const pool = new Pool({
-    host: dbHost,
-    port: dbPort,
-    user: "postgres",
-    password: dbPassword,
-    database: "postgres",
-    ssl: false,
-    connectionTimeoutMillis: 5000,
-  });
+  // Try multiple possible hostnames for the supabase-db container
+  const customHost = process.env.POSTGRES_HOST;
+  const hosts = [
+    ...(customHost ? [customHost] : []),
+    "supabase-db",
+    "z4oc8k4k8o4wswkog084o0g4-supabase-db",
+    "z4oc8k4k8o4wswkog084o0g4-supabase-db-1",
+    "host.docker.internal",
+  ];
 
-  try {
-    await pool.query(
-      "ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS title_suggestions jsonb DEFAULT NULL;"
-    );
-    await pool.end();
+  const errors: string[] = [];
 
-    return NextResponse.json({
-      status: "ok",
-      message: "Migration applied — title_suggestions column added.",
+  for (const host of hosts) {
+    const pool = new Pool({
+      host,
+      port: 5432,
+      user: "postgres",
+      password: dbPassword,
+      database: "postgres",
+      ssl: false,
+      connectionTimeoutMillis: 3000,
     });
-  } catch (error) {
-    await pool.end().catch(() => {});
-    const msg = error instanceof Error ? error.message : String(error);
-    return NextResponse.json(
-      {
-        status: "error",
-        message: `Migration failed: ${msg}`,
-        sql: "ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS title_suggestions jsonb DEFAULT NULL;",
-      },
-      { status: 500 }
-    );
+
+    try {
+      await pool.query(MIGRATION_SQL);
+      await pool.end();
+      return NextResponse.json({
+        status: "ok",
+        message: `Migration applied via ${host} — title_suggestions column added.`,
+        host,
+      });
+    } catch (error) {
+      await pool.end().catch(() => {});
+      const msg = error instanceof Error ? error.message : String(error);
+      errors.push(`${host}: ${msg}`);
+    }
   }
+
+  return NextResponse.json(
+    {
+      status: "error",
+      message: "Could not connect to PostgreSQL on any host",
+      tried: errors,
+      sql: MIGRATION_SQL,
+    },
+    { status: 500 }
+  );
 }
