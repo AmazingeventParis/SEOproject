@@ -4,7 +4,11 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Underline from "@tiptap/extension-underline";
-import { useEffect, useCallback } from "react";
+import { Table } from "@tiptap/extension-table";
+import { TableRow } from "@tiptap/extension-table-row";
+import { TableCell } from "@tiptap/extension-table-cell";
+import { TableHeader } from "@tiptap/extension-table-header";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Bold,
@@ -14,16 +18,36 @@ import {
   List,
   ListOrdered,
   Quote,
+  Table2,
   Undo,
   Redo,
 } from "lucide-react";
+import { TableBuilderDialog } from "@/components/table-builder-dialog";
 
 interface RichTextEditorProps {
   content: string;
   onChange: (html: string) => void;
 }
 
+function stripTableWrappers(html: string): string {
+  return html.replace(
+    /<div class="table-container">\s*(<table[\s\S]*?<\/table>)\s*<\/div>/g,
+    "$1"
+  );
+}
+
+function wrapTablesWithContainer(html: string): string {
+  return html.replace(
+    /(<table[\s\S]*?<\/table>)/g,
+    '<div class="table-container">$1</div>'
+  );
+}
+
 export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
+  const lastEmittedHtml = useRef<string>("");
+  const [tableDialogOpen, setTableDialogOpen] = useState(false);
+  const [selectedText, setSelectedText] = useState("");
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -36,18 +60,24 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
         },
       }),
       Underline,
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableCell,
+      TableHeader,
     ],
-    content,
+    content: stripTableWrappers(content),
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      const html = wrapTablesWithContainer(editor.getHTML());
+      lastEmittedHtml.current = html;
+      onChange(html);
     },
   });
 
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content);
+    if (editor && content !== lastEmittedHtml.current) {
+      editor.commands.setContent(stripTableWrappers(content));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]);
 
   const setLink = useCallback(() => {
@@ -66,6 +96,22 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
       .setLink({ href: url })
       .run();
   }, [editor]);
+
+  const openTableBuilder = useCallback(() => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    const text = editor.state.doc.textBetween(from, to, "\n");
+    setSelectedText(text);
+    setTableDialogOpen(true);
+  }, [editor]);
+
+  const handleTableInsert = useCallback(
+    (tableHtml: string) => {
+      if (!editor) return;
+      editor.chain().focus().deleteSelection().insertContent(tableHtml).run();
+    },
+    [editor]
+  );
 
   if (!editor) return null;
 
@@ -146,6 +192,16 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
         >
           <Quote className="h-3.5 w-3.5" />
         </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={editor.isActive("table") ? "default" : "ghost"}
+          className="h-7 w-7 p-0"
+          onClick={openTableBuilder}
+          title="Tableau"
+        >
+          <Table2 className="h-3.5 w-3.5" />
+        </Button>
 
         <div className="w-px h-5 bg-border mx-1" />
 
@@ -177,6 +233,14 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
       <EditorContent
         editor={editor}
         className="prose prose-sm max-w-none p-3 min-h-[200px] focus-within:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[180px]"
+      />
+
+      {/* Table builder dialog */}
+      <TableBuilderDialog
+        open={tableDialogOpen}
+        selectedText={selectedText}
+        onInsert={handleTableInsert}
+        onClose={() => setTableDialogOpen(false)}
       />
     </div>
   );

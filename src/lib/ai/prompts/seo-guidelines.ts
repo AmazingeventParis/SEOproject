@@ -26,9 +26,10 @@ Penalites E-E-A-T :
  * FAQ format and rules (HTML accordion + Schema.org).
  * Used by: block-writer, plan-architect
  */
-export const SEO_FAQ_RULES = `Format HTML : accordion natif <details>/<summary> avec balisage Schema.org FAQ.
-Structure pour chaque Q/R :
-<div class="faq-section">
+export const SEO_FAQ_RULES = `Format HTML : le bloc FAQ DOIT contenir le H2 + l'accordion natif <details>/<summary> avec balisage Schema.org FAQ.
+Structure COMPLETE a generer :
+<h2>Questions frequentes</h2>
+<div class="faq-section" itemscope itemtype="https://schema.org/FAQPage">
   <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
     <summary itemprop="name">Question ici ?</summary>
     <div class="faq-answer" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
@@ -37,9 +38,11 @@ Structure pour chaque Q/R :
       </div>
     </div>
   </details>
+  <!-- Repeter <details> pour chaque question -->
 </div>
 
 Regles FAQ :
+- Le <h2> DOIT etre inclus dans le HTML genere (pas rendu separement)
 - Reponses COURTES : 2-4 phrases maximum, directes et actionables
 - Chaque reponse donne une VRAIE SOLUTION rapide a la question posee
 - Optimise pour le featured snippet Google (reponse immediate, pas de bavardage)

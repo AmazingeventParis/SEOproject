@@ -106,7 +106,7 @@ L'article doit repondre a l'intention de recherche DES LE PREMIER H2. Le lecteur
 1. **Premier H2** : Repond DIRECTEMENT a l'intention de recherche (la reponse, le comparatif, la solution)
 2. **H2 suivants** : Approfondissent, detaillent, donnent des cas concrets
 3. **Avant-dernier H2** : Section optionnelle (erreurs a eviter, conseils avances, etc.)
-4. **Dernier bloc** : FAQ (si PAA disponibles)
+4. **Dernier bloc (optionnel)** : FAQ (si PAA disponibles et pertinent pour l'intention)
 
 ### INTERDIT en premier H2
 - "Qu'est-ce que..." / "Definition de..."
@@ -149,7 +149,7 @@ Tu DOIS respecter cette strategie de structure. L'intention de recherche determi
 ## CONTENU
 - Respecte la fourchette de mots indiquee dans la strategie ci-dessus
 - Chaque bloc : 150-500 mots
-- Section FAQ avec le heading "FAQ" en type "faq" SAUF si la strategie l'interdit (ex: discover)
+- Section FAQ (optionnelle) avec le heading "FAQ" en type "faq". Ne l'inclus PAS si la strategie l'interdit (ex: discover). L'utilisateur pourra l'ajouter manuellement plus tard si besoin.
 ${SEO_FAQ_RULES}
 - Blocs "list" pour les elements enumeratifs
 
@@ -451,7 +451,7 @@ EXCEPTION SLUG : les slugs ne doivent JAMAIS contenir d'annee (un slug est intem
 3. WRITING DIRECTIVES : chaque bloc a une directive d'ecriture specifique et un format_hint
 4. IMAGES : decide pour chaque H2 si une image est pertinente (generate_image + image_prompt_hint)
 5. Analyse les SERP pour surpasser les contenus existants en profondeur et en valeur
-6. Integre les questions PAA dans une section FAQ dediee
+6. Integre les questions PAA dans une section FAQ dediee (si pertinent selon l'intention)
 7. Assigne les nuggets pertinents aux blocs appropries
 8. Propose 3 variantes de titre H1 (question, promesse, specifique) + meta description optimisee
 9. Vise 1500-3000 mots repartis equilibrement

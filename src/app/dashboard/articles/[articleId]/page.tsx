@@ -67,6 +67,8 @@ import {
   Link2,
   AlertTriangle,
   CheckCircle2,
+  MessageSquarePlus,
+  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -1192,6 +1194,49 @@ export default function ArticleDetailPage() {
     });
   }
 
+  // Add or remove FAQ block from the plan
+  async function toggleFaqBlock() {
+    if (!article) return;
+    const currentBlocks: ContentBlock[] = article.content_blocks ?? [];
+    const hasFaq = currentBlocks.some((b) => b.type === "faq");
+
+    let updatedBlocks: ContentBlock[];
+    if (hasFaq) {
+      // Remove FAQ block
+      updatedBlocks = currentBlocks.filter((b) => b.type !== "faq");
+    } else {
+      // Add FAQ block at the end
+      const faqBlock: ContentBlock = {
+        id: crypto.randomUUID(),
+        type: "faq",
+        heading: "FAQ",
+        content_html: "",
+        nugget_ids: [],
+        word_count: 0,
+        status: "pending",
+        writing_directive: "Ecris 3 a 6 questions-reponses basees sur les People Also Ask. Format accordion HTML avec Schema.org.",
+        format_hint: "prose",
+      };
+      updatedBlocks = [...currentBlocks, faqBlock];
+    }
+
+    try {
+      const res = await fetch(`/api/articles/${article.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content_blocks: updatedBlocks }),
+      });
+      if (!res.ok) throw new Error("Erreur");
+      toast({
+        title: hasFaq ? "FAQ supprimee" : "FAQ ajoutee",
+        description: hasFaq ? "Le bloc FAQ a ete retire du plan." : "Un bloc FAQ a ete ajoute en fin de plan.",
+      });
+      await fetchArticle();
+    } catch {
+      toast({ variant: "destructive", title: "Erreur", description: "Impossible de modifier la FAQ." });
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -2057,6 +2102,33 @@ export default function ArticleDetailPage() {
                     </Card>
                   );
                 })}
+
+                {/* FAQ toggle button */}
+                {(article.status === "planning" || article.status === "writing") && (
+                  <div className="flex justify-center pt-2">
+                    {blocks.some((b) => b.type === "faq") ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+                        onClick={toggleFaqBlock}
+                      >
+                        <X className="mr-1.5 h-3.5 w-3.5" />
+                        Retirer la FAQ
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-purple-600 border-purple-200 hover:bg-purple-50 hover:border-purple-300"
+                        onClick={toggleFaqBlock}
+                      >
+                        <MessageSquarePlus className="mr-1.5 h-3.5 w-3.5" />
+                        Ajouter une FAQ
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -2118,7 +2190,8 @@ export default function ArticleDetailPage() {
                     .filter((b) => b.status !== "pending")
                     .map((block) => (
                       <div key={block.id} className="mb-4">
-                        {block.heading && (
+                        {/* FAQ blocks include their own H2 in content_html */}
+                        {block.heading && block.type !== "faq" && (
                           <>
                             {block.type === "h2" ? (
                               <h2>{block.heading}</h2>

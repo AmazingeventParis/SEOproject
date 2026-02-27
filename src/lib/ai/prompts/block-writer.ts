@@ -127,9 +127,9 @@ Format : <ul> ou <ol> avec des <li> detailles (pas juste un mot par item).
 Chaque item doit apporter de la valeur.
 
 ### Pour un bloc de type "faq"
-Ecris les questions-reponses en HTML avec le format suivant :
+Ecris le bloc FAQ COMPLET avec le H2 et les questions-reponses en HTML :
 ${SEO_FAQ_RULES}
-- Le H2 "FAQ" est rendu separement par le renderer, donc N'INCLUS PAS de <h2> dans le HTML
+- Le H2 DOIT etre inclus dans le HTML genere (ex: <h2>Questions frequentes</h2> ou <h2>FAQ</h2>)
 
 ### Pour un bloc de type "callout"
 Ecris un encadre informatif ou d'alerte en HTML.
