@@ -33,12 +33,9 @@ interface GenerateImageOptions {
   aspectRatio?: string;
 }
 
-interface FluxProUltraOutput {
-  images: { url: string; width: number; height: number; content_type: string }[];
-  timings: Record<string, number>;
-  seed: number;
-  has_nsfw_concepts: boolean[];
-  prompt: string;
+interface NanaBananaOutput {
+  images: { url: string; width: number; height: number; content_type?: string; file_name?: string; file_size?: number }[];
+  description?: string;
 }
 
 // ---- Anti-text & realism directives (appended to every prompt) ----
@@ -51,30 +48,31 @@ const REALISM_SUFFIX = [
 ].join(" ");
 
 /**
- * Generate an image using Flux Pro v1.1 Ultra via fal.ai.
+ * Generate an image using Nano Banana Pro (Google) via fal.ai.
  * Produces ultra-realistic editorial photos with NO text.
  */
 export async function generateImage(
   prompt: string,
   options?: GenerateImageOptions
 ): Promise<GenerateImageResult> {
-  const aspectRatio = options?.aspectRatio ?? "16:9";
+  type AspectRatio = "21:9" | "16:9" | "3:2" | "4:3" | "5:4" | "1:1" | "4:5" | "3:4" | "2:3" | "9:16";
+  const aspectRatio = (options?.aspectRatio ?? "16:9") as AspectRatio;
 
   const fullPrompt = `${prompt}. ${REALISM_SUFFIX}`;
 
   await ensureFalKey();
 
   try {
-    const result = await fal.subscribe("fal-ai/flux-pro/v1.1-ultra", {
+    const result = await fal.subscribe("fal-ai/nano-banana-pro", {
       input: {
         prompt: fullPrompt,
         aspect_ratio: aspectRatio,
-        safety_tolerance: "5" as const,
         output_format: "jpeg",
+        resolution: "1K",
       },
     });
 
-    const data = result.data as FluxProUltraOutput;
+    const data = result.data as NanaBananaOutput;
     const image = data.images[0];
 
     if (!image?.url) {
@@ -97,7 +95,7 @@ export async function generateImage(
 }
 
 /**
- * Build a descriptive image prompt in English for Flux Pro Ultra.
+ * Build a descriptive image prompt in English for Nano Banana Pro.
  * Focuses on concrete visual scenes — never asks for text or graphics.
  */
 export function buildImagePrompt(
