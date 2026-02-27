@@ -7,6 +7,10 @@ ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS seo_title text DEFAULT NULL;
 ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS authority_link_suggestions jsonb DEFAULT NULL;
 ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS selected_authority_link jsonb DEFAULT NULL;
 ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS theme_color text DEFAULT NULL;
+ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS money_page_url text DEFAULT NULL;
+ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS money_page_description text DEFAULT NULL;
+ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS authority_link_suggestions jsonb DEFAULT NULL;
+ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS selected_authority_link jsonb DEFAULT NULL;
 ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS year_tag INTEGER DEFAULT NULL;
 `;
 
