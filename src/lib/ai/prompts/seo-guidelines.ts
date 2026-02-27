@@ -95,7 +95,7 @@ export const SEO_SEMANTIC_FIELD_RULES = `- Champ semantique riche : utilise des 
 - Ne te limite pas au mot-cle exact — enrichis avec l'ecosysteme semantique du sujet`
 
 /**
- * Heading hierarchy rules (H2/H3 structure).
+ * Heading hierarchy rules (H2/H3/H4 structure).
  * Used by: plan-architect, critique
  */
 export const SEO_HEADING_STRUCTURE_RULES = `Regles H2 :
@@ -104,7 +104,7 @@ export const SEO_HEADING_STRUCTURE_RULES = `Regles H2 :
 - Integre des mots-cles secondaires naturellement dans les H2
 - AU MOINS un H2 doit contenir le mot-cle principal ou une variante tres proche
 - 3 a 6 sections H2 par article
-- MAX 80 caracteres par titre H2/H3 — si plus long, reformule
+- MAX 80 caracteres par titre H2/H3/H4 — si plus long, reformule
 - Utilise des VERBES D'ACTION dans les titres (Comparer, Choisir, Eviter, Optimiser...)
 - Exemples BONS : "Quel budget prevoir pour une renovation de salle de bain ?"
 - Exemples MAUVAIS : "Le budget", "Parlons argent", "Introduction"
@@ -113,7 +113,15 @@ Regles H3 :
 - Chaque H3 = sous-aspect CONCRET du H2 parent
 - 1 a 3 H3 par H2 maximum
 - Les H3 doivent integrer des variantes du mot-cle
-- Ne saute JAMAIS un niveau (pas de H3 sans H2 parent)`
+- Ne saute JAMAIS un niveau (pas de H3 sans H2 parent)
+- Utilise des H3 pour decouper les sections H2 longues (>400 mots) en sous-parties lisibles
+
+Regles H4 :
+- Chaque H4 = detail precis sous un H3 parent
+- 1 a 3 H4 par H3 maximum
+- Utilise des H4 quand un H3 couvre plusieurs points distincts qui meritent un titre
+- Ne saute JAMAIS un niveau (pas de H4 sans H3 parent)
+- Optionnel : n'utilise des H4 que si le contenu est suffisamment dense pour le justifier`
 
 /**
  * Internal linking strategy rules.

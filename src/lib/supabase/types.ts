@@ -66,7 +66,7 @@ export interface SelectedAuthorityLink {
 
 export interface ContentBlock {
   id: string
-  type: 'h2' | 'h3' | 'paragraph' | 'list' | 'faq' | 'callout' | 'image'
+  type: 'h2' | 'h3' | 'h4' | 'paragraph' | 'list' | 'faq' | 'callout' | 'image'
   heading?: string
   content_html: string
   nugget_ids: string[]

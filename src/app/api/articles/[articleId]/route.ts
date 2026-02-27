@@ -5,7 +5,7 @@ import type { ArticleUpdate } from "@/lib/supabase/types";
 
 const contentBlockSchema = z.object({
   id: z.string(),
-  type: z.enum(["h2", "h3", "paragraph", "list", "faq", "callout", "image"]),
+  type: z.enum(["h2", "h3", "h4", "paragraph", "list", "faq", "callout", "image"]),
   heading: z.string().nullish(),
   content_html: z.string(),
   nugget_ids: z.array(z.string()),

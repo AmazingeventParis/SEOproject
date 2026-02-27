@@ -62,7 +62,7 @@ interface PlanArchitectPrompt {
  *   "content_blocks": [
  *     {
  *       "id": "uuid",
- *       "type": "h2" | "h3" | "paragraph" | "list" | "faq",
+ *       "type": "h2" | "h3" | "h4" | "paragraph" | "list" | "faq",
  *       "heading": "...",
  *       "content_html": "",
  *       "nugget_ids": [],
@@ -229,8 +229,8 @@ Tu DOIS retourner UNIQUEMENT un objet JSON valide, sans texte avant ou apres, sa
     },
     {
       "id": "genere un UUID v4 unique",
-      "type": "h2 | h3 | paragraph | list | faq",
-      "heading": "Titre de la section (pour h2, h3, faq) ou null",
+      "type": "h2 | h3 | h4 | paragraph | list | faq",
+      "heading": "Titre de la section (pour h2, h3, h4, faq) ou null",
       "content_html": "",
       "nugget_ids": ["ids des nuggets"],
       "word_count": 300,

@@ -878,7 +878,7 @@ async function executePublish(
   const htmlParts: string[] = []
   for (const block of contentBlocks) {
     if (!block.content_html) continue
-    if (block.heading && (block.type === 'h2' || block.type === 'h3')) {
+    if (block.heading && (block.type === 'h2' || block.type === 'h3' || block.type === 'h4')) {
       const tag = block.type
       htmlParts.push(`<${tag}>${block.heading}</${tag}>`)
     }

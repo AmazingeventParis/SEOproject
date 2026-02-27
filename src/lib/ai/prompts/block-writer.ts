@@ -25,7 +25,7 @@ interface BlockWriterParams {
     writing_style_examples: Record<string, unknown>[]
   }
   block: {
-    type: 'h2' | 'h3' | 'paragraph' | 'list' | 'faq' | 'callout' | 'image'
+    type: 'h2' | 'h3' | 'h4' | 'paragraph' | 'list' | 'faq' | 'callout' | 'image'
     heading: string | null
     word_count: number
     writing_directive?: string
@@ -112,9 +112,9 @@ ${SEO_EEAT_RULES}
 
 ## FORMAT DE SORTIE
 
-### Pour un bloc de type "h2" ou "h3" (section avec titre)
+### Pour un bloc de type "h2", "h3" ou "h4" (section avec titre)
 Ecris le contenu de la section en HTML propre.
-N'inclus PAS le tag de titre (h2/h3) - il sera ajoute automatiquement.
+N'inclus PAS le tag de titre (h2/h3/h4) - il sera ajoute automatiquement.
 Utilise : <p>, <strong>, <em>, <ul>/<ol>/<li>, <blockquote> si pertinent.
 
 ### Pour un bloc de type "paragraph"

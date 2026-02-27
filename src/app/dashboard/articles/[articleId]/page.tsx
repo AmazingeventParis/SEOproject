@@ -81,6 +81,7 @@ interface ArticleWithRelations extends Article {
 const BLOCK_TYPE_LABELS: Record<string, string> = {
   h2: "H2",
   h3: "H3",
+  h4: "H4",
   paragraph: "Paragraphe",
   list: "Liste",
   faq: "FAQ",
@@ -91,6 +92,7 @@ const BLOCK_TYPE_LABELS: Record<string, string> = {
 const BLOCK_TYPE_COLORS: Record<string, string> = {
   h2: "bg-blue-100 text-blue-700",
   h3: "bg-sky-100 text-sky-700",
+  h4: "bg-indigo-100 text-indigo-700",
   paragraph: "bg-gray-100 text-gray-700",
   list: "bg-amber-100 text-amber-700",
   faq: "bg-purple-100 text-purple-700",
@@ -1917,6 +1919,7 @@ export default function ArticleDetailPage() {
                   const isSectionLoading = actionLoading === `section-${sectionBlockIds[0]}`;
                   const sectionHeading = section.h2Block.heading || (section.h2Block.type === "faq" ? "FAQ" : `Section #${section.h2Index + 1}`);
                   const allWritten = sectionPending.length === 0;
+                  const subSections = section.children.filter((c) => c.block.type === "h3" || c.block.type === "h4");
 
                   return (
                     <Card key={section.h2Block.id} className="overflow-hidden">
@@ -1925,7 +1928,7 @@ export default function ArticleDetailPage() {
                         className="flex items-center justify-between gap-3 p-4 cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => toggleSection(section.h2Block.id)}
                       >
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="flex items-center gap-3 min-w-0 flex-1 flex-wrap">
                           {isExpanded ? (
                             <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
                           ) : (
@@ -1938,6 +1941,11 @@ export default function ArticleDetailPage() {
                           <span className="text-xs text-muted-foreground shrink-0">
                             {sectionWritten.length}/{allBlocksInSection.length} blocs
                           </span>
+                          {subSections.length > 0 && (
+                            <Badge variant="outline" className="bg-sky-50 text-sky-600 border-sky-200 text-xs shrink-0">
+                              {subSections.length} sous-section{subSections.length > 1 ? "s" : ""}
+                            </Badge>
+                          )}
                           {allWritten && (
                             <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200 shrink-0">
                               Ecrit
@@ -1985,8 +1993,19 @@ export default function ArticleDetailPage() {
                           )}
 
                           {/* Each block in the section */}
-                          {allBlocksInSection.map(({ block, index }) => (
-                            <div key={block.id} className="border-b last:border-b-0 px-4 py-3">
+                          {allBlocksInSection.map(({ block, index }) => {
+                            const isSubHeading = block.type === "h3" || block.type === "h4";
+                            const indentClass = block.type === "h3" ? "ml-4 border-l-2 border-sky-200" : block.type === "h4" ? "ml-8 border-l-2 border-indigo-200" : "";
+                            return (
+                            <div key={block.id} className={`border-b last:border-b-0 px-4 py-3 ${indentClass}`}>
+                              {/* Sub-heading separator */}
+                              {isSubHeading && (
+                                <div className={`-mx-4 -mt-3 mb-3 px-4 py-1.5 ${block.type === "h3" ? "bg-sky-50/50" : "bg-indigo-50/50"}`}>
+                                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                                    {block.type === "h3" ? "Sous-section" : "Sous-sous-section"}
+                                  </span>
+                                </div>
+                              )}
                               {/* Block header */}
                               <div className="flex items-center gap-2 flex-wrap mb-2">
                                 <Badge variant="outline" className={`text-xs ${BLOCK_TYPE_COLORS[block.type] ?? ""}`}>
@@ -2056,7 +2075,7 @@ export default function ArticleDetailPage() {
 
                               {/* Block heading */}
                               {block.heading && (
-                                <p className={`font-medium mb-2 ${block.type === "h2" ? "text-lg" : "text-base"}`}>
+                                <p className={`font-medium mb-2 ${block.type === "h2" ? "text-lg" : block.type === "h3" ? "text-base" : block.type === "h4" ? "text-sm" : "text-base"}`}>
                                   {block.heading}
                                 </p>
                               )}
@@ -2096,7 +2115,8 @@ export default function ArticleDetailPage() {
                                 <p className="text-xs text-muted-foreground italic">En attente de redaction...</p>
                               )}
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </Card>
@@ -2197,6 +2217,8 @@ export default function ArticleDetailPage() {
                               <h2>{block.heading}</h2>
                             ) : block.type === "h3" ? (
                               <h3>{block.heading}</h3>
+                            ) : block.type === "h4" ? (
+                              <h4>{block.heading}</h4>
                             ) : null}
                           </>
                         )}
