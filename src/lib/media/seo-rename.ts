@@ -1,4 +1,4 @@
-const MAX_FILENAME_LENGTH = 60;
+const MAX_FILENAME_LENGTH = 50;
 const MAX_ALT_LENGTH = 125;
 
 /**
@@ -8,68 +8,112 @@ const MAX_ALT_LENGTH = 125;
 export function sanitizeFilename(text: string): string {
   return (
     text
-      // Lowercase
       .toLowerCase()
-      // Remove accents (normalize NFD then strip diacritical marks)
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      // Replace spaces and special characters with hyphens
       .replace(/[^a-z0-9]+/g, "-")
-      // Remove consecutive hyphens
       .replace(/-{2,}/g, "-")
-      // Trim hyphens from start and end
       .replace(/^-+|-+$/g, "")
-      // Truncate to max length
       .slice(0, MAX_FILENAME_LENGTH)
-      // Trim any trailing hyphen after truncation
       .replace(/-+$/, "")
   );
 }
 
 /**
+ * Extract 2-3 meaningful words from a heading for a concise filename suffix.
+ * Removes stop words and keeps the most descriptive terms.
+ */
+function extractKeyTerms(text: string, maxWords = 3): string {
+  const stopWords = new Set([
+    "le", "la", "les", "un", "une", "des", "de", "du", "au", "aux",
+    "et", "ou", "en", "pour", "par", "sur", "avec", "sans", "dans",
+    "ce", "ces", "cette", "son", "sa", "ses", "mon", "ma", "mes",
+    "qui", "que", "quoi", "dont", "comment", "pourquoi", "quel", "quelle",
+    "est", "sont", "a", "the", "and", "or", "for", "how", "what", "your",
+    "notre", "votre", "nos", "vos", "leur", "leurs", "tout", "tous",
+    "plus", "pas", "ne", "se", "il", "elle", "ils", "elles", "on",
+    "bien", "tres", "aussi", "meme", "entre", "avant", "apres",
+  ]);
+
+  const words = text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !stopWords.has(w));
+
+  return words.slice(0, maxWords).join("-");
+}
+
+/**
  * Generate an SEO-friendly filename for an image.
- * Format: {sanitized-keyword}-{sanitized-descriptor}-{index}.webp
- * Example: "meilleur-aspirateur-robot-hero-1.webp"
+ *
+ * Strategy:
+ * - Hero: {keyword-short}.webp
+ * - Section: {keyword-short}-{heading-terms}.webp
+ * - Max ~50 chars before extension, concise and descriptive
  */
 export function generateSeoFilename(
   keyword: string,
-  descriptor: string,
-  index: number
+  heading: string | null,
+  imageType: "hero" | "section"
 ): string {
-  const sanitizedKeyword = sanitizeFilename(keyword);
-  const sanitizedDescriptor = sanitizeFilename(descriptor);
-  const baseName = `${sanitizedKeyword}-${sanitizedDescriptor}-${index}`;
+  const keywordSlug = sanitizeFilename(keyword).slice(0, 30).replace(/-+$/, "");
 
-  // Ensure the base name (without extension) fits within the limit
+  if (imageType === "hero") {
+    return `${keywordSlug}.webp`;
+  }
+
+  // Section image: add heading key terms
+  const headingTerms = heading ? extractKeyTerms(heading) : "";
+  if (!headingTerms) {
+    return `${keywordSlug}.webp`;
+  }
+
+  const baseName = `${keywordSlug}-${headingTerms}`;
   const truncated = baseName.slice(0, MAX_FILENAME_LENGTH).replace(/-+$/, "");
-
   return `${truncated}.webp`;
 }
 
 /**
- * Generate descriptive French alt text for an image.
- * Rules:
- * - If heading is provided: "{heading} - {keyword}"
- * - If blockType is "hero": "Image principale : {keyword}"
- * - Otherwise: "Illustration {keyword}"
- * Max 125 characters.
+ * Generate descriptive alt text for an image.
+ *
+ * Strategy:
+ * - Uses the image_prompt_hint (scene description) when available
+ * - Falls back to heading + keyword
+ * - Always includes the keyword naturally
+ * - Describes the visual scene, not just the topic
+ * - Max 125 characters
  */
 export function generateAltText(
   keyword: string,
   heading: string | null,
-  blockType: string
+  imageType: "hero" | "section",
+  imagePromptHint?: string | null
 ): string {
   let alt: string;
 
-  if (heading) {
-    alt = `${heading} - ${keyword}`;
-  } else if (blockType === "hero") {
-    alt = `Image principale : ${keyword}`;
+  if (imagePromptHint) {
+    // Use the scene description from the plan, ensure keyword is present
+    const hint = imagePromptHint
+      .replace(/^editorial photo(graph)?\s*(showing|of|illustrating)?\s*/i, "")
+      .replace(/\.$/, "");
+    const keywordLower = keyword.toLowerCase();
+    const hintLower = hint.toLowerCase();
+
+    if (hintLower.includes(keywordLower) || hintLower.includes(keywordLower.split(" ")[0])) {
+      alt = capitalize(hint);
+    } else {
+      alt = `${capitalize(hint)} - ${keyword}`;
+    }
+  } else if (heading && imageType === "section") {
+    alt = `${heading} : photo illustrant ${keyword.toLowerCase()}`;
   } else {
-    alt = `Illustration ${keyword}`;
+    alt = `Photo illustrant ${keyword.toLowerCase()}`;
   }
 
-  // Truncate to max length, cutting at the last space if needed
+  // Truncate at last space within limit
   if (alt.length > MAX_ALT_LENGTH) {
     const truncated = alt.slice(0, MAX_ALT_LENGTH);
     const lastSpace = truncated.lastIndexOf(" ");
@@ -80,4 +124,8 @@ export function generateAltText(
   }
 
   return alt;
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

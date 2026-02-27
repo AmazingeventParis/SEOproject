@@ -655,7 +655,7 @@ async function executeMedia(
     const heroResult = await generateHeroImage(article.keyword, article.title || article.keyword)
     const heroBuffer = await fetch(heroResult.url).then(r => r.arrayBuffer())
     const optimized = await optimizeForWeb(Buffer.from(heroBuffer))
-    const filename = generateSeoFilename(article.keyword, 'hero', 0)
+    const filename = generateSeoFilename(article.keyword, null, 'hero')
     const altText = generateAltText(article.keyword, null, 'hero')
 
     const wpMedia = await uploadMedia(article.site_id, {
@@ -688,8 +688,8 @@ async function executeMedia(
       const imageResult = await generateImage(prompt, { aspectRatio: "16:9" })
       const imgBuffer = await fetch(imageResult.url).then(r => r.arrayBuffer())
       const optimized = await optimizeForWeb(Buffer.from(imgBuffer))
-      const filename = generateSeoFilename(article.keyword, block.heading || 'illustration', i + 1)
-      const altText = generateAltText(article.keyword, block.heading || null, block.type)
+      const filename = generateSeoFilename(article.keyword, block.heading || null, 'section')
+      const altText = generateAltText(article.keyword, block.heading || null, 'section', block.image_prompt_hint)
 
       const wpMedia = await uploadMedia(article.site_id, {
         buffer: optimized.buffer,
