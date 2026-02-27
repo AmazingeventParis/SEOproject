@@ -8,6 +8,15 @@
   }
 }
 
+/* Espacement avant les titres Hn (sauf H1) — aeration du contenu */
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  margin-top: 50px !important;
+}
+
 /* FAQ Accordion — Modern <details>/<summary> */
 .faq-section {
   display: flex;

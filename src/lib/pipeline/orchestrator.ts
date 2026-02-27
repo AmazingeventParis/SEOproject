@@ -919,7 +919,7 @@ async function executePublish(
     if (!block.content_html) continue
     if (block.heading && (block.type === 'h2' || block.type === 'h3' || block.type === 'h4')) {
       const tag = block.type
-      htmlParts.push(`<${tag}>${block.heading}</${tag}>`)
+      htmlParts.push(`<${tag} style="margin-top:50px">${block.heading}</${tag}>`)
     }
     htmlParts.push(block.content_html)
   }
