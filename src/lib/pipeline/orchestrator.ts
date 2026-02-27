@@ -766,13 +766,32 @@ async function executeSeo(
   })
   schemas.push(articleSchema)
 
-  // FAQ schema (from FAQ blocks)
+  // FAQ schema (parse individual Q/A from <details>/<summary> in FAQ blocks)
   const faqBlocks = contentBlocks.filter(b => b.type === 'faq' && b.content_html)
   if (faqBlocks.length > 0) {
-    const faqItems = faqBlocks.map(b => ({
-      question: b.heading || '',
-      answer: b.content_html.replace(/<[^>]*>/g, '').trim(),
-    })).filter(item => item.question && item.answer)
+    const faqItems: { question: string; answer: string }[] = []
+    const summaryRegex = /<summary[^>]*>([\s\S]*?)<\/summary>/gi
+    const detailsRegex = /<details[^>]*>([\s\S]*?)<\/details>/gi
+
+    for (const block of faqBlocks) {
+      let detailsMatch
+      while ((detailsMatch = detailsRegex.exec(block.content_html)) !== null) {
+        const detailsInner = detailsMatch[1]
+        const summaryMatch = summaryRegex.exec(detailsInner)
+        if (summaryMatch) {
+          const question = summaryMatch[1].replace(/<[^>]*>/g, '').trim()
+          const answer = detailsInner
+            .replace(/<summary[^>]*>[\s\S]*?<\/summary>/i, '')
+            .replace(/<[^>]*>/g, '')
+            .trim()
+          if (question && answer) {
+            faqItems.push({ question, answer })
+          }
+        }
+        summaryRegex.lastIndex = 0
+      }
+      detailsRegex.lastIndex = 0
+    }
 
     const faqSchema = generateFAQSchema(faqItems)
     if (faqSchema) schemas.push(faqSchema)
