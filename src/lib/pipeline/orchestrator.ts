@@ -21,7 +21,7 @@ import { optimizeForWeb } from '@/lib/media/sharp-processor'
 import { generateSeoFilename, generateAltText } from '@/lib/media/seo-rename'
 import { generateArticleSchema, generateFAQSchema, generateBreadcrumbSchema, assembleJsonLd } from '@/lib/seo/json-ld'
 import { generateInternalLinks, injectLinksIntoHtml } from '@/lib/seo/internal-links'
-import { createPost, updatePost, uploadMedia } from '@/lib/wordpress/client'
+import { createPost, updatePost, uploadMedia, findOrCreateCategory } from '@/lib/wordpress/client'
 
 /**
  * Resolve default model override from seo_config for a given step.
@@ -872,6 +872,7 @@ async function executePublish(
 ): Promise<PipelineRunResult> {
   const supabase = getServerClient()
   const contentBlocks = (article.content_blocks || []) as ContentBlock[]
+  const site = article.seo_sites
 
   // 1. Assemble full HTML from content blocks
   const htmlParts: string[] = []
@@ -892,7 +893,13 @@ async function executePublish(
 
   const fullHtml = htmlParts.join('\n\n')
 
-  // 2. Fetch previous pipeline run to get hero media ID
+  // 2. Extract intro as excerpt (first paragraph block without heading)
+  const introBlock = contentBlocks.find(b => b.type === 'paragraph' && !b.heading && b.content_html)
+  const excerpt = introBlock
+    ? introBlock.content_html.replace(/<[^>]*>/g, '').trim()
+    : (article.meta_description || '')
+
+  // 3. Fetch previous pipeline run to get hero media ID
   const { data: mediaRun } = await supabase
     .from('seo_pipeline_runs')
     .select('output')
@@ -905,11 +912,18 @@ async function executePublish(
 
   const heroMediaId = (mediaRun?.output as Record<string, unknown>)?.heroMediaId as number | undefined
 
-  // 3. Create or update WordPress post
-  let wpPostId: number
-  let wpUrl: string
+  // 4. Find or create WP category based on site niche
+  let categoryIds: number[] | undefined
+  try {
+    if (site?.niche) {
+      const catId = await findOrCreateCategory(article.site_id, site.niche)
+      categoryIds = [catId]
+    }
+  } catch {
+    // Category assignment is optional — continue without it
+  }
 
-  // Build SEO meta for Yoast/Rank Math
+  // 5. Build SEO meta for Yoast/Rank Math
   const seoMeta: Record<string, unknown> = {}
   if (article.seo_title) {
     seoMeta._yoast_wpseo_title = article.seo_title
@@ -919,7 +933,15 @@ async function executePublish(
     seoMeta._yoast_wpseo_metadesc = article.meta_description
     seoMeta.rank_math_description = article.meta_description
   }
+  if (article.keyword) {
+    seoMeta._yoast_wpseo_focuskw = article.keyword
+    seoMeta.rank_math_focus_keyword = article.keyword
+  }
   const hasSeoMeta = Object.keys(seoMeta).length > 0
+
+  // 6. Create or update WordPress post as DRAFT
+  let wpPostId: number
+  let wpUrl: string
 
   if (article.wp_post_id) {
     // Update existing post
@@ -927,26 +949,31 @@ async function executePublish(
       title: article.title || article.keyword,
       content: fullHtml,
       slug: article.slug || undefined,
-      status: 'publish',
+      status: 'draft',
+      excerpt,
       featured_media: heroMediaId,
+      categories: categoryIds,
+      ...(hasSeoMeta ? { meta: seoMeta } : {}),
     })
     wpPostId = wpPost.id
     wpUrl = wpPost.link
   } else {
-    // Create new post
+    // Create new post as draft
     const result = await createPost(article.site_id, {
       title: article.title || article.keyword,
       content: fullHtml,
       slug: article.slug || article.keyword.toLowerCase().replace(/\s+/g, '-'),
-      status: 'publish',
+      status: 'draft',
+      excerpt,
       featured_media: heroMediaId,
+      categories: categoryIds,
       ...(hasSeoMeta ? { meta: seoMeta } : {}),
     })
     wpPostId = result.wpPostId
     wpUrl = result.wpUrl
   }
 
-  // 4. Update article with WP data
+  // 7. Update article with WP data
   const now = new Date().toISOString()
   await supabase
     .from('seo_articles')
@@ -965,7 +992,10 @@ async function executePublish(
       wpPostId,
       wpUrl,
       htmlLength: fullHtml.length,
-      publishedAt: article.published_at || now,
+      status: 'draft',
+      excerpt: excerpt.slice(0, 100) + '...',
+      category: site?.niche || null,
+      seoMeta: hasSeoMeta ? Object.keys(seoMeta) : [],
     },
   }
 }

@@ -105,6 +105,7 @@ export async function createPost(
     status: input.status,
   }
 
+  if (input.excerpt) body.excerpt = input.excerpt
   if (input.categories) body.categories = input.categories
   if (input.tags) body.tags = input.tags
   if (input.featured_media) body.featured_media = input.featured_media
@@ -244,6 +245,35 @@ export async function getCategories(siteId: string): Promise<WPCategory[]> {
 
   const categories: WPCategory[] = await response.json()
   return categories
+}
+
+/**
+ * Create a new category on the WordPress site.
+ */
+/**
+ * Find or create a category by name. Returns the category ID.
+ */
+export async function findOrCreateCategory(
+  siteId: string,
+  categoryName: string
+): Promise<number> {
+  const existing = await getCategories(siteId)
+  const normalized = categoryName.toLowerCase().trim()
+
+  // Try exact name match (case-insensitive)
+  const match = existing.find(c => c.name.toLowerCase().trim() === normalized)
+  if (match) return match.id
+
+  // Try slug match
+  const slug = normalized
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  const slugMatch = existing.find(c => c.slug === slug)
+  if (slugMatch) return slugMatch.id
+
+  // Create new category
+  const newCat = await createCategory(siteId, categoryName, slug)
+  return newCat.id
 }
 
 /**

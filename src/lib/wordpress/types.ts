@@ -42,6 +42,7 @@ export interface WPCreatePostInput {
   content: string
   slug: string
   status: 'publish' | 'draft'
+  excerpt?: string
   categories?: number[]
   tags?: number[]
   featured_media?: number
@@ -53,9 +54,11 @@ export interface WPUpdatePostInput {
   content?: string
   slug?: string
   status?: 'publish' | 'draft'
+  excerpt?: string
   categories?: number[]
   tags?: number[]
   featured_media?: number
+  meta?: Record<string, unknown>
 }
 
 export interface WPUploadMediaInput {
