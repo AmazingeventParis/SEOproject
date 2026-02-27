@@ -30,50 +30,51 @@ interface GenerateImageResult {
 interface GenerateImageOptions {
   width?: number;
   height?: number;
-  style?: string;
+  aspectRatio?: string;
 }
 
-interface FluxImage {
-  url: string;
-  width: number;
-  height: number;
-  content_type: string;
-}
-
-interface FluxOutput {
-  images: FluxImage[];
+interface FluxProUltraOutput {
+  images: { url: string; width: number; height: number; content_type: string }[];
   timings: Record<string, number>;
   seed: number;
   has_nsfw_concepts: boolean[];
   prompt: string;
 }
 
+// ---- Anti-text & realism directives (appended to every prompt) ----
+const REALISM_SUFFIX = [
+  "Ultra realistic photograph taken with a Canon EOS R5, 35mm lens, f/2.8 aperture.",
+  "Natural ambient lighting, shallow depth of field, authentic colors.",
+  "ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO NUMBERS, NO CAPTIONS, NO WATERMARKS, NO LOGOS anywhere in the image.",
+  "No overlaid graphics, no UI elements, no infographics, no diagrams.",
+  "Real-world scene, candid feel, editorial photography for a premium magazine.",
+].join(" ");
+
 /**
- * Generate an image using fal.ai's Flux Schnell model.
- * Default size is 1200x630 (blog hero format).
+ * Generate an image using Flux Pro v1.1 Ultra via fal.ai.
+ * Produces ultra-realistic editorial photos with NO text.
  */
 export async function generateImage(
   prompt: string,
   options?: GenerateImageOptions
 ): Promise<GenerateImageResult> {
-  const width = options?.width ?? 1200;
-  const height = options?.height ?? 630;
+  const aspectRatio = options?.aspectRatio ?? "16:9";
 
-  const fullPrompt = options?.style
-    ? `${prompt}. Style: ${options.style}`
-    : prompt;
+  const fullPrompt = `${prompt}. ${REALISM_SUFFIX}`;
 
   await ensureFalKey();
 
   try {
-    const result = await fal.subscribe("fal-ai/flux/schnell", {
+    const result = await fal.subscribe("fal-ai/flux-pro/v1.1-ultra", {
       input: {
         prompt: fullPrompt,
-        image_size: { width, height },
+        aspect_ratio: aspectRatio,
+        safety_tolerance: "5" as const,
+        output_format: "jpeg",
       },
     });
 
-    const data = result.data as FluxOutput;
+    const data = result.data as FluxProUltraOutput;
     const image = data.images[0];
 
     if (!image?.url) {
@@ -82,8 +83,8 @@ export async function generateImage(
 
     return {
       url: image.url,
-      width: image.width ?? width,
-      height: image.height ?? height,
+      width: image.width ?? (options?.width || 1200),
+      height: image.height ?? (options?.height || 675),
     };
   } catch (error) {
     if (error instanceof Error) {
@@ -96,32 +97,27 @@ export async function generateImage(
 }
 
 /**
- * Build a descriptive image prompt in English for better AI results.
+ * Build a descriptive image prompt in English for Flux Pro Ultra.
+ * Focuses on concrete visual scenes — never asks for text or graphics.
  */
 export function buildImagePrompt(
   keyword: string,
   blockContext: string,
   articleTitle: string
 ): string {
-  return `Professional blog illustration for article about ${keyword}. Context: ${blockContext}. Article title: ${articleTitle}. Style: modern, clean, editorial photography style, high quality`;
+  return `Editorial photograph illustrating the concept of "${keyword}". Scene context: ${blockContext}. For an article titled "${articleTitle}". Show a real-world scene with authentic people or objects, natural environment, candid moment. No staged or stock-photo feel. No text or overlay of any kind.`;
 }
 
 /**
- * Convenience function: builds a prompt and generates a 1200x630 hero image.
+ * Convenience function: builds a prompt and generates a 16:9 hero image.
  */
 export async function generateHeroImage(
   keyword: string,
   articleTitle: string
 ): Promise<GenerateImageResult> {
-  const prompt = buildImagePrompt(
-    keyword,
-    "Hero image for the article",
-    articleTitle
-  );
+  const prompt = `Wide-angle editorial cover photo for a premium article about "${keyword}". Title: "${articleTitle}". Cinematic composition, golden hour lighting, real environment, authentic atmosphere. Hero banner format. No text, no overlay, no graphic elements.`;
 
   return generateImage(prompt, {
-    width: 1200,
-    height: 630,
-    style: "professional, vibrant, editorial",
+    aspectRatio: "16:9",
   });
 }

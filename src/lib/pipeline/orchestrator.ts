@@ -685,7 +685,7 @@ async function executeMedia(
     try {
       const promptContext = block.image_prompt_hint || block.heading || ''
       const prompt = buildImagePrompt(article.keyword, promptContext, article.title || article.keyword)
-      const imageResult = await generateImage(prompt, { width: 1200, height: 800 })
+      const imageResult = await generateImage(prompt, { aspectRatio: "16:9" })
       const imgBuffer = await fetch(imageResult.url).then(r => r.arrayBuffer())
       const optimized = await optimizeForWeb(Buffer.from(imgBuffer))
       const filename = generateSeoFilename(article.keyword, block.heading || 'illustration', i + 1)
