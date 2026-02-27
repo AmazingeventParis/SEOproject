@@ -24,6 +24,46 @@ import { generateInternalLinks, injectLinksIntoHtml } from '@/lib/seo/internal-l
 import { createPost, updatePost, uploadMedia, findOrCreateCategory } from '@/lib/wordpress/client'
 
 /**
+ * Extract and parse JSON from AI response text.
+ * Handles: markdown fences, text before/after JSON, nested braces, trailing commas.
+ */
+function extractJSON<T = unknown>(raw: string): T {
+  // 1. Try stripping markdown fences first
+  let cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  try {
+    return JSON.parse(cleaned) as T
+  } catch {
+    // continue to fallback strategies
+  }
+
+  // 2. Extract the first top-level { ... } block (handles text before/after)
+  const firstBrace = cleaned.indexOf('{')
+  if (firstBrace !== -1) {
+    let depth = 0
+    let inString = false
+    let escape = false
+    for (let i = firstBrace; i < cleaned.length; i++) {
+      const ch = cleaned[i]
+      if (escape) { escape = false; continue }
+      if (ch === '\\') { escape = true; continue }
+      if (ch === '"' && !escape) { inString = !inString; continue }
+      if (inString) continue
+      if (ch === '{') depth++
+      if (ch === '}') { depth--; if (depth === 0) { cleaned = cleaned.substring(firstBrace, i + 1); break } }
+    }
+    // Fix trailing commas before } or ]
+    cleaned = cleaned.replace(/,\s*([}\]])/g, '$1')
+    try {
+      return JSON.parse(cleaned) as T
+    } catch {
+      // continue
+    }
+  }
+
+  throw new Error(`JSON invalide. Debut de la reponse IA : ${raw.substring(0, 300)}`)
+}
+
+/**
  * Resolve default model override from seo_config for a given step.
  * Returns undefined if no default is configured.
  */
@@ -227,8 +267,7 @@ async function executeAnalyze(
           competitorModel = aiResponse.model
           competitorCostUsd = estimateCost(aiResponse.tokensIn, aiResponse.tokensOut, aiResponse.model)
 
-          const cleaned = aiResponse.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-          semanticAnalysis = JSON.parse(cleaned)
+          semanticAnalysis = extractJSON(aiResponse.content)
         } catch {
           // Gemini analysis failed — continue without it
         }
@@ -353,13 +392,14 @@ async function executePlan(
   // Parse the AI response as JSON plan
   let plan: { title_suggestions: { title: string; seo_title?: string; slug: string; seo_rationale: string }[]; meta_description: string; content_blocks: ContentBlock[] }
   try {
-    const cleaned = aiResponse.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    plan = JSON.parse(cleaned)
-  } catch {
+    plan = extractJSON(aiResponse.content)
+  } catch (parseError) {
+    const msg = parseError instanceof Error ? parseError.message : String(parseError)
+    console.error('[Plan Parse Error]', msg)
     return {
       success: false,
       runId: '',
-      error: 'Impossible de parser le plan genere par l\'IA',
+      error: `Impossible de parser le plan genere par l'IA : ${msg}`,
       tokensIn: aiResponse.tokensIn,
       tokensOut: aiResponse.tokensOut,
       modelUsed: aiResponse.model,
@@ -486,8 +526,7 @@ Retourne UNIQUEMENT un JSON valide :
 Pas de texte avant ou apres le JSON.`
 
       const evalResponse = await routeAI('evaluate_authority_links', [{ role: 'user', content: evalPrompt }])
-      const evalCleaned = evalResponse.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      const evalParsed = JSON.parse(evalCleaned) as { selections: { index: number; rationale: string; anchor_context: string }[] }
+      const evalParsed = extractJSON<{ selections: { index: number; rationale: string; anchor_context: string }[] }>(evalResponse.content)
 
       authorityLinkSuggestions = (evalParsed.selections || [])
         .filter(s => checkedCandidates[s.index])
