@@ -94,6 +94,35 @@ const TRANSITIONS: PipelineTransition[] = [
   },
 ]
 
+// ---- Rollback (go back one step) ----
+
+const ROLLBACK_MAP: Partial<Record<ArticleStatus, ArticleStatus>> = {
+  analyzing: 'draft',
+  planning: 'analyzing',
+  writing: 'planning',
+  media: 'writing',
+  seo_check: 'media',
+  reviewing: 'media',
+  publishing: 'reviewing',
+}
+
+/**
+ * Get the previous status for a rollback (go back one step).
+ * Returns null if rollback is not possible from this status.
+ */
+export function getRollbackStatus(currentStatus: ArticleStatus): ArticleStatus | null {
+  return ROLLBACK_MAP[currentStatus] ?? null
+}
+
+/**
+ * Get the French label for the rollback target status.
+ */
+export function getRollbackLabel(currentStatus: ArticleStatus): string | null {
+  const target = getRollbackStatus(currentStatus)
+  if (!target) return null
+  return getStatusLabel(target)
+}
+
 /**
  * Get the valid next status for a given current status and step
  */

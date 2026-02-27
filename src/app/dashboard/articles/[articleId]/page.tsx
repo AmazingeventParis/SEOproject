@@ -69,6 +69,7 @@ import {
   CheckCircle2,
   MessageSquarePlus,
   X,
+  Undo2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -871,6 +872,34 @@ export default function ArticleDetailPage() {
     }
   }
 
+  async function rollbackPipeline() {
+    setActionLoading("rollback");
+    try {
+      const res = await fetch(`/api/articles/${articleId}/rollback`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Erreur");
+      }
+      const result = await res.json();
+      toast({
+        title: "Retour en arriere",
+        description: `Statut revenu a "${result.label}".`,
+      });
+      await Promise.all([fetchArticle(), fetchPipelineRuns()]);
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description:
+          err instanceof Error ? err.message : "Impossible de revenir en arriere.",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function runWriteAll() {
     setActionLoading("Redaction");
     setWriteProgress(null);
@@ -1454,6 +1483,23 @@ export default function ArticleDetailPage() {
                   Voir sur WordPress
                 </Button>
               </a>
+            )}
+            {/* Rollback button — visible when not draft/published */}
+            {article.status !== "draft" && article.status !== "published" && (
+              <Button
+                variant="outline"
+                onClick={rollbackPipeline}
+                disabled={!!actionLoading}
+                title="Revenir a l'etape precedente"
+                className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:border-amber-300"
+              >
+                {actionLoading === "rollback" ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <Undo2 className="mr-1.5 h-4 w-4" />
+                )}
+                Retour
+              </Button>
             )}
             {/* Refresh button */}
             <Button
