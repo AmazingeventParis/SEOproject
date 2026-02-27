@@ -8,6 +8,8 @@ import type {
   ContentBlock,
   PipelineRun,
   TitleSuggestion,
+  AuthorityLinkSuggestion,
+  SelectedAuthorityLink,
 } from "@/lib/supabase/types";
 import { getStepLabel } from "@/lib/pipeline/state-machine";
 import { StatusBadge } from "@/components/articles/status-badge";
@@ -36,7 +38,9 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import { RichTextEditor } from "@/components/rich-text-editor";
 import { ModelSelector } from "@/components/articles/model-selector";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -60,6 +64,9 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
+  Link2,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -252,6 +259,11 @@ function TitleSelectionCard({
                     )}
                   </div>
                   <p className="font-medium text-sm">{suggestion.title}</p>
+                  {suggestion.seo_title && suggestion.seo_title !== suggestion.title && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      Title SEO : {suggestion.seo_title}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground mt-1">
                     /{suggestion.slug}
                   </p>
@@ -292,6 +304,477 @@ function TitleSelectionCard({
   );
 }
 
+// ---- Authority Link Card ----
+function AuthorityLinkCard({
+  suggestions,
+  selectedLink,
+  onSelect,
+  onCustomSelect,
+  onRegenerate,
+  isLoading,
+  isRegenerating,
+}: {
+  suggestions: AuthorityLinkSuggestion[];
+  selectedLink: SelectedAuthorityLink | null;
+  onSelect: (index: number) => void;
+  onCustomSelect: (url: string, title: string, anchorContext: string) => void;
+  onRegenerate: () => void;
+  isLoading: boolean;
+  isRegenerating: boolean;
+}) {
+  const [customUrl, setCustomUrl] = React.useState("");
+  const [customTitle, setCustomTitle] = React.useState("");
+
+  return (
+    <Card className="border-emerald-200 bg-emerald-50/50">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Link2 className="h-4 w-4 text-emerald-600" />
+          Lien d&apos;autorite (optionnel)
+        </CardTitle>
+        <CardDescription>
+          Source externe fiable pour renforcer l&apos;E-E-A-T — sera integre dans un bloc H2
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {suggestions.map((suggestion, index) => {
+          const isSelected = suggestion.selected;
+
+          return (
+            <button
+              key={index}
+              onClick={() => onSelect(index)}
+              disabled={isLoading}
+              className={`w-full text-left rounded-lg border-2 p-3 transition-all ${
+                isSelected
+                  ? "border-emerald-500 bg-emerald-100/80 ring-1 ring-emerald-500/30"
+                  : "border-gray-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/30"
+              } ${isLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge
+                      variant="secondary"
+                      className="text-xs bg-emerald-100 text-emerald-700"
+                    >
+                      {suggestion.domain}
+                    </Badge>
+                    {suggestion.is_valid ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                    ) : (
+                      <AlertTriangle className="h-3.5 w-3.5 text-orange-500" />
+                    )}
+                    {isSelected && (
+                      <Badge className="bg-emerald-600 text-white text-xs">
+                        <Check className="h-3 w-3 mr-1" />
+                        Selectionne
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="font-medium text-sm">{suggestion.title}</p>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                    {suggestion.snippet}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1 italic">
+                    {suggestion.rationale}
+                  </p>
+                  <p className="text-xs text-emerald-600 mt-1 truncate">
+                    {suggestion.url}
+                  </p>
+                </div>
+                <div
+                  className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center mt-1 ${
+                    isSelected
+                      ? "border-emerald-500 bg-emerald-500"
+                      : "border-gray-300"
+                  }`}
+                >
+                  {isSelected && <Check className="h-3 w-3 text-white" />}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+
+        {/* Custom link input */}
+        <div className="rounded-lg border-2 border-dashed border-gray-200 p-3 space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">
+            Ou saisir un lien personnalise :
+          </p>
+          <div className="flex gap-2">
+            <Input
+              placeholder="https://..."
+              value={customUrl}
+              onChange={(e) => setCustomUrl(e.target.value)}
+              className="text-sm h-8"
+            />
+            <Input
+              placeholder="Titre (optionnel)"
+              value={customTitle}
+              onChange={(e) => setCustomTitle(e.target.value)}
+              className="text-sm h-8 w-48"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 shrink-0"
+              onClick={() => {
+                if (customUrl) {
+                  onCustomSelect(customUrl, customTitle, "");
+                  setCustomUrl("");
+                  setCustomTitle("");
+                }
+              }}
+              disabled={!customUrl || isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {/* Selected link display when it's a custom one */}
+        {selectedLink && !suggestions.some((s) => s.selected) && (
+          <div className="rounded-lg border-2 border-emerald-500 bg-emerald-100/80 p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Badge className="bg-emerald-600 text-white text-xs">
+                <Check className="h-3 w-3 mr-1" />
+                Lien personnalise selectionne
+              </Badge>
+            </div>
+            <p className="font-medium text-sm">{selectedLink.title}</p>
+            <p className="text-xs text-emerald-600 truncate">{selectedLink.url}</p>
+          </div>
+        )}
+
+        <div className="pt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRegenerate}
+            disabled={isRegenerating}
+          >
+            {isRegenerating ? (
+              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-3.5 w-3.5" />
+            )}
+            Regenerer les suggestions
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---- Content Gap types & helpers ----
+interface ContentGapItem {
+  label: string;
+  type: string;
+  description: string;
+}
+
+const GAP_TYPE_CONFIG: Record<string, { icon: string; label: string; color: string }> = {
+  calculator: { icon: "🧮", label: "Calculateur", color: "bg-blue-100 text-blue-700 border-blue-200" },
+  comparison: { icon: "📊", label: "Comparatif", color: "bg-purple-100 text-purple-700 border-purple-200" },
+  checklist: { icon: "✅", label: "Checklist", color: "bg-green-100 text-green-700 border-green-200" },
+  specific_question: { icon: "❓", label: "Question", color: "bg-orange-100 text-orange-700 border-orange-200" },
+  interactive: { icon: "🎯", label: "Interactif", color: "bg-pink-100 text-pink-700 border-pink-200" },
+  data: { icon: "📈", label: "Donnees", color: "bg-cyan-100 text-cyan-700 border-cyan-200" },
+  text: { icon: "📝", label: "Contenu", color: "bg-gray-100 text-gray-600 border-gray-200" },
+};
+
+/** Normalize gap from Gemini (could be string or object) to ContentGapItem */
+function normalizeGap(raw: unknown): ContentGapItem {
+  if (typeof raw === "string") {
+    return { label: raw, type: "text", description: "" };
+  }
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    return {
+      label: String(obj.label || obj.gap || ""),
+      type: String(obj.type || "text"),
+      description: String(obj.description || ""),
+    };
+  }
+  return { label: String(raw), type: "text", description: "" };
+}
+
+/** Serialize a gap item to a descriptive string for storage & plan architect */
+function serializeGap(item: ContentGapItem): string {
+  const typeConf = GAP_TYPE_CONFIG[item.type] || GAP_TYPE_CONFIG.text;
+  if (item.description) {
+    return `[${typeConf.label}] ${item.label} — ${item.description}`;
+  }
+  return item.label;
+}
+
+// ---- Content Gap Selector ----
+function ContentGapSelector({
+  contentGaps,
+  selectedContentGaps,
+  onConfirm,
+  isLoading,
+}: {
+  contentGaps: unknown[];
+  selectedContentGaps: string[] | undefined;
+  onConfirm: (gaps: string[]) => void;
+  isLoading: boolean;
+}) {
+  const items = React.useMemo(() => contentGaps.map(normalizeGap), [contentGaps]);
+  const isConfirmed = selectedContentGaps !== undefined;
+  const [selected, setSelected] = React.useState<Set<number>>(
+    () => {
+      if (!selectedContentGaps) return new Set();
+      // Match saved strings back to items by label
+      const indices = new Set<number>();
+      for (const saved of selectedContentGaps) {
+        const idx = items.findIndex(
+          (item) => saved === serializeGap(item) || saved === item.label || saved.includes(item.label)
+        );
+        if (idx >= 0) indices.add(idx);
+      }
+      return indices;
+    }
+  );
+
+  const toggleGap = (index: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+
+  const handleConfirm = () => {
+    const serialized = Array.from(selected).map((i) => serializeGap(items[i]));
+    onConfirm(serialized);
+  };
+
+  if (isConfirmed) {
+    return (
+      <Card className="border-amber-200 bg-amber-50/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-amber-600" />
+            Lacunes de contenu
+          </CardTitle>
+          <CardDescription>
+            {selectedContentGaps.length === 0
+              ? "Aucune lacune selectionnee — le plan sera genere sans contrainte de lacunes."
+              : `${selectedContentGaps.length} lacune(s) selectionnee(s) — seront integrees au plan.`}
+          </CardDescription>
+        </CardHeader>
+        {selectedContentGaps.length > 0 && (
+          <CardContent className="flex flex-wrap gap-2">
+            {selectedContentGaps.map((gap, i) => (
+              <Badge key={i} variant="secondary" className="bg-amber-100 text-amber-800 text-xs">
+                {gap}
+              </Badge>
+            ))}
+          </CardContent>
+        )}
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-amber-200 bg-amber-50/50">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Search className="h-4 w-4 text-amber-600" />
+          Opportunites de contenu detectees
+        </CardTitle>
+        <CardDescription>
+          Selectionnez les elements a integrer dans le plan. Les formats non-texte (calculateurs, comparatifs...) vous differencient de la concurrence.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {items.map((item, index) => {
+          const typeConf = GAP_TYPE_CONFIG[item.type] || GAP_TYPE_CONFIG.text;
+          const isSelected = selected.has(index);
+          return (
+            <button
+              key={index}
+              onClick={() => toggleGap(index)}
+              disabled={isLoading}
+              className={`w-full text-left rounded-lg border-2 p-3 transition-all ${
+                isSelected
+                  ? "border-amber-500 bg-amber-50/80 ring-1 ring-amber-500/30"
+                  : "border-gray-200 bg-white hover:border-amber-300 hover:bg-amber-50/30"
+              } ${isLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 ${
+                    isSelected
+                      ? "border-amber-500 bg-amber-500"
+                      : "border-gray-300"
+                  }`}
+                >
+                  {isSelected && <Check className="h-3 w-3 text-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${typeConf.color}`}>
+                      {typeConf.icon} {typeConf.label}
+                    </span>
+                    <span className="text-sm font-medium text-gray-900 truncate">{item.label}</span>
+                  </div>
+                  {item.description && (
+                    <p className="text-xs text-muted-foreground leading-relaxed">{item.description}</p>
+                  )}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+
+        <div className="flex items-center justify-between pt-3">
+          <span className="text-sm text-muted-foreground">
+            {selected.size} selectionnee(s)
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onConfirm([])}
+              disabled={isLoading}
+            >
+              Passer (aucune)
+            </Button>
+            <Button
+              size="sm"
+              className="bg-amber-600 hover:bg-amber-700"
+              onClick={handleConfirm}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-3.5 w-3.5" />
+              )}
+              Confirmer
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---- Links Summary Card ----
+function LinksSummaryCard({
+  blocks,
+  siteDomain,
+}: {
+  blocks: ContentBlock[];
+  siteDomain: string | null;
+}) {
+  const linkRegex = /<a\s[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+
+  const allLinks: { url: string; anchor: string; blockHeading: string; isInternal: boolean }[] = [];
+
+  for (const block of blocks) {
+    if (!block.content_html || block.status === "pending") continue;
+    let match;
+    linkRegex.lastIndex = 0;
+    while ((match = linkRegex.exec(block.content_html)) !== null) {
+      const url = match[1];
+      const anchor = match[2].replace(/<[^>]*>/g, "").trim();
+      const isInternal =
+        (siteDomain && url.includes(siteDomain)) || url.startsWith("/");
+      allLinks.push({
+        url,
+        anchor,
+        blockHeading: block.heading || `Bloc ${block.type}`,
+        isInternal: !!isInternal,
+      });
+    }
+  }
+
+  const internalLinks = allLinks.filter((l) => l.isInternal);
+  const externalLinks = allLinks.filter((l) => !l.isInternal);
+
+  if (allLinks.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Link2 className="h-4 w-4" />
+          Resume des liens
+          <Badge variant="secondary" className="text-xs">
+            {internalLinks.length} internes, {externalLinks.length} externes
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {internalLinks.length > 0 && (
+          <div>
+            <h4 className="text-sm font-medium mb-2">Liens internes</h4>
+            <div className="space-y-1.5">
+              {internalLinks.map((link, i) => (
+                <div key={i} className="flex items-start gap-2 text-sm">
+                  <Badge variant="outline" className="text-xs shrink-0 bg-blue-50 text-blue-600 border-blue-200">
+                    Interne
+                  </Badge>
+                  <div className="min-w-0">
+                    <span className="font-medium">{link.anchor}</span>
+                    <span className="text-muted-foreground text-xs ml-2 truncate block">
+                      {link.url}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      dans : {link.blockHeading}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {externalLinks.length > 0 && (
+          <div>
+            <h4 className="text-sm font-medium mb-2">Liens externes</h4>
+            <div className="space-y-1.5">
+              {externalLinks.map((link, i) => (
+                <div key={i} className="flex items-start gap-2 text-sm">
+                  <Badge variant="outline" className="text-xs shrink-0 bg-emerald-50 text-emerald-600 border-emerald-200">
+                    Externe
+                  </Badge>
+                  <div className="min-w-0">
+                    <span className="font-medium">{link.anchor}</span>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:underline ml-2 truncate block"
+                    >
+                      {link.url}
+                    </a>
+                    <span className="text-xs text-muted-foreground">
+                      dans : {link.blockHeading}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ArticleDetailPage() {
   const params = useParams();
   const articleId = params.articleId as string;
@@ -310,6 +793,7 @@ export default function ArticleDetailPage() {
   const [savingBlock, setSavingBlock] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [writeProgress, setWriteProgress] = useState<{ current: number; total: number } | null>(null);
 
   const fetchArticle = useCallback(async () => {
     try {
@@ -370,6 +854,162 @@ export default function ArticleDetailPage() {
         description: `${label} en cours...`,
       });
       // Refetch article and pipeline
+      await Promise.all([fetchArticle(), fetchPipelineRuns()]);
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description:
+          err instanceof Error ? err.message : "Une erreur est survenue.",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function runWriteAll() {
+    setActionLoading("Redaction");
+    setWriteProgress(null);
+    try {
+      const fetchOptions: RequestInit = {
+        method: "POST",
+        ...(selectedModel
+          ? {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ model: selectedModel }),
+            }
+          : {}),
+      };
+      const res = await fetch(
+        `/api/articles/${articleId}/write-all`,
+        fetchOptions
+      );
+      if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => ({ error: "Erreur" }));
+        throw new Error(err.error || "Erreur");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        let eventType = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            eventType = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            try {
+              const parsed = JSON.parse(line.slice(6));
+              if (eventType === "progress") {
+                setWriteProgress({ current: parsed.current, total: parsed.total });
+              }
+            } catch {
+              // skip invalid JSON
+            }
+          }
+        }
+      }
+
+      toast({
+        title: "Redaction terminee",
+        description: "Tous les blocs ont ete rediges.",
+      });
+      await Promise.all([fetchArticle(), fetchPipelineRuns()]);
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description:
+          err instanceof Error ? err.message : "Erreur lors de la redaction.",
+      });
+    } finally {
+      setActionLoading(null);
+      setWriteProgress(null);
+    }
+  }
+
+  async function runAnalyzeThenPlan(skipAnalyze = false) {
+    try {
+      let currentArticle = article;
+
+      if (!skipAnalyze) {
+        // 1. Run analyze
+        setActionLoading("Analyse");
+        const fetchOptions: RequestInit = {
+          method: "POST",
+          ...(selectedModel
+            ? {
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ model: selectedModel }),
+              }
+            : {}),
+        };
+        const res = await fetch(
+          `/api/articles/${articleId}/analyze`,
+          fetchOptions
+        );
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: "Erreur" }));
+          throw new Error(err.error || "Erreur");
+        }
+
+        // 2. Refetch article to get serp_data
+        const artRes = await fetch(`/api/articles/${articleId}`);
+        const updatedArticle = await artRes.json();
+        setArticle(updatedArticle);
+        currentArticle = updatedArticle;
+      }
+
+      // 3. Check if content gaps exist
+      const sd = (currentArticle?.serp_data as Record<string, unknown>) || null;
+      const sem = sd?.semanticAnalysis as { contentGaps?: unknown[] } | undefined;
+      const selectedGaps = sd?.selectedContentGaps as string[] | undefined;
+      const hasGaps = sem?.contentGaps && sem.contentGaps.length > 0;
+      const gapsAlreadyConfirmed = selectedGaps !== undefined;
+
+      if (hasGaps && !gapsAlreadyConfirmed) {
+        // Content gaps found and not yet confirmed — stop here, ContentGapSelector will show
+        toast({
+          title: "Analyse terminee",
+          description: "Selectionnez les lacunes de contenu puis le plan sera genere.",
+        });
+        await fetchPipelineRuns();
+        setActionLoading(null);
+        return;
+      }
+
+      // 4. No gaps → auto-trigger plan
+      setActionLoading("Generation du plan");
+      const planOptions: RequestInit = {
+        method: "POST",
+        ...(selectedModel
+          ? {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ model: selectedModel }),
+            }
+          : {}),
+      };
+      const planRes = await fetch(
+        `/api/articles/${articleId}/plan`,
+        planOptions
+      );
+      if (!planRes.ok) {
+        const err = await planRes.json().catch(() => ({ error: "Erreur" }));
+        throw new Error(err.error || "Erreur plan");
+      }
+
+      toast({
+        title: "Plan genere",
+        description: "L'analyse et le plan sont termines.",
+      });
       await Promise.all([fetchArticle(), fetchPipelineRuns()]);
     } catch (err) {
       toast({
@@ -633,22 +1273,20 @@ export default function ArticleDetailPage() {
             )}
             {article.status === "draft" && (
               <Button
-                onClick={() => runPipelineAction("analyze", "Analyse")}
+                onClick={() => runAnalyzeThenPlan()}
                 disabled={!!actionLoading}
               >
-                {actionLoading === "Analyse" ? (
+                {actionLoading === "Analyse" || actionLoading === "Generation du plan" ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <Search className="mr-2 h-4 w-4" />
                 )}
-                Analyser
+                {actionLoading === "Generation du plan" ? "Generation du plan..." : "Analyser et planifier"}
               </Button>
             )}
             {article.status === "analyzing" && (
               <Button
-                onClick={() =>
-                  runPipelineAction("plan", "Generation du plan")
-                }
+                onClick={() => runAnalyzeThenPlan(true)}
                 disabled={!!actionLoading}
               >
                 {actionLoading === "Generation du plan" ? (
@@ -656,7 +1294,7 @@ export default function ArticleDetailPage() {
                 ) : (
                   <Sparkles className="mr-2 h-4 w-4" />
                 )}
-                Generer le plan
+                {actionLoading === "Generation du plan" ? "Generation du plan..." : "Generer le plan"}
               </Button>
             )}
             {article.status === "planning" && (
@@ -674,9 +1312,7 @@ export default function ArticleDetailPage() {
                   </div>
                 )}
                 <Button
-                  onClick={() =>
-                    runPipelineAction("write-all", "Redaction")
-                  }
+                  onClick={() => runWriteAll()}
                   disabled={!!actionLoading || !article.persona_id || !article.title}
                 >
                   {actionLoading === "Redaction" ? (
@@ -704,9 +1340,7 @@ export default function ArticleDetailPage() {
             )}
             {article.status === "writing" && pendingBlocks.length > 0 && (
               <Button
-                onClick={() =>
-                  runPipelineAction("write-all", "Redaction")
-                }
+                onClick={() => runWriteAll()}
                 disabled={!!actionLoading || !article.persona_id}
               >
                 {actionLoading === "Redaction" ? (
@@ -806,6 +1440,17 @@ export default function ArticleDetailPage() {
 
         {/* Pipeline progress */}
         <PipelineProgress status={article.status} showLabels />
+
+        {/* Write-all progress bar */}
+        {writeProgress && (
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>Redaction en cours...</span>
+              <span>{writeProgress.current}/{writeProgress.total} blocs</span>
+            </div>
+            <Progress value={(writeProgress.current / writeProgress.total) * 100} />
+          </div>
+        )}
       </div>
 
       <Separator />
@@ -834,19 +1479,96 @@ export default function ArticleDetailPage() {
         {/* ========== PLAN TAB ========== */}
         <TabsContent value="plan" className="space-y-4">
           {blocks.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <FileText className="mb-4 h-10 w-10 text-muted-foreground/50" />
-                <p className="text-muted-foreground text-center">
-                  Aucun plan genere pour le moment.
-                  <br />
-                  {article.status === "draft" &&
-                    "Lancez l'analyse puis la generation du plan."}
-                  {article.status === "analyzing" &&
-                    "Generez le plan une fois l'analyse terminee."}
-                </p>
-              </CardContent>
-            </Card>
+            <div className="space-y-4">
+              {/* Content Gap Selector — shown when analyzing and gaps exist */}
+              {article.status === "analyzing" &&
+                (() => {
+                  const sd = article.serp_data as Record<string, unknown> | null;
+                  const sem = sd?.semanticAnalysis as { contentGaps?: unknown[] } | undefined;
+                  const gaps = sem?.contentGaps;
+                  const selectedGaps = sd?.selectedContentGaps as string[] | undefined;
+                  if (gaps && gaps.length > 0) {
+                    return (
+                      <ContentGapSelector
+                        contentGaps={gaps}
+                        selectedContentGaps={selectedGaps}
+                        onConfirm={async (selected) => {
+                          try {
+                            setActionLoading("select-content-gaps");
+                            const res = await fetch(
+                              `/api/articles/${articleId}/select-content-gaps`,
+                              {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ selected_gaps: selected }),
+                              }
+                            );
+                            if (!res.ok) throw new Error("Erreur");
+                            const data = await res.json();
+                            setArticle(data);
+                            toast({
+                              title: "Lacunes confirmees",
+                              description:
+                                selected.length === 0
+                                  ? "Aucune lacune selectionnee."
+                                  : `${selected.length} lacune(s) selectionnee(s).`,
+                            });
+
+                            // Auto-trigger plan after gap confirmation
+                            setActionLoading("Generation du plan");
+                            const planOptions: RequestInit = {
+                              method: "POST",
+                              ...(selectedModel
+                                ? {
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ model: selectedModel }),
+                                  }
+                                : {}),
+                            };
+                            const planRes = await fetch(
+                              `/api/articles/${articleId}/plan`,
+                              planOptions
+                            );
+                            if (!planRes.ok) {
+                              const err = await planRes.json().catch(() => ({ error: "Erreur" }));
+                              throw new Error(err.error || "Erreur plan");
+                            }
+                            toast({
+                              title: "Plan genere",
+                              description: "Le plan a ete genere avec les lacunes selectionnees.",
+                            });
+                            await Promise.all([fetchArticle(), fetchPipelineRuns()]);
+                          } catch (err) {
+                            toast({
+                              variant: "destructive",
+                              title: "Erreur",
+                              description: err instanceof Error ? err.message : "Impossible de sauvegarder la selection.",
+                            });
+                          } finally {
+                            setActionLoading(null);
+                          }
+                        }}
+                        isLoading={actionLoading === "select-content-gaps"}
+                      />
+                    );
+                  }
+                  return null;
+                })()}
+
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <FileText className="mb-4 h-10 w-10 text-muted-foreground/50" />
+                  <p className="text-muted-foreground text-center">
+                    Aucun plan genere pour le moment.
+                    <br />
+                    {article.status === "draft" &&
+                      "Lancez l'analyse puis la generation du plan."}
+                    {article.status === "analyzing" &&
+                      "Generez le plan une fois l'analyse terminee."}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
           ) : (() => {
             const { sections, orphans } = groupBlocksByH2(blocks);
             return (
@@ -920,6 +1642,108 @@ export default function ArticleDetailPage() {
                     />
                   )}
 
+                {/* Authority Link Selection */}
+                {article.authority_link_suggestions &&
+                  (article.authority_link_suggestions as AuthorityLinkSuggestion[]).length > 0 && (
+                    <AuthorityLinkCard
+                      suggestions={article.authority_link_suggestions as AuthorityLinkSuggestion[]}
+                      selectedLink={article.selected_authority_link as SelectedAuthorityLink | null}
+                      onSelect={async (index) => {
+                        try {
+                          setActionLoading("select-authority-link");
+                          const res = await fetch(
+                            `/api/articles/${articleId}/select-authority-link`,
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ link_index: index }),
+                            }
+                          );
+                          if (!res.ok) throw new Error("Erreur");
+                          const data = await res.json();
+                          setArticle(data);
+                          toast({
+                            title: "Lien d'autorite selectionne",
+                            description: "Le lien sera integre lors de la redaction.",
+                          });
+                        } catch {
+                          toast({
+                            variant: "destructive",
+                            title: "Erreur",
+                            description: "Impossible de selectionner le lien.",
+                          });
+                        } finally {
+                          setActionLoading(null);
+                        }
+                      }}
+                      onCustomSelect={async (url, title, anchorContext) => {
+                        try {
+                          setActionLoading("select-authority-link");
+                          const res = await fetch(
+                            `/api/articles/${articleId}/select-authority-link`,
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                custom_url: url,
+                                custom_title: title || undefined,
+                                anchor_context: anchorContext || undefined,
+                              }),
+                            }
+                          );
+                          if (!res.ok) {
+                            const err = await res.json();
+                            throw new Error(err.error || "Erreur");
+                          }
+                          const data = await res.json();
+                          setArticle(data);
+                          toast({
+                            title: "Lien personnalise selectionne",
+                            description: "Le lien sera integre lors de la redaction.",
+                          });
+                        } catch (err) {
+                          toast({
+                            variant: "destructive",
+                            title: "Erreur",
+                            description:
+                              err instanceof Error
+                                ? err.message
+                                : "Impossible de verifier le lien.",
+                          });
+                        } finally {
+                          setActionLoading(null);
+                        }
+                      }}
+                      onRegenerate={async () => {
+                        try {
+                          setActionLoading("regenerate-authority-links");
+                          const res = await fetch(
+                            `/api/articles/${articleId}/suggest-authority-links`,
+                            { method: "POST" }
+                          );
+                          if (!res.ok) throw new Error("Erreur");
+                          const data = await res.json();
+                          setArticle(data);
+                          toast({
+                            title: "Suggestions regenerees",
+                            description: "Choisissez parmi les nouvelles suggestions.",
+                          });
+                        } catch {
+                          toast({
+                            variant: "destructive",
+                            title: "Erreur",
+                            description:
+                              "Impossible de regenerer les suggestions.",
+                          });
+                        } finally {
+                          setActionLoading(null);
+                        }
+                      }}
+                      isLoading={actionLoading === "select-authority-link"}
+                      isRegenerating={actionLoading === "regenerate-authority-links"}
+                    />
+                  )}
+
                 {/* Orphan blocks (before first H2) */}
                 {orphans.map(({ block, index }) => (
                   <Card key={block.id}>
@@ -941,13 +1765,95 @@ export default function ArticleDetailPage() {
                           {BLOCK_STATUS_LABELS[block.status] ?? block.status}
                         </Badge>
                         <span className="text-xs text-muted-foreground">#{index + 1}</span>
+                        {block.word_count > 0 && (
+                          <span className="text-xs text-muted-foreground">{block.word_count} mots</span>
+                        )}
+
+                        {/* Write button for pending orphan blocks */}
+                        {block.status === "pending" && (
+                          <div className="ml-auto">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => writeBlock(block.id)}
+                              disabled={actionLoading === `block-${block.id}`}
+                            >
+                              {actionLoading === `block-${block.id}` ? (
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                              ) : (
+                                <Play className="mr-1 h-3 w-3" />
+                              )}
+                              Ecrire
+                            </Button>
+                          </div>
+                        )}
+
+                        {/* Edit / Save buttons for written orphan blocks */}
+                        {block.status !== "pending" && block.content_html && (
+                          <div className="ml-auto flex items-center gap-1">
+                            {editingBlockId === block.id ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() => { setEditingBlockId(null); setEditingHtml(""); }}
+                                >
+                                  Annuler
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() => saveBlockEdit(block.id, editingHtml)}
+                                  disabled={savingBlock === block.id}
+                                >
+                                  {savingBlock === block.id ? (
+                                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Save className="mr-1 h-3 w-3" />
+                                  )}
+                                  Sauvegarder
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => { setEditingBlockId(block.id); setEditingHtml(block.content_html); }}
+                              >
+                                <PenLine className="mr-1 h-3 w-3" />
+                                Modifier
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
                       {block.heading && <p className="font-medium mt-2">{block.heading}</p>}
-                      {block.status !== "pending" && block.content_html && (
-                        <div
-                          className="text-sm text-muted-foreground prose prose-sm max-w-none mt-2"
-                          dangerouslySetInnerHTML={{ __html: block.content_html }}
-                        />
+                      {block.writing_directive && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mb-2 mt-1">
+                          <span className="font-medium">Directive :</span> {block.writing_directive}
+                        </p>
+                      )}
+                      {block.status !== "pending" && block.content_html && streamingBlockId !== block.id && (
+                        editingBlockId === block.id ? (
+                          <RichTextEditor
+                            content={editingHtml}
+                            onChange={setEditingHtml}
+                          />
+                        ) : (
+                          <div
+                            className="text-sm prose prose-sm max-w-none dark:prose-invert mt-2"
+                            dangerouslySetInnerHTML={{ __html: block.content_html }}
+                          />
+                        )
+                      )}
+                      {streamingBlockId === block.id && streamingContent && (
+                        <div className="text-sm prose prose-sm max-w-none border-l-2 border-blue-400 pl-3 animate-pulse mt-2">
+                          <div dangerouslySetInnerHTML={{ __html: streamingContent.substring(0, 500) }} />
+                          <span className="inline-block w-2 h-4 bg-blue-400 animate-pulse ml-0.5" />
+                        </div>
                       )}
                     </CardContent>
                   </Card>
@@ -1128,11 +2034,9 @@ export default function ArticleDetailPage() {
                               {/* Content display or editor */}
                               {block.status !== "pending" && block.content_html && streamingBlockId !== block.id && (
                                 editingBlockId === block.id ? (
-                                  <Textarea
-                                    value={editingHtml}
-                                    onChange={(e) => setEditingHtml(e.target.value)}
-                                    className="font-mono text-xs min-h-[200px]"
-                                    rows={12}
+                                  <RichTextEditor
+                                    content={editingHtml}
+                                    onChange={setEditingHtml}
                                   />
                                 ) : (
                                   <div
@@ -1178,6 +2082,22 @@ export default function ArticleDetailPage() {
                     <h1 className="text-2xl font-bold mb-2">
                       {article.title}
                     </h1>
+                  )}
+
+                  {/* SEO Title */}
+                  {article.seo_title && (
+                    <div className="not-prose mb-3 rounded-md bg-blue-50 border border-blue-200 p-3">
+                      <p className="text-xs font-medium text-blue-600 mb-1">
+                        Title SEO (balise &lt;title&gt;)
+                      </p>
+                      <p className="text-sm font-medium">{article.seo_title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {article.seo_title.length} / 60 caracteres
+                        {article.seo_title.length > 60 && (
+                          <span className="text-destructive ml-1">(trop long)</span>
+                        )}
+                      </p>
+                    </div>
                   )}
 
                   {/* Meta description */}
@@ -1254,14 +2174,35 @@ export default function ArticleDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Meta description */}
+          {/* SEO Title + Meta description */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Meta description</CardTitle>
+              <CardTitle className="text-base">Meta SEO</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* SEO Title */}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Title SEO (balise &lt;title&gt;)</p>
+                {article.seo_title ? (
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">{article.seo_title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {article.seo_title.length} / 60 caracteres
+                      {article.seo_title.length > 60 && (
+                        <span className="text-destructive ml-1">(trop long)</span>
+                      )}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Pas encore defini.</p>
+                )}
+              </div>
+
+              {/* Meta description */}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Meta description</p>
               {article.meta_description ? (
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <p className="text-sm">{article.meta_description}</p>
                   <p className="text-xs text-muted-foreground">
                     {article.meta_description.length} / 160 caracteres
@@ -1277,8 +2218,17 @@ export default function ArticleDetailPage() {
                   Pas encore generee.
                 </p>
               )}
+              </div>
             </CardContent>
           </Card>
+
+          {/* Links Summary */}
+          {blocks.some((b) => b.status !== "pending" && b.content_html) && (
+            <LinksSummaryCard
+              blocks={blocks}
+              siteDomain={article.seo_sites?.domain || null}
+            />
+          )}
 
           {/* JSON-LD */}
           <Card>

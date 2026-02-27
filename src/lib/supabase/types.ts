@@ -39,8 +39,27 @@ export interface InternalLinkTarget {
 export interface TitleSuggestion {
   title: string
   slug: string
+  seo_title: string
   seo_rationale: string
   selected: boolean
+}
+
+// ---- Authority link types (JSONB stored inside seo_articles) ----
+
+export interface AuthorityLinkSuggestion {
+  url: string
+  title: string
+  domain: string
+  snippet: string
+  rationale: string
+  is_valid: boolean
+  selected: boolean
+}
+
+export interface SelectedAuthorityLink {
+  url: string
+  title: string
+  anchor_context: string
 }
 
 // ---- Content block (JSONB stored inside seo_articles.content_blocks) ----
@@ -76,6 +95,7 @@ export type Database = {
           wp_app_password: string
           gsc_property: string | null
           niche: string | null
+          theme_color: string | null
           default_persona_id: string | null
           money_page_url: string | null
           money_page_description: string | null
@@ -92,6 +112,7 @@ export type Database = {
           wp_app_password: string
           gsc_property?: string | null
           niche?: string | null
+          theme_color?: string | null
           default_persona_id?: string | null
           money_page_url?: string | null
           money_page_description?: string | null
@@ -108,6 +129,7 @@ export type Database = {
           wp_app_password?: string
           gsc_property?: string | null
           niche?: string | null
+          theme_color?: string | null
           default_persona_id?: string | null
           money_page_url?: string | null
           money_page_description?: string | null
@@ -270,6 +292,7 @@ export type Database = {
           status: ArticleStatus
           title: string | null
           slug: string | null
+          seo_title: string | null
           meta_description: string | null
           content_blocks: ContentBlock[]
           content_html: string | null
@@ -281,6 +304,9 @@ export type Database = {
           nugget_density_score: number
           link_to_money_page: boolean
           title_suggestions: TitleSuggestion[] | null
+          authority_link_suggestions: AuthorityLinkSuggestion[] | null
+          selected_authority_link: SelectedAuthorityLink | null
+          year_tag: number | null
           created_at: string
           updated_at: string
           published_at: string | null
@@ -295,6 +321,7 @@ export type Database = {
           status?: ArticleStatus
           title?: string | null
           slug?: string | null
+          seo_title?: string | null
           meta_description?: string | null
           content_blocks?: ContentBlock[]
           content_html?: string | null
@@ -306,6 +333,9 @@ export type Database = {
           nugget_density_score?: number
           link_to_money_page?: boolean
           title_suggestions?: TitleSuggestion[] | null
+          authority_link_suggestions?: AuthorityLinkSuggestion[] | null
+          selected_authority_link?: SelectedAuthorityLink | null
+          year_tag?: number | null
           created_at?: string
           updated_at?: string
           published_at?: string | null
@@ -320,6 +350,7 @@ export type Database = {
           status?: ArticleStatus
           title?: string | null
           slug?: string | null
+          seo_title?: string | null
           meta_description?: string | null
           content_blocks?: ContentBlock[]
           content_html?: string | null
@@ -331,6 +362,9 @@ export type Database = {
           nugget_density_score?: number
           link_to_money_page?: boolean
           title_suggestions?: TitleSuggestion[] | null
+          authority_link_suggestions?: AuthorityLinkSuggestion[] | null
+          selected_authority_link?: SelectedAuthorityLink | null
+          year_tag?: number | null
           created_at?: string
           updated_at?: string
           published_at?: string | null

@@ -31,6 +31,7 @@ export interface SiteFormData {
   wp_app_password: string;
   gsc_property: string;
   niche: string;
+  theme_color: string;
   money_page_url: string;
   money_page_description: string;
 }
@@ -53,6 +54,7 @@ export function SiteForm({ site, onSubmit, submitLabel = "Enregistrer" }: SiteFo
     wp_app_password: site?.wp_app_password ?? "",
     gsc_property: site?.gsc_property ?? "",
     niche: site?.niche ?? "",
+    theme_color: site?.theme_color ?? "",
     money_page_url: site?.money_page_url ?? "",
     money_page_description: site?.money_page_description ?? "",
   });
@@ -199,6 +201,34 @@ export function SiteForm({ site, onSubmit, submitLabel = "Enregistrer" }: SiteFo
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Theme Color */}
+      <div className="space-y-2">
+        <Label htmlFor="theme_color">Couleur du site (optionnel)</Label>
+        <div className="flex items-center gap-3">
+          <input
+            type="color"
+            id="theme_color_picker"
+            value={formData.theme_color || "#4f46e5"}
+            onChange={(e) => handleChange("theme_color", e.target.value)}
+            className="h-10 w-10 rounded border cursor-pointer"
+          />
+          <Input
+            id="theme_color"
+            placeholder="#4f46e5"
+            value={formData.theme_color}
+            onChange={(e) => handleChange("theme_color", e.target.value)}
+            className="max-w-[140px] font-mono"
+          />
+          {formData.theme_color && (
+            <div
+              className="h-10 flex-1 rounded border"
+              style={{ backgroundColor: formData.theme_color }}
+            />
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">Utilise pour les tableaux et elements visuels dans les articles</p>
       </div>
 
       {/* Money Page */}

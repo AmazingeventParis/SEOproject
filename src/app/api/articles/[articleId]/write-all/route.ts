@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { getServerClient } from "@/lib/supabase/client";
 import { executeStep } from "@/lib/pipeline/orchestrator";
 import { modelIdToOverride } from "@/lib/ai/router";
@@ -9,7 +9,7 @@ interface RouteContext {
   params: { articleId: string };
 }
 
-// POST /api/articles/[articleId]/write-all - Write ALL pending blocks sequentially
+// POST /api/articles/[articleId]/write-all - Write ALL pending blocks with SSE progress
 export async function POST(
   _request: NextRequest,
   { params }: RouteContext
@@ -37,23 +37,17 @@ export async function POST(
     .single();
 
   if (fetchError || !article) {
-    if (fetchError?.code === "PGRST116") {
-      return NextResponse.json(
-        { error: "Article non trouve" },
-        { status: 404 }
-      );
-    }
-    return NextResponse.json(
-      { error: fetchError?.message || "Article non trouve" },
-      { status: 500 }
+    return new Response(
+      JSON.stringify({ error: fetchError?.code === "PGRST116" ? "Article non trouve" : (fetchError?.message || "Article non trouve") }),
+      { status: fetchError?.code === "PGRST116" ? 404 : 500, headers: { "Content-Type": "application/json" } }
     );
   }
 
   const contentBlocks = (article.content_blocks || []) as ContentBlock[];
   if (contentBlocks.length === 0) {
-    return NextResponse.json(
-      { error: "Aucun bloc de contenu. Generez d'abord un plan." },
-      { status: 422 }
+    return new Response(
+      JSON.stringify({ error: "Aucun bloc de contenu. Generez d'abord un plan." }),
+      { status: 422, headers: { "Content-Type": "application/json" } }
     );
   }
 
@@ -66,68 +60,62 @@ export async function POST(
   }
 
   if (pendingIndices.length === 0) {
-    return NextResponse.json(
-      { error: "Aucun bloc en attente de redaction." },
-      { status: 422 }
+    return new Response(
+      JSON.stringify({ error: "Aucun bloc en attente de redaction." }),
+      { status: 422, headers: { "Content-Type": "application/json" } }
     );
   }
 
-  // Write each pending block sequentially
-  const results: {
-    blockIndex: number;
-    success: boolean;
-    runId: string;
-    error?: string;
-  }[] = [];
-  let successCount = 0;
-  let errorCount = 0;
-  let totalTokensIn = 0;
-  let totalTokensOut = 0;
-  let totalCostUsd = 0;
+  // SSE streaming response
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      let successCount = 0;
+      let errorCount = 0;
 
-  for (const blockIndex of pendingIndices) {
-    try {
-      const result: PipelineRunResult = await executeStep(
-        articleId,
-        "write_block",
-        { blockIndex, ...modelOverrideInput }
-      );
+      for (let i = 0; i < pendingIndices.length; i++) {
+        const blockIndex = pendingIndices[i];
+        let success = false;
 
-      results.push({
-        blockIndex,
-        success: result.success,
-        runId: result.runId,
-        error: result.error,
-      });
+        try {
+          const result: PipelineRunResult = await executeStep(
+            articleId,
+            "write_block",
+            { blockIndex, ...modelOverrideInput }
+          );
+          success = result.success;
+          if (success) successCount++;
+          else errorCount++;
+        } catch {
+          errorCount++;
+        }
 
-      if (result.success) {
-        successCount++;
-        totalTokensIn += result.tokensIn || 0;
-        totalTokensOut += result.tokensOut || 0;
-        totalCostUsd += result.costUsd || 0;
-      } else {
-        errorCount++;
+        // Send progress event
+        const progressData = JSON.stringify({
+          current: i + 1,
+          total: pendingIndices.length,
+          blockIndex,
+          success,
+        });
+        controller.enqueue(encoder.encode(`event: progress\ndata: ${progressData}\n\n`));
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      results.push({
-        blockIndex,
-        success: false,
-        runId: "",
-        error: message,
-      });
-      errorCount++;
-    }
-  }
 
-  return NextResponse.json({
-    totalBlocks: contentBlocks.length,
-    pendingBlocks: pendingIndices.length,
-    written: successCount,
-    errors: errorCount,
-    totalTokensIn,
-    totalTokensOut,
-    totalCostUsd: Math.round(totalCostUsd * 1000000) / 1000000,
-    results,
+      // Send done event
+      const doneData = JSON.stringify({
+        written: successCount,
+        errors: errorCount,
+        totalBlocks: contentBlocks.length,
+      });
+      controller.enqueue(encoder.encode(`event: done\ndata: ${doneData}\n\n`));
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
   });
 }

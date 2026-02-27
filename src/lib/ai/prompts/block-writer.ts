@@ -4,8 +4,19 @@
 // Writes in persona voice, integrates nuggets, outputs clean HTML
 // ============================================================
 
+import {
+  SEO_EEAT_RULES,
+  SEO_FAQ_RULES,
+  SEO_ANTI_AI_PATTERNS,
+  SEO_KEYWORD_RULES,
+  SEO_INTERNAL_LINKING_RULES,
+  SEO_WRITING_STYLE_RULES,
+  INTENT_STRATEGIES,
+} from './seo-guidelines'
+
 interface BlockWriterParams {
   keyword: string
+  searchIntent?: string
   persona: {
     name: string
     role: string
@@ -25,6 +36,8 @@ interface BlockWriterParams {
   articleTitle: string
   internalLinkTargets?: { target_slug: string; target_title: string; suggested_anchor_context: string; is_money_page?: boolean }[]
   siteDomain?: string
+  authorityLink?: { url: string; title: string; anchor_context: string } | null
+  siteThemeColor?: string
 }
 
 interface BlockWriterPrompt {
@@ -41,7 +54,7 @@ interface BlockWriterPrompt {
 export function buildBlockWriterPrompt(
   params: BlockWriterParams
 ): BlockWriterPrompt {
-  const { keyword, persona, block, nuggets, previousHeadings, articleTitle, internalLinkTargets, siteDomain } = params
+  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, articleTitle, internalLinkTargets, siteDomain, authorityLink, siteThemeColor } = params
 
   // ---- System prompt ----
   const system = `Tu es un redacteur web expert en SEO, specialise dans la creation de contenu de haute qualite optimise pour le referencement naturel.
@@ -62,24 +75,34 @@ Tu dois ecrire EXACTEMENT comme cette personne parlerait - avec sa voix, son exp
 ## REGLES DE REDACTION
 
 ### Style et qualite
-- Ecris dans un style naturel, fluide et engageant
-- Utilise des phrases de longueur variee (courtes pour l'impact, longues pour l'explication)
-- Evite absolument le style "ChatGPT" : pas de "Dans cet article nous allons...", pas de "Il est important de noter que..."
-- Pas de formulations generiques ou bateaux
-- Integre des exemples concrets, des chiffres, des cas pratiques quand c'est pertinent
-- Utilise des transitions naturelles entre les paragraphes
+${SEO_WRITING_STYLE_RULES}
 
-### SEO
-- Integre le mot-cle principal et ses variantes de maniere naturelle (pas de keyword stuffing)
-- Le mot-cle doit apparaitre 1 a 2 fois dans le texte du bloc, de maniere organique
-- Utilise des mots semantiquement lies au mot-cle (champ lexical riche)
-- Structure le contenu pour faciliter la lecture (paragraphes courts, listes quand adapte)
+${SEO_ANTI_AI_PATTERNS}
+
+### SEO — Placement strategique du mot-cle
+Le placement du mot-cle depend de la POSITION du bloc dans l'article :
+
+**INTRO (premier bloc, quand aucune section precedente) :**
+- Le mot-cle principal DOIT apparaitre dans les 2-3 premieres phrases (OBLIGATOIRE)
+- Place-le de maniere naturelle des le debut pour signaler la pertinence a Google
+
+**MILIEU (blocs intermediaires) :**
+- Utilise des VARIANTES et SYNONYMES du mot-cle principal (pas le mot-cle exact a chaque fois)
+- Enrichis avec des mots-cles secondaires et le champ semantique
+- Le mot-cle principal peut apparaitre 1 fois si c'est naturel, sinon prefere les variantes
+
+**FIN (derniers blocs avant la FAQ) :**
+- Reintroduis le mot-cle principal au moins 1 fois pour renforcer la pertinence globale
+- Combine avec des variantes pour un signal SEO fort en conclusion
+
+**FAQ :**
+- Integre le mot-cle principal au moins 1 fois dans l'intro ou une reponse de la FAQ
+
+**Regles generales :**
+${SEO_KEYWORD_RULES}
 
 ### E-E-A-T
-- Montre l'experience personnelle du persona quand c'est pertinent
-- Sois precis et factuel - pas d'affirmations vagues
-- Cite des sources ou des references si necessaire
-- Donne des conseils actionables et concrets
+${SEO_EEAT_RULES}
 
 ### Integration des nuggets
 - Les nuggets sont des contenus authentiques du persona (citations, anecdotes, observations)
@@ -104,16 +127,9 @@ Format : <ul> ou <ol> avec des <li> detailles (pas juste un mot par item).
 Chaque item doit apporter de la valeur.
 
 ### Pour un bloc de type "faq"
-Ecris les questions-reponses en HTML avec le balisage schema.org FAQ.
-Format pour chaque Q/R :
-<div class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
-  <h3 itemprop="name">Question ici ?</h3>
-  <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-    <div itemprop="text">
-      <p>Reponse detaillee ici.</p>
-    </div>
-  </div>
-</div>
+Ecris les questions-reponses en HTML avec le format suivant :
+${SEO_FAQ_RULES}
+- Le H2 "FAQ" est rendu separement par le renderer, donc N'INCLUS PAS de <h2> dans le HTML
 
 ### Pour un bloc de type "callout"
 Ecris un encadre informatif ou d'alerte en HTML.
@@ -121,18 +137,34 @@ Format : <div class="callout callout-info"><p>Contenu...</p></div>
 Variantes : callout-info, callout-warning, callout-tip, callout-important
 
 ### Pour un format "table"
-Cree un tableau HTML responsive dans un style moderne :
-<div class="table-responsive">
-  <table class="info-table">
-    <thead><tr><th>...</th></tr></thead>
-    <tbody><tr><td>...</td></tr></tbody>
+Cree un tableau HTML epure, moderne et responsive.
+
+**Structure HTML OBLIGATOIRE :**
+<div class="table-container">
+  <table>
+    <thead>
+      <tr><th${siteThemeColor ? ` style="background-color: ${siteThemeColor}20; border-bottom: 2px solid ${siteThemeColor}50"` : ''}>En-tete</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Donnee</td></tr>
+    </tbody>
   </table>
 </div>
-Regles tableaux :
-- Max 4-5 colonnes pour rester lisible sur mobile
-- Headers clairs et concis
-- Cellules courtes (pas de paragraphes dans les cellules)
+
+**Design UX/UI :**
+${siteThemeColor ? `Couleur theme du site : ${siteThemeColor}. Styles inline OBLIGATOIRES :
+- <th> : style="background-color: ${siteThemeColor}20; border-bottom: 2px solid ${siteThemeColor}50; font-weight: 600; padding: 14px 16px"
+- <td> : style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9"
+- Lignes paires <tr> : style="background-color: ${siteThemeColor}08"` : 'Pas de couleur de site definie — les styles sont geres par le CSS (headers gris #f8fafc, bordures #f1f5f9).'}
+
+**Regles strictes :**
+- TOUJOURS wrapper dans <div class="table-container"> (scroll horizontal mobile + ombre legere + coins arrondis)
+- Pas de bordures lourdes — uniquement border-bottom fines
+- Max 4-5 colonnes pour la lisibilite mobile
+- Headers courts et clairs (1-3 mots)
+- Cellules concises (pas de paragraphes dans les cellules)
 - Ajoute une phrase d'introduction avant le tableau si pertinent
+- Le zebra-striping et le hover sont geres par le CSS — ne pas ajouter de class supplementaire
 
 ### Pour un format "mixed"
 Combine prose + elements visuels (liste ou tableau) :
@@ -147,14 +179,18 @@ Structure le contenu sous forme de liste a puces ou numerotee :
 - Ajoute une phrase d'introduction avant la liste
 
 ### Maillage interne
-- Si des cibles de liens internes sont fournies, integre-les naturellement dans le texte
+Si des cibles de liens internes sont fournies :
+${SEO_INTERNAL_LINKING_RULES}
 - Genere le HTML <a href="URL">ancre variee</a> directement dans ta sortie
-- L'ancre ne doit JAMAIS etre le titre exact, ni l'URL, ni le slug de la page cible
-- L'ancre = expression naturelle de 2-6 mots integree dans la phrase
-- JAMAIS de "cliquez ici" ou "en savoir plus" comme ancre
-- Chaque lien doit apporter de la valeur au lecteur
 
-## REGLES STRICTES
+### Annee de reference — REGLE ABSOLUE
+Nous sommes en ${new Date().getFullYear()}. Si le contenu fait reference a une periode, une date ou une annee, utilise UNIQUEMENT ${new Date().getFullYear()}. JAMAIS 2024 ou 2025.
+
+${searchIntent && INTENT_STRATEGIES[searchIntent]?.writing ? `## STRATEGIE D'ECRITURE — Intention "${searchIntent}"
+${INTENT_STRATEGIES[searchIntent].writing}
+Cette strategie PRIME sur les regles generales en cas de conflit.
+
+` : ''}## REGLES STRICTES
 - Retourne UNIQUEMENT du HTML propre, sans markdown, sans blocs de code
 - Respecte EXACTEMENT le nombre de mots demande (tolerance +/- 15%)
 - N'invente PAS de statistiques ou de chiffres - sois honnete
@@ -171,7 +207,7 @@ Ecris le contenu d'un bloc pour l'article intitule : "${articleTitle}"
 ## BLOC A REDIGER
 - Type : ${block.type}
 - Titre de la section : ${block.heading || '(pas de titre - bloc de contenu libre)'}
-- Nombre de mots cible : ${block.word_count} mots
+- Nombre de mots cible : ${block.word_count} mots${searchIntent ? `\n- Intention de recherche : ${searchIntent}` : ''}
 
 ## CONTEXTE - Sections precedentes de l'article
 L'article contient deja les sections suivantes avant ce bloc :`
@@ -234,12 +270,37 @@ Voici des extraits authentiques. Imite ce style, ce vocabulaire, cette structure
     user += `\nIMPORTANT : L'ancre doit etre UNIQUE et NATURELLE — pas le titre exact.`
   }
 
+  // Inject authority link if provided
+  if (authorityLink) {
+    user += `\n\n## LIEN D'AUTORITE EXTERNE
+- Source : "${authorityLink.title}" → ${authorityLink.url}
+- Contexte : ${authorityLink.anchor_context}
+Integre ce lien EXTERNE naturellement (1 seule fois, ancre descriptive).
+Ce lien renforce l'E-E-A-T en citant une source reconnue.`
+  }
+
+  // Determine keyword placement instruction based on block position
+  let keywordInstruction: string
+  if (previousHeadings.length === 0 && block.type === 'paragraph') {
+    keywordInstruction = `- OBLIGATOIRE : place le mot-cle principal "${keyword}" dans les 2-3 premieres phrases (intro de l'article)
+- BLOC INTRO : max 140 mots STRICT. 1-2 <p> uniquement. Pas de liste, pas de titre.
+- Le lecteur doit immediatement savoir qu'il est au bon endroit. Identifie la cible (qui est concerne).
+- Inclus UNE phrase explicite de validation d'intention : ce que le lecteur va apprendre ou resoudre en lisant cet article.
+- Phrases courtes, percutantes. Une idee par phrase. Zero fluff, zero formule generique.`
+  } else if (previousHeadings.length === 0) {
+    keywordInstruction = `- OBLIGATOIRE : place le mot-cle principal "${keyword}" dans les 2-3 premieres phrases (intro de l'article)`
+  } else if (block.type === 'faq') {
+    keywordInstruction = `- Integre le mot-cle principal "${keyword}" au moins 1 fois dans l'intro ou une reponse de la FAQ`
+  } else {
+    keywordInstruction = `- Utilise des variantes et synonymes du mot-cle "${keyword}". Mot-cle principal au moins 1 fois si c'est un des derniers blocs de l'article`
+  }
+
   user += `\n\n## RAPPEL
 - Ecris exactement ~${block.word_count} mots
 - Type de bloc : ${block.type}${block.format_hint ? ` (format: ${block.format_hint})` : ''}
 - Retourne UNIQUEMENT du HTML propre
 - Ecris en tant que ${persona.name} (${persona.role})
-- Integre le mot-cle "${keyword}" naturellement 1-2 fois`
+${keywordInstruction}`
 
   return { system, user }
 }

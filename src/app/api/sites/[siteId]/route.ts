@@ -11,6 +11,7 @@ const updateSiteSchema = z.object({
   wp_app_password: z.string().min(1).optional(),
   gsc_property: z.string().nullable().optional(),
   niche: z.string().nullable().optional(),
+  theme_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
   money_page_url: z.string().nullable().optional(),
   money_page_description: z.string().nullable().optional(),
   active: z.boolean().optional(),

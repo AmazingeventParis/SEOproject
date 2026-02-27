@@ -50,6 +50,7 @@ CREATE TABLE seo_sites (
   wp_app_password    text        NOT NULL,
   gsc_property       text,
   niche              text,
+  theme_color        text,
   default_persona_id uuid,           -- FK added later (circular ref with seo_personas)
   active             boolean     DEFAULT true,
   created_at         timestamptz DEFAULT now(),
@@ -127,6 +128,7 @@ CREATE TABLE seo_articles (
   status               seo_article_status NOT NULL DEFAULT 'draft',
   title                text,
   slug                 text,
+  seo_title            text,
   meta_description     text,
   content_blocks       jsonb              DEFAULT '[]'::jsonb,
   content_html         text,

@@ -4,8 +4,19 @@
 // Returns structured JSON with scores and actionable feedback
 // ============================================================
 
+import {
+  SEO_EEAT_RULES,
+  SEO_ANTI_AI_PATTERNS,
+  SEO_KEYWORD_RULES,
+  SEO_SEMANTIC_FIELD_RULES,
+  SEO_HEADING_STRUCTURE_RULES,
+  SEO_WRITING_STYLE_RULES,
+  INTENT_STRATEGIES,
+} from './seo-guidelines'
+
 interface CritiqueParams {
   keyword: string
+  searchIntent?: string
   title: string
   contentHtml: string
   persona: {
@@ -35,7 +46,7 @@ interface CritiquePrompt {
  * }
  */
 export function buildCritiquePrompt(params: CritiqueParams): CritiquePrompt {
-  const { keyword, title, contentHtml, persona } = params
+  const { keyword, searchIntent, title, contentHtml, persona } = params
 
   // ---- System prompt ----
   const system = `Tu es un expert en audit de contenu SEO avec plus de 15 ans d'experience en referencement naturel, redaction web et strategie de contenu. Tu evalues les articles avec precision et objectivite.
@@ -54,43 +65,36 @@ Evaluation generale de la qualite du contenu. Prend en compte tous les autres cr
 - 0-39 : Mauvais - reecriture necessaire
 
 ### 2. Score E-E-A-T (eeat_score: 0-100)
-Evalue l'Experience, l'Expertise, l'Autorite et la Fiabilite du contenu.
-- Experience : L'auteur partage-t-il des experiences personnelles, des cas concrets ?
-- Expertise : Le contenu demontre-t-il une connaissance approfondie du sujet ?
-- Autorite : Y a-t-il des references, des sources, des donnees qui renforcent la credibilite ?
-- Fiabilite : Les informations sont-elles exactes, a jour, equilibrees ?
-
-Penalise fortement :
-- Contenu generique sans valeur ajoutee
-- Absence d'exemples ou de cas concrets
-- Affirmations non etayees
-- Style impersonnel / "IA" evident
+Evalue le contenu selon les criteres E-E-A-T :
+${SEO_EEAT_RULES}
 
 ### 3. Score de lisibilite (readability: 0-100)
 Evalue la facilite de lecture et la qualite redactionnelle.
-- Structure : paragraphes bien decoupes, transitions fluides
-- Clarte : phrases comprehensibles, vocabulaire adapte a l'audience
-- Engagement : style captivant, exemples parlants, rythme varie
-- Formatage : utilisation appropriee des listes, du gras, des sous-titres
+Criteres de qualite attendus :
+${SEO_WRITING_STYLE_RULES}
 
-Penalise :
-- Phrases trop longues ou complexes
-- Paragraphes-blocs (plus de 4-5 lignes)
-- Repetitions excessives
-- Style monotone
-- Formulations "ChatGPT" ("Il est important de noter que...", "Dans cet article, nous allons...")
+${SEO_ANTI_AI_PATTERNS}
 
 ### 4. Score SEO (seo_score: 0-100)
 Evalue l'optimisation pour les moteurs de recherche.
-- Le mot-cle principal apparait dans le titre (H1) ?
-- Le mot-cle est present dans les sous-titres (H2/H3) de maniere naturelle ?
-- La densite du mot-cle est adequate (0.5-2.5%) ?
-- Le champ semantique est riche (mots-cles lies, LSI) ?
-- La structure Hn est correcte (hierarchie respectee) ?
+
+Mots-cles :
+${SEO_KEYWORD_RULES}
+
+Structure des titres :
+${SEO_HEADING_STRUCTURE_RULES}
+
+Champ semantique :
+${SEO_SEMANTIC_FIELD_RULES}
+
+Autres criteres SEO :
 - La longueur est suffisante (1500+ mots pour un article complet) ?
 - Y a-t-il des elements schema.org (FAQ, etc.) ?
 - Les meta-donnees sont-elles optimisees (titre, description) ?
-
+${searchIntent && INTENT_STRATEGIES[searchIntent]?.critique ? `
+### Criteres specifiques a l'intention "${searchIntent}"
+${INTENT_STRATEGIES[searchIntent].critique}
+` : ''}
 ### 5. Problemes (issues: string[])
 Liste des problemes concrets identifies dans le contenu.
 Chaque issue doit etre :
@@ -145,7 +149,7 @@ Retourne UNIQUEMENT un objet JSON valide, sans texte avant ou apres, sans bloc d
   let user = `## ARTICLE A EVALUER
 
 ### Mot-cle principal : "${keyword}"
-### Titre : "${title}"
+### Titre : "${title}"${searchIntent ? `\n### Intention de recherche : ${searchIntent}` : ''}
 
 ### Persona / Auteur attendu
 - Nom : ${persona.name}

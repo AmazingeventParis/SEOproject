@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
-const MIGRATION_SQL =
-  "ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS title_suggestions jsonb DEFAULT NULL;";
+const MIGRATION_SQL = `
+ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS title_suggestions jsonb DEFAULT NULL;
+ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS seo_title text DEFAULT NULL;
+ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS authority_link_suggestions jsonb DEFAULT NULL;
+ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS selected_authority_link jsonb DEFAULT NULL;
+ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS theme_color text DEFAULT NULL;
+ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS year_tag INTEGER DEFAULT NULL;
+`;
 
 // POST /api/migrate — Run pending schema migrations
 export async function POST() {
@@ -45,7 +51,7 @@ export async function POST() {
       await pool.end();
       return NextResponse.json({
         status: "ok",
-        message: `Migration applied as ${user}@${host} — title_suggestions column added.`,
+        message: `Migration applied as ${user}@${host} — title_suggestions + seo_title + authority_link + theme_color + year_tag columns added.`,
       });
     } catch (error) {
       await pool.end().catch(() => {});

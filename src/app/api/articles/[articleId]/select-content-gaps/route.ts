@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getServerClient } from "@/lib/supabase/client";
-import type { TitleSuggestion } from "@/lib/supabase/types";
 
-const selectTitleSchema = z.object({
-  title_index: z.number().int().min(0).max(2),
+const selectContentGapsSchema = z.object({
+  selected_gaps: z.array(z.string()),
 });
 
 interface RouteContext {
   params: { articleId: string };
 }
 
-// POST /api/articles/[articleId]/select-title
+// POST /api/articles/[articleId]/select-content-gaps
 export async function POST(
   request: NextRequest,
   { params }: RouteContext
@@ -28,7 +27,7 @@ export async function POST(
     );
   }
 
-  const parsed = selectTitleSchema.safeParse(body);
+  const parsed = selectContentGapsSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Validation echouee", details: parsed.error.format() },
@@ -36,12 +35,12 @@ export async function POST(
     );
   }
 
-  const { title_index } = parsed.data;
+  const { selected_gaps } = parsed.data;
 
   // Fetch article
   const { data: article, error: fetchError } = await supabase
     .from("seo_articles")
-    .select("title_suggestions")
+    .select("serp_data")
     .eq("id", params.articleId)
     .single();
 
@@ -52,34 +51,17 @@ export async function POST(
     );
   }
 
-  const suggestions = article.title_suggestions as TitleSuggestion[] | null;
-  if (!suggestions || !suggestions[title_index]) {
-    return NextResponse.json(
-      { error: "Suggestion de titre introuvable" },
-      { status: 400 }
-    );
-  }
-
-  const selected = suggestions[title_index];
-
-  // Fix any wrong year in title/slug/seo_title (safety net)
-  const currentYear = new Date().getFullYear();
-  const fixYear = (text: string) => text.replace(/\b(202[0-9])\b/g, (match) => match === String(currentYear) ? match : String(currentYear));
-  const stripYearFromSlug = (slug: string) => slug.replace(/[-]?(202[0-9])[-]?/g, '-').replace(/^-|-$/g, '').replace(/--+/g, '-');
-
-  // Mark selected and update title/slug
-  const updatedSuggestions = suggestions.map((s, i) => ({
-    ...s,
-    selected: i === title_index,
-  }));
+  // Merge selectedContentGaps into existing serp_data
+  const serpData = (article.serp_data as Record<string, unknown>) || {};
+  const updatedSerpData = {
+    ...serpData,
+    selectedContentGaps: selected_gaps,
+  };
 
   const { data, error } = await supabase
     .from("seo_articles")
     .update({
-      title: fixYear(selected.title),
-      slug: stripYearFromSlug(selected.slug),
-      seo_title: fixYear(selected.seo_title || selected.title),
-      title_suggestions: updatedSuggestions,
+      serp_data: updatedSerpData,
     })
     .eq("id", params.articleId)
     .select(

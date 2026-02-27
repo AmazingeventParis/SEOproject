@@ -44,7 +44,11 @@ export async function POST(
     .map((r) => r.title)
     .join("\n- ") || "";
 
+  const currentYear = new Date().getFullYear();
+
   const prompt = `Tu es un expert SEO. Genere exactement 3 suggestions de titre H1 optimises pour le mot-cle "${article.keyword}" (intention: ${article.search_intent}).
+
+REGLE ABSOLUE — ANNEE : Nous sommes en ${currentYear}. Si un titre ou seo_title contient une annee, ce DOIT etre ${currentYear}. JAMAIS 2024, JAMAIS 2025. C'est non negociable.
 
 Contexte de l'article :
 - Sections H2 : ${h2Headings || "non definies"}
@@ -53,21 +57,23 @@ ${competitorTitles ? `- Titres concurrents :\n- ${competitorTitles}` : ""}
 Chaque titre doit suivre une strategie differente :
 1. **Question** : formule comme une question (cible le featured snippet)
 2. **Promesse** : valeur claire pour le lecteur
-3. **Specifique** : chiffres, donnees concretes ou annee en cours (2026)
+3. **Specifique** : chiffres, donnees concretes ou annee ${currentYear} (OBLIGATOIRE : l'annee doit etre ${currentYear})
 
 Retourne UNIQUEMENT un JSON valide :
 {
   "title_suggestions": [
-    { "title": "...", "slug": "...", "seo_rationale": "..." },
-    { "title": "...", "slug": "...", "seo_rationale": "..." },
-    { "title": "...", "slug": "...", "seo_rationale": "..." }
+    { "title": "...", "seo_title": "...", "slug": "...", "seo_rationale": "..." },
+    { "title": "...", "seo_title": "...", "slug": "...", "seo_rationale": "..." },
+    { "title": "... ${currentYear} ...", "seo_title": "... ${currentYear} ...", "slug": "slug-sans-annee", "seo_rationale": "..." }
   ]
 }
 
 Regles :
-- Titre : 50-65 caracteres ideal
-- Slug : minuscules, sans accents, tirets
+- title (H1) : 50-65 caracteres ideal, titre visible sur la page
+- seo_title (balise <title>) : 50-60 caracteres, optimise CTR dans les SERP, peut differer du H1
+- Slug : minuscules, sans accents, tirets, JAMAIS d'annee dans le slug (un slug est intemporel)
 - seo_rationale : 1 phrase explicative
+- TOUTE annee dans title/seo_title = ${currentYear}. Verifie avant de repondre.
 - Pas de texte avant ou apres le JSON`;
 
   try {
@@ -81,24 +87,30 @@ Regles :
       .replace(/```\n?/g, "")
       .trim();
     const parsed = JSON.parse(cleaned) as {
-      title_suggestions: { title: string; slug: string; seo_rationale: string }[];
+      title_suggestions: { title: string; seo_title?: string; slug: string; seo_rationale: string }[];
     };
+
+    // Fix wrong years in generated titles + strip years from slugs
+    const fixYear = (text: string) => text.replace(/\b(202[0-9])\b/g, (match) => match === String(currentYear) ? match : String(currentYear));
+    const stripYearFromSlug = (slug: string) => slug.replace(/[-]?(202[0-9])[-]?/g, '-').replace(/^-|-$/g, '').replace(/--+/g, '-');
 
     const titleSuggestions: TitleSuggestion[] = (
       parsed.title_suggestions || []
     ).map((s) => ({
-      title: s.title,
-      slug: s.slug,
+      title: fixYear(s.title),
+      seo_title: fixYear(s.seo_title || s.title),
+      slug: stripYearFromSlug(s.slug),
       seo_rationale: s.seo_rationale,
       selected: false,
     }));
 
-    // Save new suggestions, reset title/slug
+    // Save new suggestions, reset title/slug/seo_title
     const { data, error } = await supabase
       .from("seo_articles")
       .update({
         title: null,
         slug: null,
+        seo_title: null,
         title_suggestions: titleSuggestions,
       })
       .eq("id", params.articleId)

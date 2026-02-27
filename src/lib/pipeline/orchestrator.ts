@@ -1,11 +1,11 @@
 import { getServerClient } from '@/lib/supabase/client'
-import type { Article, ArticleStatus, ContentBlock } from '@/lib/supabase/types'
+import type { Article, ArticleStatus, ContentBlock, AuthorityLinkSuggestion, SelectedAuthorityLink } from '@/lib/supabase/types'
 import type { PipelineStep, PipelineContext, PipelineRunResult } from './types'
 
 // Article with joined relations from Supabase query
 type ArticleWithRelations = Article & {
   seo_personas: { name: string; role: string; tone_description: string | null; bio: string | null; writing_style_examples: Record<string, unknown>[] } | null
-  seo_sites: { name: string; domain: string; niche: string | null; money_page_url: string | null; money_page_description: string | null } | null
+  seo_sites: { name: string; domain: string; niche: string | null; theme_color: string | null; money_page_url: string | null; money_page_description: string | null } | null
 }
 import { validateTransition, getNextStatus } from './state-machine'
 import { analyzeSERP, extractCompetitorInsights } from '@/lib/seo/serper'
@@ -62,7 +62,7 @@ export async function executeStep(
   // Fetch article with persona and site
   const { data: article, error: fetchError } = await supabase
     .from('seo_articles')
-    .select('*, seo_personas!seo_articles_persona_id_fkey(name, role, tone_description, bio, writing_style_examples), seo_sites!seo_articles_site_id_fkey(name, domain, niche, money_page_url, money_page_description)')
+    .select('*, seo_personas!seo_articles_persona_id_fkey(name, role, tone_description, bio, writing_style_examples), seo_sites!seo_articles_site_id_fkey(name, domain, niche, theme_color, money_page_url, money_page_description)')
     .eq('id', articleId)
     .single()
 
@@ -308,23 +308,22 @@ async function executePlan(
     .or(`site_id.eq.${article.site_id},site_id.is.null`)
     .limit(20)
 
-  // Fetch existing silo articles for internal linking context
-  let siloArticles: { keyword: string; title: string | null; slug: string | null }[] = []
-  if (article.silo_id) {
-    const { data } = await supabase
-      .from('seo_articles')
-      .select('keyword, title, slug')
-      .eq('silo_id', article.silo_id)
-      .neq('id', article.id)
-      .not('title', 'is', null)
-    siloArticles = (data || []) as { keyword: string; title: string | null; slug: string | null }[]
-  }
+  // Fetch ALL published/written articles from the same site for internal linking
+  const { data: siteArticlesData } = await supabase
+    .from('seo_articles')
+    .select('keyword, title, slug')
+    .eq('site_id', article.site_id)
+    .neq('id', article.id)
+    .not('slug', 'is', null)
+    .not('title', 'is', null)
+    .limit(100)
+  const siteArticles = (siteArticlesData || []) as { keyword: string; title: string | null; slug: string | null }[]
 
   const persona = article.seo_personas as { name: string; role: string; tone_description: string | null; bio: string | null; writing_style_examples: Record<string, unknown>[] } | null
   const serpDataRaw = article.serp_data as {
     serp?: { organic: { title: string; snippet: string }[]; peopleAlsoAsk: { question: string }[] }
     competitorContent?: { avgWordCount: number; commonHeadings: string[]; tfidfKeywords: { term: string; tfidf: number; df: number }[] }
-    semanticAnalysis?: { contentGaps: string[]; semanticField: string[]; recommendedWordCount: number; recommendedH2Structure: string[]; keyDifferentiators: string[]; mustAnswerQuestions: string[] }
+    semanticAnalysis?: { contentGaps: (string | { label: string; type: string; description: string })[]; semanticField: string[]; recommendedWordCount: number; recommendedH2Structure: string[]; keyDifferentiators: string[]; mustAnswerQuestions: string[] }
   } | null
 
   // Build money page config if applicable
@@ -340,10 +339,11 @@ async function executePlan(
     persona: persona || { name: 'Expert', role: 'Redacteur', tone_description: null, bio: null, writing_style_examples: [] },
     serpData: serpDataRaw?.serp as Parameters<typeof buildPlanArchitectPrompt>[0]['serpData'],
     nuggets: (nuggets || []).map((n) => ({ id: n.id, content: n.content, tags: n.tags })),
-    existingSiloArticles: siloArticles,
+    existingSiloArticles: siteArticles,
     moneyPage,
     competitorContent: serpDataRaw?.competitorContent,
     semanticAnalysis: serpDataRaw?.semanticAnalysis,
+    selectedContentGaps: (serpDataRaw as Record<string, unknown> | null)?.selectedContentGaps as string[] | undefined,
   })
 
   const aiResponse = modelOverride
@@ -351,7 +351,7 @@ async function executePlan(
     : await routeAI('plan_article', [{ role: 'user', content: prompt.user }], prompt.system)
 
   // Parse the AI response as JSON plan
-  let plan: { title_suggestions: { title: string; slug: string; seo_rationale: string }[]; meta_description: string; content_blocks: ContentBlock[] }
+  let plan: { title_suggestions: { title: string; seo_title?: string; slug: string; seo_rationale: string }[]; meta_description: string; content_blocks: ContentBlock[] }
   try {
     const cleaned = aiResponse.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     plan = JSON.parse(cleaned)
@@ -366,23 +366,158 @@ async function executePlan(
     }
   }
 
-  // Build title suggestions with selected: false
+  // Ensure intro block exists as first element (type paragraph, heading null, before first H2)
+  const blocks = plan.content_blocks || []
+  const firstBlock = blocks[0]
+  const hasIntro = firstBlock && firstBlock.type === 'paragraph' && !firstBlock.heading
+  if (!hasIntro) {
+    const introBlock: ContentBlock = {
+      id: crypto.randomUUID(),
+      type: 'paragraph',
+      heading: undefined,
+      content_html: '',
+      nugget_ids: [],
+      word_count: 120,
+      status: 'pending',
+      writing_directive: `Intro courte (100-140 mots). Contient le mot-cle "${article.keyword}". Valide que le lecteur est au bon endroit (identifie la cible). Inclus une phrase explicite sur ce que le lecteur va apprendre. Phrases courtes, percutantes, zero fluff. 1-2 <p> uniquement.`,
+      format_hint: 'prose',
+    }
+    plan.content_blocks = [introBlock, ...blocks]
+  }
+
+  // Build title suggestions with selected: false + fix wrong years
+  const currentYear = new Date().getFullYear()
+  const fixYear = (text: string) => text.replace(/\b(202[0-9])\b/g, (match) => match === String(currentYear) ? match : String(currentYear))
+  const stripYearFromSlug = (slug: string) => slug.replace(/[-]?(202[0-9])[-]?/g, '-').replace(/^-|-$/g, '').replace(/--+/g, '-')
+
+  // Fix years in content block headings too
+  for (const block of plan.content_blocks || []) {
+    if (block.heading) {
+      block.heading = fixYear(block.heading)
+    }
+  }
+
   const titleSuggestions = (plan.title_suggestions || []).map(s => ({
-    title: s.title,
-    slug: s.slug,
+    title: fixYear(s.title),
+    seo_title: fixYear(s.seo_title || s.title),
+    slug: stripYearFromSlug(s.slug),
     seo_rationale: s.seo_rationale,
     selected: false,
   }))
 
-  // Update article with the generated plan — title and slug are null until user selects one
+  // --- Authority link suggestions (optional, wrapped in try/catch) ---
+  let authorityLinkSuggestions: AuthorityLinkSuggestion[] = []
+  try {
+    const organicResults = (serpDataRaw?.serp?.organic || []) as { title: string; link: string; snippet?: string; domain?: string }[]
+
+    const AUTHORITY_PATTERNS = [
+      'wikipedia.org', 'gouv.fr', 'service-public.fr',
+      '.edu', 'who.int', 'europa.eu', 'legifrance.gouv.fr',
+      'insee.fr', 'has-sante.fr', 'ademe.fr',
+      'nature.com', 'sciencedirect.com', 'springer.com',
+      'lemonde.fr', 'lefigaro.fr',
+    ]
+
+    const isAuthority = (url: string) => AUTHORITY_PATTERNS.some(p => url.includes(p))
+
+    // 1. Filter authority domains from existing SERP
+    let candidates = organicResults
+      .filter(r => r.link && isAuthority(r.link))
+      .map(r => ({
+        url: r.link,
+        title: r.title || '',
+        domain: r.domain || new URL(r.link).hostname,
+        snippet: r.snippet || '',
+      }))
+
+    // 2. If < 2 results, do supplementary Serper query
+    if (candidates.length < 2) {
+      try {
+        const suppSerp = await analyzeSERP(`"${article.keyword}" etude OR statistiques OR officiel`, { num: 10 })
+        const suppResults = (suppSerp?.organic || []) as { title: string; link: string; snippet?: string; domain?: string }[]
+        const existingUrls = new Set(candidates.map(c => c.url))
+        const newCandidates = suppResults
+          .filter(r => r.link && isAuthority(r.link) && !existingUrls.has(r.link))
+          .map(r => ({
+            url: r.link,
+            title: r.title || '',
+            domain: r.domain || new URL(r.link).hostname,
+            snippet: r.snippet || '',
+          }))
+        candidates = [...candidates, ...newCandidates]
+      } catch {
+        // Supplementary SERP failed — continue with what we have
+      }
+    }
+
+    if (candidates.length > 0) {
+      // 3. HEAD-check each URL
+      const validationResults = await Promise.allSettled(
+        candidates.slice(0, 5).map(async (c) => {
+          try {
+            const res = await fetch(c.url, { method: 'HEAD', signal: AbortSignal.timeout(5000), redirect: 'follow' })
+            return { ...c, is_valid: res.status >= 200 && res.status < 400 }
+          } catch {
+            return { ...c, is_valid: false }
+          }
+        })
+      )
+      const checkedCandidates = validationResults
+        .filter((r): r is PromiseFulfilledResult<typeof candidates[0] & { is_valid: boolean }> => r.status === 'fulfilled')
+        .map(r => r.value)
+
+      // 4. Gemini Flash to pick top 2-3 with rationale
+      const evalPrompt = `Tu es un expert SEO. Voici des sources potentielles d'autorite pour un article sur "${article.keyword}".
+
+Candidats :
+${checkedCandidates.map((c, i) => `${i + 1}. ${c.title} (${c.domain}) — ${c.snippet.slice(0, 150)}`).join('\n')}
+
+Selectionne les 2-3 meilleures sources pour renforcer l'E-E-A-T de l'article.
+Pour chaque source selectionnee, fournis :
+- rationale : pourquoi cette source renforce la credibilite (1 phrase)
+- anchor_context : suggestion de phrase dans laquelle integrer le lien (1 phrase)
+
+Retourne UNIQUEMENT un JSON valide :
+{
+  "selections": [
+    { "index": 0, "rationale": "...", "anchor_context": "..." }
+  ]
+}
+Pas de texte avant ou apres le JSON.`
+
+      const evalResponse = await routeAI('evaluate_authority_links', [{ role: 'user', content: evalPrompt }])
+      const evalCleaned = evalResponse.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      const evalParsed = JSON.parse(evalCleaned) as { selections: { index: number; rationale: string; anchor_context: string }[] }
+
+      authorityLinkSuggestions = (evalParsed.selections || [])
+        .filter(s => checkedCandidates[s.index])
+        .map(s => ({
+          url: checkedCandidates[s.index].url,
+          title: checkedCandidates[s.index].title,
+          domain: checkedCandidates[s.index].domain,
+          snippet: checkedCandidates[s.index].snippet,
+          rationale: s.rationale,
+          is_valid: checkedCandidates[s.index].is_valid,
+          selected: false,
+        }))
+    }
+  } catch {
+    // Authority links are optional — don't break the plan step
+  }
+
+  // Update article with the generated plan — title, slug, seo_title are null until user selects one
   await supabase
     .from('seo_articles')
     .update({
       title: null,
       slug: null,
-      meta_description: plan.meta_description,
+      seo_title: null,
+      meta_description: fixYear(plan.meta_description || ''),
       content_blocks: plan.content_blocks,
       title_suggestions: titleSuggestions,
+      authority_link_suggestions: authorityLinkSuggestions.length > 0 ? authorityLinkSuggestions : null,
+      selected_authority_link: null,
+      year_tag: new Date().getFullYear(),
       status: 'planning' as ArticleStatus,
     })
     .eq('id', article.id)
@@ -433,8 +568,16 @@ async function executeWriteBlock(
   const internalLinkTargets = block.internal_link_targets || []
   const siteDomain = article.seo_sites?.domain
 
+  // Authority link injection: only in the first H2 (non-FAQ) that doesn't already contain it
+  const selectedAuth = article.selected_authority_link as SelectedAuthorityLink | null
+  const alreadyPlaced = contentBlocks
+    .slice(0, blockIndex)
+    .some(b => b.content_html?.includes(selectedAuth?.url || '___'))
+  const shouldInjectAuth = selectedAuth && block.type === 'h2' && !alreadyPlaced
+
   const prompt = buildBlockWriterPrompt({
     keyword: article.keyword,
+    searchIntent: article.search_intent,
     persona: persona || { name: 'Expert', role: 'Redacteur', tone_description: null, bio: null, writing_style_examples: [] },
     block: {
       type: block.type,
@@ -448,6 +591,8 @@ async function executeWriteBlock(
     articleTitle: article.title || article.keyword,
     internalLinkTargets,
     siteDomain: siteDomain || undefined,
+    authorityLink: shouldInjectAuth ? selectedAuth : null,
+    siteThemeColor: article.seo_sites?.theme_color || undefined,
   })
 
   const aiResponse = modelOverride
@@ -745,6 +890,18 @@ async function executePublish(
   let wpPostId: number
   let wpUrl: string
 
+  // Build SEO meta for Yoast/Rank Math
+  const seoMeta: Record<string, unknown> = {}
+  if (article.seo_title) {
+    seoMeta._yoast_wpseo_title = article.seo_title
+    seoMeta.rank_math_title = article.seo_title
+  }
+  if (article.meta_description) {
+    seoMeta._yoast_wpseo_metadesc = article.meta_description
+    seoMeta.rank_math_description = article.meta_description
+  }
+  const hasSeoMeta = Object.keys(seoMeta).length > 0
+
   if (article.wp_post_id) {
     // Update existing post
     const wpPost = await updatePost(article.site_id, article.wp_post_id, {
@@ -764,6 +921,7 @@ async function executePublish(
       slug: article.slug || article.keyword.toLowerCase().replace(/\s+/g, '-'),
       status: 'publish',
       featured_media: heroMediaId,
+      ...(hasSeoMeta ? { meta: seoMeta } : {}),
     })
     wpPostId = result.wpPostId
     wpUrl = result.wpUrl

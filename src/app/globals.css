@@ -8,6 +8,230 @@
   }
 }
 
+/* FAQ Accordion — <details>/<summary> */
+.faq-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.faq-item {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+.faq-item[open] {
+  border-color: hsl(var(--ring));
+}
+
+.faq-item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.5;
+  cursor: pointer;
+  list-style: none;
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  transition: background-color 0.2s ease;
+}
+
+.faq-item summary:hover {
+  background: hsl(var(--accent));
+}
+
+/* Hide default marker */
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Custom chevron */
+.faq-item summary::after {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+  margin-left: 1rem;
+}
+
+.faq-item[open] summary::after {
+  transform: rotate(-135deg);
+}
+
+.faq-answer {
+  padding: 1rem 1.25rem;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: hsl(var(--foreground));
+}
+
+.faq-answer p {
+  margin: 0;
+}
+
+.faq-answer p + p {
+  margin-top: 0.5rem;
+}
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+  .faq-item summary {
+    padding: 0.75rem 1rem;
+    font-size: 0.925rem;
+  }
+  .faq-answer {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* ======================================
+   Table Design System — UX/UI moderne
+   ====================================== */
+
+/* Conteneur principal — scroll horizontal mobile + ombre legere */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 20px 0;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+/* Table de base — epuree, sans bordures lourdes */
+.table-container table,
+.comparison-table,
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+/* En-tetes — couleur theme via inline style ou fallback neutre */
+.table-container table thead th,
+.comparison-table thead th,
+.info-table thead th {
+  padding: 14px 16px;
+  font-weight: 600;
+  text-align: left;
+  background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+/* Cellules — bordures fines, espacement confortable */
+.table-container table td,
+.comparison-table td,
+.info-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: left;
+  vertical-align: top;
+}
+
+/* Zebra-striping — lignes alternees subtiles */
+.table-container table tbody tr:nth-child(even),
+.comparison-table tbody tr:nth-child(even),
+.info-table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+/* Hover — feedback visuel au survol */
+.table-container table tbody tr:hover,
+.comparison-table tbody tr:hover,
+.info-table tbody tr:hover {
+  background: #f1f5f9;
+  transition: background-color 0.15s ease;
+}
+
+/* Derniere ligne sans bordure basse */
+.table-container table tbody tr:last-child td,
+.comparison-table tbody tr:last-child td,
+.info-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+  .table-container table,
+  .comparison-table,
+  .info-table {
+    font-size: 0.85rem;
+  }
+  .table-container table thead th,
+  .comparison-table thead th,
+  .info-table thead th {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+  }
+  .table-container table td,
+  .comparison-table td,
+  .info-table td {
+    padding: 8px 12px;
+  }
+}
+
+/* Lead generation form */
+.lead-form {
+  background: #f0fdf4;
+  border: 2px solid #86efac;
+  border-radius: 12px;
+  padding: 24px;
+}
+.lead-form input,
+.lead-form select,
+.lead-form textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.lead-form button[type="submit"] {
+  background: #16a34a;
+  color: white;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lead-form button[type="submit"]:hover {
+  background: #15803d;
+}
+
+/* Legacy wrapper alias — backward compat */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 20px 0;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+/* Testimonial */
+blockquote.testimonial {
+  border-left: 4px solid #10b981;
+  background: #ecfdf5;
+  padding: 16px;
+  margin: 16px 0;
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+}
+
 
 
 @layer base {

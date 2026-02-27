@@ -4,6 +4,14 @@
 // Returns ONLY valid JSON with article outline
 // ============================================================
 
+import {
+  SEO_EEAT_RULES,
+  SEO_FAQ_RULES,
+  SEO_HEADING_STRUCTURE_RULES,
+  SEO_INTERNAL_LINKING_RULES,
+  INTENT_STRATEGIES,
+} from './seo-guidelines'
+
 interface PlanArchitectParams {
   keyword: string
   searchIntent: string
@@ -28,13 +36,14 @@ interface PlanArchitectParams {
     tfidfKeywords: { term: string; tfidf: number; df: number }[]
   }
   semanticAnalysis?: {
-    contentGaps: string[]
+    contentGaps: (string | { label: string; type: string; description: string })[]
     semanticField: string[]
     recommendedWordCount: number
     recommendedH2Structure: string[]
     keyDifferentiators: string[]
     mustAnswerQuestions: string[]
   }
+  selectedContentGaps?: string[]
 }
 
 interface PlanArchitectPrompt {
@@ -70,10 +79,15 @@ interface PlanArchitectPrompt {
 export function buildPlanArchitectPrompt(
   params: PlanArchitectParams
 ): PlanArchitectPrompt {
-  const { keyword, searchIntent, persona, serpData, nuggets, existingSiloArticles, moneyPage, competitorContent, semanticAnalysis } = params
+  const { keyword, searchIntent, persona, serpData, nuggets, existingSiloArticles, moneyPage, competitorContent, semanticAnalysis, selectedContentGaps } = params
+
+  const currentYear = new Date().getFullYear()
 
   // ---- System prompt ----
   const system = `Tu es un architecte de contenu SEO expert, specialise dans la creation de plans d'articles optimises pour le referencement naturel Google. Tu produis des plans qui rankent ET qui sont utiles a lire.
+
+## ANNEE EN COURS : ${currentYear}
+REGLE ABSOLUE : nous sommes en ${currentYear}. Si un titre, un seo_title, un slug, un contenu ou une meta_description mentionne une annee, ce DOIT etre ${currentYear}. JAMAIS 2024 ou 2025. C'est non negociable.
 
 ## TON ROLE
 Tu generes des plans d'articles structures en PYRAMIDE INVERSEE, complets et optimises SEO. Le plan doit permettre a un redacteur de creer un contenu de haute qualite qui se positionnera en premiere page Google.
@@ -84,6 +98,11 @@ Tu generes des plans d'articles structures en PYRAMIDE INVERSEE, complets et opt
 L'article doit repondre a l'intention de recherche DES LE PREMIER H2. Le lecteur obtient la reponse immediatement, puis chaque section approfondit ou elargit le sujet.
 
 ### Ordre des sections
+0. **Bloc intro (OBLIGATOIRE)** : type "paragraph", heading null, 100-140 mots. Contient le mot-cle principal. AVANT le premier H2. Ce bloc doit :
+   - Valider que le lecteur est au bon endroit (identification du persona cible)
+   - Contenir une phrase explicite de validation d'intention : ce que le lecteur va apprendre ou resoudre
+   - Phrases courtes, percutantes, zero fluff. Une idee par phrase.
+   - Pas de formules generiques ("Depuis la nuit des temps...", "Il est important de...")
 1. **Premier H2** : Repond DIRECTEMENT a l'intention de recherche (la reponse, le comparatif, la solution)
 2. **H2 suivants** : Approfondissent, detaillent, donnent des cas concrets
 3. **Avant-dernier H2** : Section optionnelle (erreurs a eviter, conseils avances, etc.)
@@ -98,19 +117,7 @@ Ces elements peuvent apparaitre en H3 sous un H2 pertinent, mais JAMAIS en ouver
 
 ## Hn SEMANTIQUES (TITRES OPTIMISES)
 
-### Regles H2
-- Chaque H2 doit etre une QUESTION ou une PROMESSE claire (pas de titres vagues)
-- Chaque H2 doit etre comprehensible DE FACON ISOLEE (pense featured snippet Google)
-- Integre des mots-cles secondaires naturellement dans les H2
-- 3 a 6 sections H2 par article
-- Exemples BONS : "Quel budget prevoir pour une renovation de salle de bain ?"
-- Exemples MAUVAIS : "Le budget", "Parlons argent", "Introduction"
-
-### Regles H3
-- Chaque H3 = sous-aspect CONCRET du H2 parent
-- 1 a 3 H3 par H2 maximum
-- Les H3 doivent integrer des variantes du mot-cle
-- Ne saute JAMAIS un niveau (pas de H3 sans H2 parent)
+${SEO_HEADING_STRUCTURE_RULES}
 
 ## DIRECTIVES D'ECRITURE PAR BLOC (OBLIGATOIRE)
 
@@ -132,22 +139,18 @@ Pour chaque bloc de type H2, tu DOIS decider si une illustration est pertinente 
 - Si true, fournis **image_prompt_hint** : description de la scene/concept a illustrer (en anglais, style photo editoriale)
 
 ## OPTIMISATION E-E-A-T
-- Integre des elements montrant l'EXPERIENCE reelle du persona (anecdotes, cas concrets)
-- Montre l'EXPERTISE avec des donnees precises, des analyses approfondies
-- Renforce l'AUTORITE en citant des sources, des etudes
-- Assure la FIABILITE avec des informations a jour
+${SEO_EEAT_RULES}
 
-## INTENTION DE RECHERCHE
-Adapte la structure au type d'intention :
-- "informational" / "traffic" : guide complet, tutoriel, explication detaillee
-- "commercial" / "comparison" / "review" : comparatif, tableaux, avantages/inconvenients
-- "transactional" / "lead_gen" : page conversion, CTA, benefices
-- "discover" : contenu exploratoire, tendances, nouveautes
+## STRATEGIE — Intention "${searchIntent}"
+${INTENT_STRATEGIES[searchIntent]?.plan || 'Structure guide complet standard.'}
+
+Tu DOIS respecter cette strategie de structure. L'intention de recherche determine TOUT : le nombre de mots, l'ordre des sections, les formats de blocs, et la presence ou non d'une FAQ.
 
 ## CONTENU
-- Vise entre 1500 et 3000 mots au total (somme des word_count)
+- Respecte la fourchette de mots indiquee dans la strategie ci-dessus
 - Chaque bloc : 150-500 mots
-- TOUJOURS une section FAQ basee sur les "People Also Ask" (3-6 questions)
+- Section FAQ avec le heading "FAQ" en type "faq" SAUF si la strategie l'interdit (ex: discover)
+${SEO_FAQ_RULES}
 - Blocs "list" pour les elements enumeratifs
 
 ## NUGGETS (contenus authentiques du persona)
@@ -165,12 +168,11 @@ Adapte la structure au type d'intention :
 
 Pour chaque bloc H2, definis "internal_link_targets" (tableau, peut etre vide []).
 
-Regles :
+${SEO_INTERNAL_LINKING_RULES}
+
+Format par entree :
 - Chaque entree : { "target_slug", "target_title", "suggested_anchor_context", "is_money_page" }
 - "suggested_anchor_context" = indication sur COMMENT integrer le lien naturellement
-- Un meme target_slug ne peut apparaitre qu'1 fois dans tout l'article
-- Max 2-3 liens internes par H2 (pas de sur-optimisation)
-- Place les liens la ou c'est NATUREL par rapport au sujet de la section
 - L'ancre finale sera decidee par le redacteur — donne juste le contexte d'insertion
 
 ## SUGGESTIONS DE TITRE H1 (OBLIGATOIRE)
@@ -178,11 +180,12 @@ Regles :
 Tu DOIS proposer exactement 3 variantes de titre H1, chacune avec une strategie differente :
 1. **Question** : formule le titre comme une question (cible le featured snippet Google)
 2. **Promesse** : formule le titre comme une promesse de valeur claire pour le lecteur
-3. **Specifique** : utilise des chiffres, donnees concretes ou l'annee en cours
+3. **Specifique** : utilise des chiffres, donnees concretes ou l'annee ${currentYear} (OBLIGATOIRE : si une annee apparait, ce doit etre ${currentYear})
 
 Chaque suggestion doit inclure :
-- "title" : le titre H1 (50-65 caracteres ideal)
-- "slug" : le slug URL correspondant (minuscules, sans accents, tirets)
+- "title" : le titre H1 visible sur la page (50-65 caracteres ideal)
+- "seo_title" : le Title SEO pour la balise <title> (50-60 caracteres, optimise CTR dans les SERP, peut differer du H1)
+- "slug" : le slug URL correspondant (minuscules, sans accents, tirets, JAMAIS d'annee dans le slug — un slug doit etre intemporel)
 - "seo_rationale" : 1 phrase expliquant pourquoi ce titre est optimise SEO
 
 ## FORMAT DE SORTIE
@@ -191,23 +194,39 @@ Tu DOIS retourner UNIQUEMENT un objet JSON valide, sans texte avant ou apres, sa
 {
   "title_suggestions": [
     {
-      "title": "Titre variante Question (cible featured snippet)",
+      "title": "Titre H1 variante Question (cible featured snippet)",
+      "seo_title": "Title SEO pour balise <title> (optimise CTR SERP)",
       "slug": "slug-question",
       "seo_rationale": "Explication SEO"
     },
     {
-      "title": "Titre variante Promesse (valeur lecteur)",
+      "title": "Titre H1 variante Promesse (valeur lecteur)",
+      "seo_title": "Title SEO pour balise <title> (optimise CTR SERP)",
       "slug": "slug-promesse",
       "seo_rationale": "Explication SEO"
     },
     {
-      "title": "Titre variante Specifique (chiffres/annee)",
-      "slug": "slug-specifique",
+      "title": "Titre H1 variante Specifique (chiffres/annee ${currentYear})",
+      "seo_title": "Title SEO pour balise <title> (optimise CTR SERP, annee ${currentYear})",
+      "slug": "slug-specifique-chiffres",
       "seo_rationale": "Explication SEO"
     }
   ],
   "meta_description": "Meta description engageante (140-160 caracteres)",
   "content_blocks": [
+    {
+      "id": "UUID — bloc intro OBLIGATOIRE en premier",
+      "type": "paragraph",
+      "heading": null,
+      "content_html": "",
+      "nugget_ids": [],
+      "word_count": 120,
+      "status": "pending",
+      "writing_directive": "Intro courte (100-140 mots). Contient le mot-cle. Oriente vers l'intention de recherche. Accroche forte. 1-2 paragraphes <p> uniquement.",
+      "format_hint": "prose",
+      "generate_image": false,
+      "internal_link_targets": []
+    },
     {
       "id": "genere un UUID v4 unique",
       "type": "h2 | h3 | paragraph | list | faq",
@@ -234,10 +253,11 @@ Tu DOIS retourner UNIQUEMENT un objet JSON valide, sans texte avant ou apres, sa
 
 IMPORTANT :
 - "title_suggestions" doit contenir EXACTEMENT 3 suggestions avec 3 strategies differentes (question, promesse, specifique)
+- Chaque suggestion doit avoir un "seo_title" (balise <title>, 50-60 car., optimise CTR) DISTINCT du "title" (H1 visible)
 - "content_html" doit TOUJOURS etre "" (le contenu sera genere ensuite)
 - "status" doit TOUJOURS etre "pending"
 - Genere de vrais UUID v4 pour chaque "id" (format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx)
-- Les slugs doivent etre en minuscules, sans accents, avec des tirets
+- Les slugs doivent etre en minuscules, sans accents, avec des tirets, et SANS annee (un slug est intemporel)
 - La meta_description doit inciter au clic et contenir le mot-cle principal
 - "writing_directive" est OBLIGATOIRE sur chaque bloc
 - "format_hint" est OBLIGATOIRE sur chaque bloc
@@ -319,14 +339,20 @@ Assigne les nuggets pertinents aux blocs via leur ID dans nugget_ids.`
     }
   }
 
-  // Add existing silo articles if available
+  // Add existing site articles for internal linking
   if (existingSiloArticles && existingSiloArticles.length > 0) {
-    user += `\n\n## ARTICLES EXISTANTS DANS LE MEME SILO
-Prevois des opportunites de maillage interne avec ces articles :`
+    user += `\n\n## ARTICLES EXISTANTS SUR LE SITE (maillage interne)
+Voici la liste EXHAUSTIVE des articles disponibles pour le maillage interne.
+REGLE ABSOLUE : tu ne peux linker QUE vers les slugs de cette liste. INTERDIT d'inventer des URLs ou des slugs qui ne sont pas ci-dessous.`
 
     for (const article of existingSiloArticles) {
-      user += `\n- "${article.title || article.keyword}" (/${article.slug || ''})`
+      user += `\n- "${article.title || article.keyword}" → /${article.slug || ''}`
     }
+
+    user += `\n\nSi aucun article de cette liste n'est pertinent pour une section, laisse internal_link_targets a [].`
+  } else {
+    user += `\n\n## MAILLAGE INTERNE
+Aucun article existant sur le site. Laisse internal_link_targets a [] pour tous les blocs. N'invente AUCUN lien.`
   }
 
   // Add money page if configured
@@ -362,9 +388,22 @@ Marque ces entrees avec "is_money_page": true dans internal_link_targets.`
     }
 
     if (semanticAnalysis) {
-      if (semanticAnalysis.contentGaps.length > 0) {
-        user += `\n\n### Lacunes de contenu a combler :`
-        for (const gap of semanticAnalysis.contentGaps) {
+      // Use selectedContentGaps if defined (user selection), otherwise fall back to all contentGaps
+      const rawGaps = selectedContentGaps !== undefined
+        ? selectedContentGaps
+        : semanticAnalysis.contentGaps
+
+      // Normalize gaps: objects → descriptive strings, strings → as-is
+      const gapsToUse = rawGaps.map(g => {
+        if (typeof g === 'string') return g
+        const obj = g as { label: string; type: string; description: string }
+        return obj.description ? `[${obj.type}] ${obj.label} — ${obj.description}` : obj.label
+      })
+
+      if (gapsToUse.length > 0) {
+        user += `\n\n### Lacunes de contenu a combler :
+IMPORTANT : les lacunes entre crochets indiquent un FORMAT SPECIFIQUE a respecter. Par exemple [calculator] signifie que le bloc doit presenter un simulateur/calculateur sous forme de tableau interactif, [comparison] un tableau comparatif detaille, [checklist] une liste actionnable, etc. Adapte le format_hint et la writing_directive du bloc en consequence.`
+        for (const gap of gapsToUse) {
           user += `\n- ${gap}`
         }
       }
@@ -401,6 +440,11 @@ Marque ces entrees avec "is_money_page": true dans internal_link_targets.`
     }
   }
 
+  user += `\n\n## ANNEE DE REFERENCE — REGLE ABSOLUE
+Nous sommes en ${currentYear}. TOUTE reference temporelle, date ou annee dans les titres, seo_titles, meta_description et content_blocks DOIT etre ${currentYear}.
+INTERDIT : 2024, 2025 ou toute annee autre que ${currentYear}.
+EXCEPTION SLUG : les slugs ne doivent JAMAIS contenir d'annee (un slug est intemporel, il ne change pas d'une annee a l'autre).`
+
   user += `\n\n## INSTRUCTIONS FINALES
 1. PYRAMIDE INVERSEE : le premier H2 repond DIRECTEMENT a l'intention de recherche
 2. Hn SEMANTIQUES : chaque H2 est une question ou promesse claire, comprehensible isolement
@@ -411,6 +455,8 @@ Marque ces entrees avec "is_money_page": true dans internal_link_targets.`
 7. Assigne les nuggets pertinents aux blocs appropries
 8. Propose 3 variantes de titre H1 (question, promesse, specifique) + meta description optimisee
 9. Vise 1500-3000 mots repartis equilibrement
+10. Au moins un H2 doit contenir le mot-cle principal ou une variante tres proche
+11. BLOC INTRO OBLIGATOIRE : le PREMIER element de content_blocks doit etre un bloc type "paragraph", heading null, 100-140 mots, contenant le mot-cle principal. Ce bloc precede le premier H2.
 
 Retourne UNIQUEMENT le JSON, rien d'autre.`
 

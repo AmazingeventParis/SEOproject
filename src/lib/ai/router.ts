@@ -28,8 +28,8 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     temperature: 0.7,
   },
   write_block: {
-    provider: 'anthropic',
-    model: 'claude-sonnet-4-20250514',
+    provider: 'google',
+    model: 'gemini-3.1-pro-preview',
     maxTokens: 2048,
     temperature: 0.8,
   },
@@ -74,6 +74,12 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     model: 'gemini-2.0-flash',
     maxTokens: 2048,
     temperature: 0.2,
+  },
+  evaluate_authority_links: {
+    provider: 'google',
+    model: 'gemini-2.0-flash',
+    maxTokens: 1024,
+    temperature: 0.3,
   },
 }
 

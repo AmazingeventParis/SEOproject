@@ -259,7 +259,9 @@ ${pagesInfo}
 ## INSTRUCTIONS
 Retourne un JSON valide (sans bloc markdown) avec cette structure exacte:
 {
-  "contentGaps": ["lacune 1", "lacune 2", ...],
+  "contentGaps": [
+    { "label": "Titre court de la lacune", "type": "calculator|comparison|checklist|specific_question|interactive|data|text", "description": "Description detaillee de ce que cet element apporterait a l'article" }
+  ],
   "semanticField": ["terme1", "terme2", ...],
   "recommendedWordCount": nombre,
   "recommendedH2Structure": ["H2 titre 1", "H2 titre 2", ...],
@@ -268,7 +270,17 @@ Retourne un JSON valide (sans bloc markdown) avec cette structure exacte:
 }
 
 Regles:
-- contentGaps: 3-6 sujets importants couverts par les concurrents mais potentiellement manquants
+- contentGaps: 5-8 opportunites de contenu DIVERSIFIEES. Ne propose pas que du texte brut ! Pense a des FORMATS DIFFERENTS qui apportent une vraie valeur ajoutee :
+  - **calculator** : simulateur, calculateur interactif, estimateur (ex: "Calculez votre budget mensuel", "Simulateur de rentabilite")
+  - **comparison** : tableau comparatif detaille, versus, benchmark (ex: "Comparatif prix/fonctionnalites des 5 leaders")
+  - **checklist** : liste actionnable, guide etape par etape, to-do (ex: "Checklist des 12 points a verifier avant de signer")
+  - **specific_question** : reponse a une question tres precise que les concurrents survolent (ex: "Que faire si X arrive dans la situation Y ?")
+  - **interactive** : quiz, decision tree, auto-diagnostic (ex: "Quel type de X correspond a votre profil ?")
+  - **data** : infographie, statistiques cles, chiffres exclusifs, etude de cas chiffree (ex: "Les 10 chiffres cles du marche en ${new Date().getFullYear()}")
+  - **text** : angle editorial, temoignage, expertise approfondie (ex: "Retour d'experience : 3 erreurs courantes de debutants")
+
+  IMPORTANT : au moins 3 gaps doivent etre de type NON-text (calculator, comparison, checklist, interactive, data). L'objectif est de DIFFERENCIER l'article des concurrents par des formats originaux, pas juste ajouter plus de texte.
+
 - semanticField: 15-25 termes du champ semantique a integrer dans l'article
 - recommendedWordCount: nombre de mots recommande (basé sur la moyenne + 20%)
 - recommendedH2Structure: 4-8 H2 recommandés couvrant tout le sujet
