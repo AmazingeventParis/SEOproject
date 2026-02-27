@@ -6,23 +6,23 @@ import type { ArticleUpdate } from "@/lib/supabase/types";
 const contentBlockSchema = z.object({
   id: z.string(),
   type: z.enum(["h2", "h3", "paragraph", "list", "faq", "callout", "image"]),
-  heading: z.string().optional(),
+  heading: z.string().nullish(),
   content_html: z.string(),
   nugget_ids: z.array(z.string()),
   word_count: z.number(),
-  model_used: z.string().optional(),
+  model_used: z.string().nullish(),
   status: z.enum(["pending", "written", "approved"]),
-  writing_directive: z.string().optional(),
-  format_hint: z.enum(["prose", "bullets", "table", "mixed"]).optional(),
-  generate_image: z.boolean().optional(),
-  image_prompt_hint: z.string().optional(),
+  writing_directive: z.string().nullish(),
+  format_hint: z.enum(["prose", "bullets", "table", "mixed"]).nullish(),
+  generate_image: z.boolean().nullish(),
+  image_prompt_hint: z.string().nullish(),
   internal_link_targets: z.array(z.object({
     target_slug: z.string(),
     target_title: z.string(),
     suggested_anchor_context: z.string(),
     is_money_page: z.boolean().optional(),
-  })).optional(),
-});
+  })).nullish(),
+}).passthrough();
 
 const updateArticleSchema = z.object({
   title: z.string().nullable().optional(),
