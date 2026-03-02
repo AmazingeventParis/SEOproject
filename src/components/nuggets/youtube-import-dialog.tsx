@@ -102,9 +102,7 @@ export function YoutubeImportDialog({
 
       const data = await res.json();
       if (!res.ok) {
-        if (data.transcript_unavailable) {
-          setShowManualTranscript(true);
-        }
+        setShowManualTranscript(true);
         setError(data.error || "Erreur inconnue");
         setStep("input");
         return;
