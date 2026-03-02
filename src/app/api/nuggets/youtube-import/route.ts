@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { YoutubeTranscript } from "youtube-transcript";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import { routeAI } from "@/lib/ai/router";
 import { getServerClient } from "@/lib/supabase/client";
 
@@ -91,6 +91,13 @@ async function resolveGeminiKey(): Promise<string> {
  * Fallback: send YouTube URL directly to Gemini for video analysis.
  * Gemini 2.0 Flash can process YouTube videos natively via fileData.
  */
+const SAFETY_SETTINGS = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+];
+
 async function extractNuggetsFromVideo(videoUrl: string): Promise<{ content: string; tags: string[] }[]> {
   const apiKey = await resolveGeminiKey();
   const genai = new GoogleGenerativeAI(apiKey);
@@ -100,6 +107,7 @@ async function extractNuggetsFromVideo(videoUrl: string): Promise<{ content: str
       maxOutputTokens: 4096,
       temperature: 0.3,
     },
+    safetySettings: SAFETY_SETTINGS,
   });
 
   const result = await model.generateContent([
@@ -216,8 +224,21 @@ export async function POST(request: NextRequest) {
         nuggets = parseNuggetsFromAIResponse(aiResponse.content);
       } else {
         // Method 3: Gemini direct video analysis (no transcript needed)
-        method = "video";
-        nuggets = await extractNuggetsFromVideo(videoUrl);
+        // If blocked by safety filters, fail with a clear message
+        try {
+          method = "video";
+          nuggets = await extractNuggetsFromVideo(videoUrl);
+        } catch (videoErr) {
+          const videoMsg = videoErr instanceof Error ? videoErr.message : String(videoErr);
+          if (videoMsg.includes("blocked") || videoMsg.includes("SAFETY") || videoMsg.includes("OTHER")) {
+            throw new Error(
+              "La video a ete bloquee par les filtres de securite de Gemini. " +
+              "Utilisez l'option de transcription manuelle : copiez la transcription depuis YouTube " +
+              "(bouton \"...\" sous la video → \"Afficher la transcription\") et collez-la dans le champ prevu."
+            );
+          }
+          throw videoErr;
+        }
       }
     }
 
