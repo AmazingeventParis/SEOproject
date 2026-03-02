@@ -87,9 +87,13 @@ export async function POST(
           );
           success = result.success;
           if (success) successCount++;
-          else errorCount++;
-        } catch {
+          else {
+            errorCount++;
+            console.error(`[write-all] Block ${blockIndex} failed:`, result.error || 'unknown');
+          }
+        } catch (err) {
           errorCount++;
+          console.error(`[write-all] Block ${blockIndex} exception:`, err instanceof Error ? err.message : err);
         }
 
         // Send progress event

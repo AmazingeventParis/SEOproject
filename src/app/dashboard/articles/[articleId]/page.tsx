@@ -803,6 +803,20 @@ export default function ArticleDetailPage() {
   const [writeProgress, setWriteProgress] = useState<{ current: number; total: number } | null>(null);
   const [gscAnalysis, setGscAnalysis] = useState<Record<string, unknown> | null>(null);
   const [gscLoading, setGscLoading] = useState(false);
+  const [reverseBacklinks, setReverseBacklinks] = useState<Array<{
+    wp_post_id: number;
+    wp_post_title: string;
+    wp_post_url: string;
+    injection_type: 'wrap_existing' | 'add_sentences';
+    anchor_text: string;
+    original_paragraph: string;
+    modified_paragraph: string;
+    paragraph_index: number;
+    status: 'suggested' | 'approved' | 'rejected' | 'injected' | 'rolled_back';
+    injected_at?: string;
+  }> | null>(null);
+  const [backlinksLoading, setBacklinksLoading] = useState(false);
+  const [backlinksActionLoading, setBacklinksActionLoading] = useState<number | null>(null);
 
   const fetchGscAnalysis = useCallback(async () => {
     setGscLoading(true);
@@ -825,6 +839,112 @@ export default function ArticleDetailPage() {
     }
   }, [articleId, toast]);
 
+  const suggestBacklinks = useCallback(async () => {
+    setBacklinksLoading(true);
+    try {
+      const res = await fetch(`/api/articles/${articleId}/reverse-backlinks/suggest`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Erreur backlinks");
+      }
+      const data = await res.json();
+      setReverseBacklinks(data.suggestions || []);
+      if (data.suggestions?.length === 0) {
+        toast({ title: "Backlinks", description: "Aucun article candidat trouve pour le maillage retour." });
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Backlinks retour",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
+      });
+    } finally {
+      setBacklinksLoading(false);
+    }
+  }, [articleId, toast]);
+
+  const updateBacklinkStatus = useCallback(async (index: number, newStatus: 'approved' | 'rejected') => {
+    if (!reverseBacklinks || !article) return;
+    const updated = [...reverseBacklinks];
+    updated[index] = { ...updated[index], status: newStatus };
+    setReverseBacklinks(updated);
+    // Persist to serp_data
+    try {
+      await fetch(`/api/articles/${articleId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serp_data: {
+            ...(article.serp_data as Record<string, unknown> || {}),
+            reverse_backlinks: updated,
+          },
+        }),
+      });
+    } catch {
+      // silent — local state already updated
+    }
+  }, [reverseBacklinks, article, articleId]);
+
+  const injectBacklink = useCallback(async (index: number) => {
+    setBacklinksActionLoading(index);
+    try {
+      const res = await fetch(`/api/articles/${articleId}/reverse-backlinks/inject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ suggestion_index: index }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Erreur injection");
+      }
+      const data = await res.json();
+      if (reverseBacklinks) {
+        const updated = [...reverseBacklinks];
+        updated[index] = data.suggestion;
+        setReverseBacklinks(updated);
+      }
+      toast({ title: "Backlink injecte", description: "Le lien a ete ajoute dans l'article WordPress." });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erreur injection",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
+      });
+    } finally {
+      setBacklinksActionLoading(null);
+    }
+  }, [articleId, reverseBacklinks, toast]);
+
+  const rollbackBacklinkAction = useCallback(async (index: number) => {
+    setBacklinksActionLoading(index);
+    try {
+      const res = await fetch(`/api/articles/${articleId}/reverse-backlinks/rollback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ suggestion_index: index }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Erreur rollback");
+      }
+      const data = await res.json();
+      if (reverseBacklinks) {
+        const updated = [...reverseBacklinks];
+        updated[index] = data.suggestion;
+        setReverseBacklinks(updated);
+      }
+      toast({ title: "Rollback effectue", description: "Le lien a ete retire de l'article WordPress." });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erreur rollback",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
+      });
+    } finally {
+      setBacklinksActionLoading(null);
+    }
+  }, [articleId, reverseBacklinks, toast]);
+
   const fetchArticle = useCallback(async () => {
     try {
       const res = await fetch(`/api/articles/${articleId}`);
@@ -834,6 +954,9 @@ export default function ArticleDetailPage() {
       // Load cached GSC analysis from serp_data
       const cached = (data.serp_data as Record<string, unknown>)?.gsc_analysis;
       if (cached) setGscAnalysis(cached as Record<string, unknown>);
+      // Load cached reverse backlinks
+      const cachedBacklinks = (data.serp_data as Record<string, unknown>)?.reverse_backlinks;
+      if (Array.isArray(cachedBacklinks)) setReverseBacklinks(cachedBacklinks);
     } catch {
       toast({
         variant: "destructive",
@@ -2538,6 +2661,180 @@ export default function ArticleDetailPage() {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Reverse Backlinks — only for published articles */}
+          {(article.status === "published" || article.status === "refresh_needed") && (
+            <Card className="border-orange-200">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Link2 className="h-4 w-4 text-orange-600" />
+                      Backlinks retour
+                    </CardTitle>
+                    <CardDescription>
+                      Injecter des liens vers cet article dans 2-3 articles existants du meme site
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={suggestBacklinks}
+                    disabled={backlinksLoading}
+                  >
+                    {backlinksLoading ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Search className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    {reverseBacklinks ? "Resugerer" : "Suggerer des backlinks"}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {!reverseBacklinks ? (
+                  <p className="text-sm text-muted-foreground">
+                    Cliquez sur &quot;Suggerer des backlinks&quot; pour trouver des articles candidats et generer des suggestions de maillage interne retour.
+                  </p>
+                ) : reverseBacklinks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Aucun article candidat trouve. Le site n&apos;a peut-etre pas assez d&apos;articles publies sur un theme similaire.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {reverseBacklinks.map((suggestion, idx) => (
+                      <div key={idx} className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <a
+                              href={suggestion.wp_post_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm font-medium text-blue-600 hover:underline flex items-center gap-1"
+                            >
+                              {suggestion.wp_post_title}
+                              <ExternalLink className="h-3 w-3 shrink-0" />
+                            </a>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Badge
+                              variant="outline"
+                              className={
+                                suggestion.injection_type === "wrap_existing"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : "bg-amber-50 text-amber-700 border-amber-200"
+                              }
+                            >
+                              {suggestion.injection_type === "wrap_existing" ? "Lien existant" : "Phrases ajoutees"}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={
+                                suggestion.status === "injected"
+                                  ? "bg-green-50 text-green-700 border-green-200"
+                                  : suggestion.status === "approved"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : suggestion.status === "rejected"
+                                  ? "bg-red-50 text-red-700 border-red-200"
+                                  : suggestion.status === "rolled_back"
+                                  ? "bg-gray-50 text-gray-700 border-gray-200"
+                                  : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                              }
+                            >
+                              {suggestion.status === "suggested" && "A valider"}
+                              {suggestion.status === "approved" && "Approuve"}
+                              {suggestion.status === "rejected" && "Rejete"}
+                              {suggestion.status === "injected" && "Injecte"}
+                              {suggestion.status === "rolled_back" && "Annule"}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        {/* Diff preview */}
+                        <div className="space-y-2 text-xs">
+                          <div className="bg-red-50 border border-red-100 rounded p-2.5">
+                            <p className="text-red-400 font-medium mb-1 text-[10px] uppercase tracking-wide">Original</p>
+                            <div
+                              className="text-red-800 leading-relaxed"
+                              dangerouslySetInnerHTML={{ __html: suggestion.original_paragraph }}
+                            />
+                          </div>
+                          <div className="bg-green-50 border border-green-100 rounded p-2.5">
+                            <p className="text-green-400 font-medium mb-1 text-[10px] uppercase tracking-wide">Modifie</p>
+                            <div
+                              className="text-green-800 leading-relaxed"
+                              dangerouslySetInnerHTML={{ __html: suggestion.modified_paragraph }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Anchor text */}
+                        <p className="text-xs text-muted-foreground">
+                          Ancre : <span className="font-medium">{suggestion.anchor_text}</span>
+                        </p>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2">
+                          {suggestion.status === "suggested" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-green-700 border-green-300 hover:bg-green-50"
+                                onClick={() => updateBacklinkStatus(idx, "approved")}
+                              >
+                                <Check className="mr-1 h-3.5 w-3.5" />
+                                Approuver
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-700 border-red-300 hover:bg-red-50"
+                                onClick={() => updateBacklinkStatus(idx, "rejected")}
+                              >
+                                <X className="mr-1 h-3.5 w-3.5" />
+                                Rejeter
+                              </Button>
+                            </>
+                          )}
+                          {suggestion.status === "approved" && (
+                            <Button
+                              size="sm"
+                              onClick={() => injectBacklink(idx)}
+                              disabled={backlinksActionLoading === idx}
+                            >
+                              {backlinksActionLoading === idx ? (
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Play className="mr-1 h-3.5 w-3.5" />
+                              )}
+                              Injecter
+                            </Button>
+                          )}
+                          {suggestion.status === "injected" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-orange-700 border-orange-300 hover:bg-orange-50"
+                              onClick={() => rollbackBacklinkAction(idx)}
+                              disabled={backlinksActionLoading === idx}
+                            >
+                              {backlinksActionLoading === idx ? (
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Undo2 className="mr-1 h-3.5 w-3.5" />
+                              )}
+                              Rollback
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>

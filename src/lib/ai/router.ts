@@ -92,6 +92,13 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     temperature: 0.3,
     jsonMode: true,
   },
+  generate_backlink_sentences: {
+    provider: 'google',
+    model: 'gemini-2.5-flash',
+    maxTokens: 1024,
+    temperature: 0.4,
+    jsonMode: true,
+  },
 }
 
 // ---- Cross-provider fallback map ----
@@ -158,7 +165,7 @@ async function callWithRetryAndFallback(
   system?: string,
 ): Promise<AIResponse> {
   let lastError: unknown
-  const retryDelays = [2000, 5000] // exponential-ish backoff
+  const retryDelays = [1000, 2000] // fast retries — fallback handles persistent failures
 
   // --- Attempt 1: original model ---
   try {

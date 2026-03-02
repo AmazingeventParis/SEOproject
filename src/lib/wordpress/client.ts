@@ -229,9 +229,9 @@ export async function uploadMedia(
  */
 export async function getAllPublishedPosts(
   siteId: string
-): Promise<{ title: string; slug: string; link: string }[]> {
+): Promise<{ id: number; title: string; slug: string; link: string }[]> {
   const creds = await getWPCredentials(siteId)
-  const posts: { title: string; slug: string; link: string }[] = []
+  const posts: { id: number; title: string; slug: string; link: string }[] = []
 
   for (let page = 1; page <= 2; page++) {
     const response = await fetch(
@@ -248,11 +248,12 @@ export async function getAllPublishedPosts(
 
     if (!response.ok) break
 
-    const data: { title: { rendered: string }; slug: string; link: string }[] = await response.json()
+    const data: { id: number; title: { rendered: string }; slug: string; link: string }[] = await response.json()
     if (data.length === 0) break
 
     for (const p of data) {
       posts.push({
+        id: p.id,
         title: p.title.rendered.replace(/&#8217;/g, "'").replace(/&amp;/g, '&').replace(/&#8211;/g, '-'),
         slug: p.slug,
         link: p.link,
@@ -264,6 +265,43 @@ export async function getAllPublishedPosts(
   }
 
   return posts
+}
+
+/**
+ * Fetch a single post by its WordPress ID, including full content.
+ */
+export async function getPostById(
+  siteId: string,
+  postId: number
+): Promise<{ id: number; title: string; content: string; link: string }> {
+  const creds = await getWPCredentials(siteId)
+
+  const response = await fetch(
+    `${apiBase(creds)}/posts/${postId}?_fields=id,title,content,link`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: buildAuthHeader(creds),
+        'Content-Type': 'application/json',
+      },
+      signal: AbortSignal.timeout(15000),
+    }
+  )
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(
+      `Echec de la recuperation du post ${postId} (${response.status}) : ${text}`
+    )
+  }
+
+  const data: { id: number; title: { rendered: string }; content: { rendered: string }; link: string } = await response.json()
+  return {
+    id: data.id,
+    title: data.title.rendered.replace(/&#8217;/g, "'").replace(/&amp;/g, '&').replace(/&#8211;/g, '-'),
+    content: data.content.rendered,
+    link: data.link,
+  }
 }
 
 /**
