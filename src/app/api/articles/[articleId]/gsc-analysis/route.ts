@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerClient } from "@/lib/supabase/client";
-import { getQueriesForPage, findOpportunityKeywords } from "@/lib/seo/gsc";
+import { getQueriesForPage } from "@/lib/seo/gsc";
 import type { GSCRow } from "@/lib/seo/gsc";
 
 interface RouteContext {
@@ -37,9 +37,6 @@ function generateRecommendations(
   const totalClicks = queries.reduce((sum, q) => sum + q.clicks, 0);
   const totalImpressions = queries.reduce((sum, q) => sum + q.impressions, 0);
   const avgCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
-  const avgPosition =
-    queries.reduce((sum, q) => sum + q.position * q.impressions, 0) /
-    (totalImpressions || 1);
 
   // Low CTR on high-impression queries
   const lowCtrQueries = queries.filter(
@@ -190,7 +187,7 @@ export async function GET(
     const totalClicks = queries.reduce((sum, q) => sum + q.clicks, 0);
     const totalImpressions = queries.reduce((sum, q) => sum + q.impressions, 0);
     const avgCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
-    const avgPosition =
+    const weightedPosition =
       queries.reduce((sum, q) => sum + q.position * q.impressions, 0) /
       (totalImpressions || 1);
 
@@ -204,7 +201,7 @@ export async function GET(
         totalClicks,
         totalImpressions,
         avgCtr: Math.round(avgCtr * 10000) / 100, // percentage with 2 decimals
-        avgPosition: Math.round(avgPosition * 10) / 10,
+        avgPosition: Math.round(weightedPosition * 10) / 10,
       },
       topQueries: queries.slice(0, 20).map((q) => ({
         keyword: q.keys[0],

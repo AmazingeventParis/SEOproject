@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { useToast } from "@/hooks/use-toast";
 import { CheckCircle2, Loader2, Youtube } from "lucide-react";
 import type { Site } from "@/lib/supabase/types";
 
@@ -36,7 +35,6 @@ export function YoutubeImportDialog({
   onOpenChange,
   onSuccess,
 }: YoutubeImportDialogProps) {
-  const { toast } = useToast();
   const [step, setStep] = useState<DialogStep>("input");
   const [url, setUrl] = useState("");
   const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>([]);
