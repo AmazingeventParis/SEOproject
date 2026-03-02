@@ -23,19 +23,19 @@ import { callOpenAI } from './openai'
 const TASK_ROUTING: Record<AITask, ModelConfig> = {
   plan_article: {
     provider: 'google',
-    model: 'gemini-3.1-pro-preview',
+    model: 'gemini-2.5-flash',
     maxTokens: 4096,
     temperature: 0.7,
   },
   write_block: {
     provider: 'google',
-    model: 'gemini-3.1-pro-preview',
+    model: 'gemini-2.5-flash',
     maxTokens: 2048,
     temperature: 0.8,
   },
   critique: {
     provider: 'google',
-    model: 'gemini-3.1-pro-preview',
+    model: 'gemini-2.5-flash',
     maxTokens: 2048,
     temperature: 0.3,
   },

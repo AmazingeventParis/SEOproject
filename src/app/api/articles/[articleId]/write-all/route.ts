@@ -5,6 +5,8 @@ import { modelIdToOverride } from "@/lib/ai/router";
 import type { ContentBlock } from "@/lib/supabase/types";
 import type { PipelineRunResult } from "@/lib/pipeline/types";
 
+export const maxDuration = 300;
+
 interface RouteContext {
   params: { articleId: string };
 }

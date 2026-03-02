@@ -4,6 +4,8 @@ import { getServerClient } from "@/lib/supabase/client";
 import { executeStep } from "@/lib/pipeline/orchestrator";
 import { modelIdToOverride } from "@/lib/ai/router";
 
+export const maxDuration = 120;
+
 const contentBlockSchema = z.object({
   id: z.string(),
   type: z.enum(["h2", "h3", "h4", "paragraph", "list", "faq", "callout", "image"]),

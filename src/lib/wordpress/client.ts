@@ -242,6 +242,7 @@ export async function getAllPublishedPosts(
           Authorization: buildAuthHeader(creds),
           'Content-Type': 'application/json',
         },
+        signal: AbortSignal.timeout(10000),
       }
     )
 

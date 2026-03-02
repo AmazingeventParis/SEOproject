@@ -5,6 +5,8 @@ import { executeStep } from "@/lib/pipeline/orchestrator";
 import { modelIdToOverride } from "@/lib/ai/router";
 import type { ContentBlock } from "@/lib/supabase/types";
 
+export const maxDuration = 120;
+
 const writeBlockSchema = z.object({
   block_id: z.string().uuid("block_id doit etre un UUID valide"),
   model: z.string().optional(),

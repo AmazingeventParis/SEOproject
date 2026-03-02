@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { executeStep } from "@/lib/pipeline/orchestrator";
 
+export const maxDuration = 120;
+
 interface RouteContext {
   params: { articleId: string };
 }
