@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle2, Loader2, Youtube } from "lucide-react";
 import type { Site } from "@/lib/supabase/types";
 
@@ -46,6 +47,8 @@ export function YoutubeImportDialog({
   const [savingTotal, setSavingTotal] = useState(0);
   const [savedCount, setSavedCount] = useState(0);
   const [error, setError] = useState("");
+  const [showManualTranscript, setShowManualTranscript] = useState(false);
+  const [manualTranscript, setManualTranscript] = useState("");
 
   // Fetch sites on mount
   const fetchSites = useCallback(async () => {
@@ -74,6 +77,8 @@ export function YoutubeImportDialog({
       setSavingTotal(0);
       setSavedCount(0);
       setError("");
+      setShowManualTranscript(false);
+      setManualTranscript("");
     }
   }, [open]);
 
@@ -84,14 +89,22 @@ export function YoutubeImportDialog({
     setStep("loading");
 
     try {
+      const payload: { url: string; transcript?: string } = { url: url.trim() };
+      if (showManualTranscript && manualTranscript.trim()) {
+        payload.transcript = manualTranscript.trim();
+      }
+
       const res = await fetch("/api/nuggets/youtube-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       if (!res.ok) {
+        if (data.transcript_unavailable) {
+          setShowManualTranscript(true);
+        }
         setError(data.error || "Erreur inconnue");
         setStep("input");
         return;
@@ -262,10 +275,31 @@ export function YoutubeImportDialog({
               </div>
             )}
 
+            {showManualTranscript && (
+              <div className="space-y-2">
+                <Label htmlFor="manual-transcript">
+                  Coller la transcription manuellement
+                </Label>
+                <Textarea
+                  id="manual-transcript"
+                  placeholder="Collez ici le texte de la transcription de la video..."
+                  value={manualTranscript}
+                  onChange={(e) => setManualTranscript(e.target.value)}
+                  rows={6}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Copiez la transcription depuis YouTube (bouton &quot;...&quot; sous la video &rarr; &quot;Afficher la transcription&quot;) ou depuis un autre outil.
+                </p>
+              </div>
+            )}
+
             <div className="flex justify-end">
-              <Button onClick={handleExtract} disabled={!url.trim()}>
+              <Button
+                onClick={handleExtract}
+                disabled={!url.trim() || (showManualTranscript && manualTranscript.trim().length < 50)}
+              >
                 <Youtube className="mr-2 h-4 w-4" />
-                Extraire les nuggets
+                {showManualTranscript ? "Extraire depuis la transcription" : "Extraire les nuggets"}
               </Button>
             </div>
           </div>
