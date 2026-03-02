@@ -113,7 +113,7 @@ async function extractNuggetsFromVideo(videoUrl: string): Promise<{ content: str
   ]);
 
   const text = result.response.text();
-  const jsonStr = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  const jsonStr = extractJsonFromText(text);
   const parsed = JSON.parse(jsonStr);
 
   if (!Array.isArray(parsed.nuggets)) {
@@ -123,8 +123,27 @@ async function extractNuggetsFromVideo(videoUrl: string): Promise<{ content: str
   return parsed.nuggets;
 }
 
+function extractJsonFromText(text: string): string {
+  // Remove markdown code fences
+  let cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+
+  // Find the first { and its matching closing }
+  const start = cleaned.indexOf("{");
+  if (start === -1) throw new Error("Pas de JSON trouve dans la reponse");
+
+  let depth = 0;
+  for (let i = start; i < cleaned.length; i++) {
+    if (cleaned[i] === "{") depth++;
+    else if (cleaned[i] === "}") depth--;
+    if (depth === 0) return cleaned.slice(start, i + 1);
+  }
+
+  // Fallback: return from first { to end
+  return cleaned.slice(start);
+}
+
 function parseNuggetsFromAIResponse(content: string): { content: string; tags: string[] }[] {
-  const jsonStr = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  const jsonStr = extractJsonFromText(content);
   const parsed = JSON.parse(jsonStr);
   if (!Array.isArray(parsed.nuggets)) {
     throw new Error("Format invalide : nuggets n'est pas un tableau");
