@@ -159,10 +159,24 @@ Si une section H2 couvre un sujet large qui necessite plus de 400 mots, tu DOIS 
 
 NE DECOUPE PAS en H3 si la section H2 est courte (<300 mots) ou si le sujet est unitaire.
 
+## WORD COUNT PAR BLOC — REGLE STRICTE (CRITIQUE)
+
+⚠️ Le word_count de chaque bloc est le NOMBRE DE MOTS que le redacteur devra ecrire. Ce n'est PAS un nombre de caracteres.
+Un paragraphe de 200 mots fait environ 8-10 lignes de texte. 50 mots = 2 lignes = BEAUCOUP TROP COURT.
+
+MINIMUMS ABSOLUS (jamais en dessous) :
+- Bloc intro (paragraph, heading null) : word_count = 120 (100-140 mots)
+- Bloc H2 SANS sous-sections H3 : word_count entre 250 et 500 (MINIMUM 250)
+- Bloc H3 : word_count entre 150 et 300 (MINIMUM 150)
+- Bloc FAQ : word_count entre 300 et 600 (MINIMUM 300, chaque Q/R = 40-80 mots)
+- Bloc list : word_count entre 200 et 400 (MINIMUM 200)
+
+INTERDIT : un word_count inferieur a 120 sur un bloc de contenu (sauf intro). Si tu generes un bloc H2 avec word_count de 50 ou 80, c'est une ERREUR GRAVE.
+
+TOTAL ARTICLE : respecte la fourchette indiquee dans la strategie (typiquement 1500-3000 mots). La SOMME de tous les word_count doit etre dans cette fourchette.
+
 ## CONTENU
 - Respecte la fourchette de mots indiquee dans la strategie ci-dessus
-- Chaque bloc H2 sans H3 : 150-500 mots
-- Chaque bloc H3 : 150-300 mots
 - Section FAQ (optionnelle) avec le heading "FAQ" en type "faq". Ne l'inclus PAS si la strategie l'interdit (ex: discover). L'utilisateur pourra l'ajouter manuellement plus tard si besoin.
 ${SEO_FAQ_RULES}
 - Blocs "list" pour les elements enumeratifs
@@ -247,7 +261,7 @@ Tu DOIS retourner UNIQUEMENT un objet JSON valide, sans texte avant ou apres, sa
       "heading": "Titre de la section (pour h2, h3, h4, faq) ou null",
       "content_html": "",
       "nugget_ids": ["ids des nuggets"],
-      "word_count": 300,
+      "word_count": 350,
       "status": "pending",
       "writing_directive": "Directive d'ecriture specifique pour ce bloc",
       "format_hint": "prose | bullets | table | mixed",
@@ -468,10 +482,11 @@ EXCEPTION SLUG : les slugs ne doivent JAMAIS contenir d'annee (un slug est intem
 6. Integre les questions PAA dans une section FAQ dediee (si pertinent selon l'intention)
 7. Assigne les nuggets pertinents aux blocs appropries
 8. Propose 3 variantes de titre H1 (question, promesse, specifique) + meta description optimisee
-9. Vise 1500-3000 mots repartis equilibrement
+9. Vise 1500-3000 mots repartis equilibrement (somme de TOUS les word_count)
 10. Au moins un H2 doit contenir le mot-cle principal ou une variante tres proche
 11. DECOUPE H3 : si un H2 necessite plus de 400 mots, decoupe-le en H3 specifiques (2-4 H3 par H2)
-12. BLOC INTRO OBLIGATOIRE : le PREMIER element de content_blocks doit etre un bloc type "paragraph", heading null, 100-140 mots, contenant le mot-cle principal. Ce bloc precede le premier H2.
+12. BLOC INTRO OBLIGATOIRE : le PREMIER element de content_blocks doit etre un bloc type "paragraph", heading null, word_count 120, contenant le mot-cle principal. Ce bloc precede le premier H2.
+13. WORD COUNT MINIMUM : chaque bloc H2 DOIT avoir word_count >= 250. Chaque H3 >= 150. JAMAIS de word_count < 120 sauf intro. Un word_count de 30, 50 ou 80 est une ERREUR — le redacteur ne peut rien ecrire de substantiel en si peu de mots.
 
 Retourne UNIQUEMENT le JSON, rien d'autre.`
 

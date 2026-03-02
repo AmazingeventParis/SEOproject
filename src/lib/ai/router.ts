@@ -31,7 +31,7 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
   write_block: {
     provider: 'google',
     model: 'gemini-2.5-flash',
-    maxTokens: 2048,
+    maxTokens: 8192,
     temperature: 0.8,
   },
   critique: {

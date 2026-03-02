@@ -471,6 +471,29 @@ async function executePlan(
     plan.content_blocks = [introBlock, ...blocks]
   }
 
+  // Enforce minimum word counts — AI sometimes generates very low values (30-50)
+  for (const block of plan.content_blocks) {
+    if (block.type === 'paragraph' && !block.heading) {
+      // Intro block: min 100
+      if (block.word_count < 100) block.word_count = 120
+    } else if (block.type === 'h2') {
+      // H2 blocks: min 250
+      if (block.word_count < 250) block.word_count = 300
+    } else if (block.type === 'h3') {
+      // H3 blocks: min 150
+      if (block.word_count < 150) block.word_count = 200
+    } else if (block.type === 'faq') {
+      // FAQ: min 300
+      if (block.word_count < 300) block.word_count = 400
+    } else if (block.type === 'list') {
+      // List: min 200
+      if (block.word_count < 200) block.word_count = 250
+    } else {
+      // Any other block: min 120
+      if (block.word_count < 120) block.word_count = 150
+    }
+  }
+
   // Build title suggestions with selected: false + fix wrong years
   const currentYear = new Date().getFullYear()
   const fixYear = (text: string) => text.replace(/\b(202[0-9])\b/g, (match) => match === String(currentYear) ? match : String(currentYear))
