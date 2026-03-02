@@ -202,7 +202,7 @@ export type Database = {
           site_id: string | null
           persona_id: string | null
           content: string
-          source_type: 'vocal' | 'tweet' | 'note' | 'url' | 'observation'
+          source_type: 'vocal' | 'tweet' | 'note' | 'url' | 'observation' | 'youtube'
           source_ref: string | null
           tags: string[]
           created_at: string
@@ -212,7 +212,7 @@ export type Database = {
           site_id?: string | null
           persona_id?: string | null
           content: string
-          source_type: 'vocal' | 'tweet' | 'note' | 'url' | 'observation'
+          source_type: 'vocal' | 'tweet' | 'note' | 'url' | 'observation' | 'youtube'
           source_ref?: string | null
           tags?: string[]
           created_at?: string
@@ -222,7 +222,7 @@ export type Database = {
           site_id?: string | null
           persona_id?: string | null
           content?: string
-          source_type?: 'vocal' | 'tweet' | 'note' | 'url' | 'observation'
+          source_type?: 'vocal' | 'tweet' | 'note' | 'url' | 'observation' | 'youtube'
           source_ref?: string | null
           tags?: string[]
           created_at?: string

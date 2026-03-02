@@ -13,6 +13,15 @@ Phases 1-4 terminées. Projet en production.
 
 <!-- Ajouter les nouvelles entrées en haut -->
 
+### 2026-03-02
+- Import de nuggets depuis YouTube
+  - **Extraction automatique** : coller une URL YouTube → transcription auto via `youtube-transcript` (gratuit, pas d'API key) → extraction IA via Gemini 2.0 Flash → selection manuelle → sauvegarde
+  - **Nouveau task AI** : `extract_nuggets` route vers Gemini 2.0 Flash (maxTokens: 4096, temperature: 0.3)
+  - **Nouveau endpoint** : `POST /api/nuggets/youtube-import` — fetch transcript, cap 30K chars, prompt Gemini pour 3-15 nuggets (JSON), retourne preview sans sauvegarder
+  - **Nouveau composant** : `youtube-import-dialog.tsx` — dialog multi-etapes (input → loading → preview → saving → done) avec selecteur site/persona, tags supplementaires, checkboxes de selection, progress bar
+  - **Source type youtube** : ajoute dans types Supabase, Zod validations (routes nuggets), filtre page nuggets, nugget-form
+  - **Migration DB** : constraint `seo_nuggets_source_type_check` mise a jour pour inclure `'youtube'`
+
 ### 2026-02-27 (2)
 - 5 optimisations pipeline et publication WordPress
   - **Images strategiques (plus 1 par H2)** : plan-architect ne force plus `generate_image: true` sur chaque H2. L'IA choisit strategiquement 4-5 sections visuelles avec repartition equilibree. Regle "OBLIGATOIRE" remplacee par "STRATEGIQUE, PAS SYSTEMATIQUE".

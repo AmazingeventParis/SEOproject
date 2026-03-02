@@ -15,6 +15,7 @@ export type AITask =
   | 'analyze_serp'       // Analyze SERP competitors -> Gemini Flash
   | 'analyze_competitor_content' // Deep competitor content analysis -> Gemini Flash
   | 'evaluate_authority_links'   // Evaluate authority link candidates -> Gemini Flash
+  | 'extract_nuggets'            // Extract knowledge nuggets from transcript -> Gemini Flash
 
 export interface AIMessage {
   role: 'user' | 'assistant' | 'system'

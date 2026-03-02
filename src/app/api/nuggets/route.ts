@@ -4,7 +4,7 @@ import { getServerClient } from "@/lib/supabase/client";
 
 const createNuggetSchema = z.object({
   content: z.string().min(1, "Le contenu est requis"),
-  source_type: z.enum(["vocal", "tweet", "note", "url", "observation"], {
+  source_type: z.enum(["vocal", "tweet", "note", "url", "observation", "youtube"], {
     message: "Le type de source est requis",
   }),
   source_ref: z.string().nullable().optional(),
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (sourceType) {
-    query = query.eq("source_type", sourceType as "vocal" | "tweet" | "note" | "url" | "observation");
+    query = query.eq("source_type", sourceType as "vocal" | "tweet" | "note" | "url" | "observation" | "youtube");
   }
 
   const { data, error } = await query;

@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import type { Nugget, Site } from "@/lib/supabase/types";
 import { NuggetDialog } from "@/components/nuggets/nugget-dialog";
+import { YoutubeImportDialog } from "@/components/nuggets/youtube-import-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,7 @@ import {
   Search,
   StickyNote,
   Trash2,
+  Youtube,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -48,6 +50,7 @@ const SOURCE_TYPE_OPTIONS = [
   { value: "note", label: "Note", icon: StickyNote },
   { value: "url", label: "URL", icon: Link },
   { value: "observation", label: "Observation", icon: Eye },
+  { value: "youtube", label: "YouTube", icon: Youtube },
 ] as const;
 
 function getSourceIcon(sourceType: string) {
@@ -66,6 +69,7 @@ export default function NuggetsPage() {
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [youtubeDialogOpen, setYoutubeDialogOpen] = useState(false);
   const [editingNugget, setEditingNugget] = useState<Nugget | undefined>(undefined);
   const { toast } = useToast();
 
@@ -163,10 +167,16 @@ export default function NuggetsPage() {
             Base de connaissances exclusives pour enrichir vos articles.
           </p>
         </div>
-        <Button onClick={handleAdd}>
-          <Plus className="mr-2 h-4 w-4" />
-          Ajouter un nugget
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setYoutubeDialogOpen(true)}>
+            <Youtube className="mr-2 h-4 w-4 text-red-600" />
+            Importer depuis YouTube
+          </Button>
+          <Button onClick={handleAdd}>
+            <Plus className="mr-2 h-4 w-4" />
+            Ajouter un nugget
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -309,6 +319,13 @@ export default function NuggetsPage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         nugget={editingNugget}
+        onSuccess={fetchNuggets}
+      />
+
+      {/* YouTube import dialog */}
+      <YoutubeImportDialog
+        open={youtubeDialogOpen}
+        onOpenChange={setYoutubeDialogOpen}
         onSuccess={fetchNuggets}
       />
     </div>

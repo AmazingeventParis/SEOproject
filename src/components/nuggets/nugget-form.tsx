@@ -22,6 +22,7 @@ const SOURCE_TYPE_OPTIONS = [
   { value: "note", label: "Note" },
   { value: "url", label: "URL" },
   { value: "observation", label: "Observation" },
+  { value: "youtube", label: "YouTube" },
 ] as const;
 
 export interface NuggetFormData {

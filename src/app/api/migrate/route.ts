@@ -12,6 +12,9 @@ ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS money_page_description text DEFAU
 ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS authority_link_suggestions jsonb DEFAULT NULL;
 ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS selected_authority_link jsonb DEFAULT NULL;
 ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS year_tag INTEGER DEFAULT NULL;
+ALTER TABLE seo_nuggets DROP CONSTRAINT IF EXISTS seo_nuggets_source_type_check;
+ALTER TABLE seo_nuggets ADD CONSTRAINT seo_nuggets_source_type_check
+  CHECK (source_type IN ('vocal','tweet','note','url','observation','youtube'));
 `;
 
 // POST /api/migrate — Run pending schema migrations
@@ -55,7 +58,7 @@ export async function POST() {
       await pool.end();
       return NextResponse.json({
         status: "ok",
-        message: `Migration applied as ${user}@${host} — title_suggestions + seo_title + authority_link + theme_color + year_tag columns added.`,
+        message: `Migration applied as ${user}@${host} — title_suggestions + seo_title + authority_link + theme_color + year_tag + youtube source_type.`,
       });
     } catch (error) {
       await pool.end().catch(() => {});

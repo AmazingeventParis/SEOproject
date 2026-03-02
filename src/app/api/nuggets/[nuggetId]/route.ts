@@ -5,7 +5,7 @@ import type { NuggetUpdate } from "@/lib/supabase/types";
 
 const updateNuggetSchema = z.object({
   content: z.string().min(1).optional(),
-  source_type: z.enum(["vocal", "tweet", "note", "url", "observation"]).optional(),
+  source_type: z.enum(["vocal", "tweet", "note", "url", "observation", "youtube"]).optional(),
   source_ref: z.string().nullable().optional(),
   site_id: z.string().uuid().nullable().optional(),
   persona_id: z.string().uuid().nullable().optional(),

@@ -81,6 +81,12 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     maxTokens: 1024,
     temperature: 0.3,
   },
+  extract_nuggets: {
+    provider: 'google',
+    model: 'gemini-2.0-flash',
+    maxTokens: 4096,
+    temperature: 0.3,
+  },
 }
 
 // ---- Cross-provider fallback map ----
