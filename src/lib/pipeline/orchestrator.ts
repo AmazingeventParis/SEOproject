@@ -42,15 +42,40 @@ function extractJSON<T = unknown>(raw: string): T {
     let depth = 0
     let inString = false
     let escape = false
+    let endIndex = -1
+    const stack: string[] = [] // track [ and { for truncation repair
+
     for (let i = firstBrace; i < cleaned.length; i++) {
       const ch = cleaned[i]
       if (escape) { escape = false; continue }
       if (ch === '\\') { escape = true; continue }
       if (ch === '"' && !escape) { inString = !inString; continue }
       if (inString) continue
-      if (ch === '{') depth++
-      if (ch === '}') { depth--; if (depth === 0) { cleaned = cleaned.substring(firstBrace, i + 1); break } }
+      if (ch === '{') { depth++; stack.push('{') }
+      if (ch === '[') stack.push('[')
+      if (ch === ']' && stack.length > 0 && stack[stack.length - 1] === '[') stack.pop()
+      if (ch === '}') {
+        depth--
+        if (stack.length > 0 && stack[stack.length - 1] === '{') stack.pop()
+        if (depth === 0) { endIndex = i; break }
+      }
     }
+
+    if (endIndex !== -1) {
+      cleaned = cleaned.substring(firstBrace, endIndex + 1)
+    } else {
+      // JSON is truncated — close open strings, arrays, objects
+      cleaned = cleaned.substring(firstBrace)
+      if (inString) cleaned += '"'
+      // Close any trailing partial key-value (remove dangling comma or incomplete value)
+      cleaned = cleaned.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"{}[\]]*$/, '')
+      cleaned = cleaned.replace(/,\s*$/, '')
+      // Close remaining open brackets/braces in reverse order
+      for (let i = stack.length - 1; i >= 0; i--) {
+        cleaned += stack[i] === '[' ? ']' : '}'
+      }
+    }
+
     // Fix trailing commas before } or ]
     cleaned = cleaned.replace(/,\s*([}\]])/g, '$1')
     try {
