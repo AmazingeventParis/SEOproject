@@ -192,7 +192,7 @@ Cette strategie PRIME sur les regles generales en cas de conflit.
 
 ` : ''}## REGLES STRICTES
 - Retourne UNIQUEMENT du HTML propre, sans markdown, sans blocs de code
-- Respecte EXACTEMENT le nombre de mots demande (tolerance +/- 15%)
+- Le nombre de mots indique est un OBJECTIF MINIMUM, pas une limite stricte. Ecris autant que necessaire pour couvrir le sujet en profondeur. Ne t'arrete PAS artificiellement pour respecter un chiffre exact.
 - N'invente PAS de statistiques ou de chiffres - sois honnete
 - Pas d'introduction du style "Voyons maintenant..." ou "Dans cette section..."
 - Va droit au sujet`
@@ -296,7 +296,7 @@ Ce lien renforce l'E-E-A-T en citant une source reconnue.`
   }
 
   user += `\n\n## RAPPEL
-- Ecris exactement ~${block.word_count} mots
+- Objectif minimum : ~${block.word_count} mots (ecris plus si le sujet le merite, ne coupe pas artificiellement)
 - Type de bloc : ${block.type}${block.format_hint ? ` (format: ${block.format_hint})` : ''}
 - Retourne UNIQUEMENT du HTML propre
 - Ecris en tant que ${persona.name} (${persona.role})

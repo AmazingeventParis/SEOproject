@@ -131,11 +131,11 @@ Chaque bloc DOIT avoir :
 - **'mixed'** : si la section necessite du contexte narratif + un element visuel (tableau ou liste)
 - **'prose'** : pour les sections narratives, analytiques, ou explicatives
 
-## DECISION IMAGE (STRATEGIQUE, PAS SYSTEMATIQUE)
+## DECISION IMAGE (GENEREUSE — MINIMUM 5 IMAGES)
 
-NE PAS mettre une image sur chaque H2. Les images doivent etre selectionnees de facon strategique :
-- **generate_image: true** : UNIQUEMENT pour les sections qui beneficient REELLEMENT d'un visuel (concepts abstraits, processus, produits, avant/apres, resultats visuels). Maximum 5-6 images dans l'article entier (hero inclus).
-- **generate_image: false** : pour les FAQ, les tableaux, les listes, les sections courtes, les sections techniques pures
+Les images enrichissent fortement l'article. Sois genereux :
+- **generate_image: true** sur MINIMUM 5 sections H2/H3 (plus si l'article est long). Privilegie les sections qui beneficient d'un visuel : concepts, processus, produits, avant/apres, resultats, ambiances.
+- **generate_image: false** : uniquement pour les FAQ, les tableaux purs, ou les blocs tres courts
 - Si true, fournis **image_prompt_hint** : description de la scene/concept a illustrer (en anglais, style photo editoriale)
 - Repartis les images de facon equilibree dans l'article (pas 3 images d'affilee puis plus rien)
 
@@ -289,7 +289,7 @@ IMPORTANT :
 - La meta_description doit inciter au clic et contenir le mot-cle principal
 - "writing_directive" est OBLIGATOIRE sur chaque bloc
 - "format_hint" est OBLIGATOIRE sur chaque bloc
-- "generate_image" doit etre present sur chaque bloc (true ou false). NE PAS forcer true sur chaque H2 — choisis strategiquement les 4-5 sections les plus visuelles
+- "generate_image" doit etre present sur chaque bloc (true ou false). MINIMUM 5 blocs avec generate_image: true (sauf FAQ et tableaux purs)
 - "image_prompt_hint" est requis uniquement si generate_image est true
 - "internal_link_targets" est OBLIGATOIRE sur les blocs de type "h2" (tableau vide [] si aucun lien pertinent)`
 
@@ -477,7 +477,7 @@ EXCEPTION SLUG : les slugs ne doivent JAMAIS contenir d'annee (un slug est intem
 1. PYRAMIDE INVERSEE : le premier H2 repond DIRECTEMENT a l'intention de recherche
 2. Hn SEMANTIQUES : chaque H2 est une question ou promesse claire, comprehensible isolement
 3. WRITING DIRECTIVES : chaque bloc a une directive d'ecriture specifique et un format_hint
-4. IMAGES : choisis strategiquement 4-5 sections pour les images (pas toutes les H2). Repartis equilibre.
+4. IMAGES : minimum 5 images reparties equilibrement dans l'article (toutes les H2 sauf FAQ/tableaux purs).
 5. Analyse les SERP pour surpasser les contenus existants en profondeur et en valeur
 6. Integre les questions PAA dans une section FAQ dediee (si pertinent selon l'intention)
 7. Assigne les nuggets pertinents aux blocs appropries
