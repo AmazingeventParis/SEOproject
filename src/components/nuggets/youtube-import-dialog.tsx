@@ -13,13 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle2, Loader2, Youtube } from "lucide-react";
 import type { Site } from "@/lib/supabase/types";
@@ -46,11 +39,9 @@ export function YoutubeImportDialog({
   const { toast } = useToast();
   const [step, setStep] = useState<DialogStep>("input");
   const [url, setUrl] = useState("");
-  const [siteId, setSiteId] = useState("");
-  const [personaId, setPersonaId] = useState("");
+  const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>([]);
   const [extraTags, setExtraTags] = useState("");
   const [sites, setSites] = useState<Site[]>([]);
-  const [personas, setPersonas] = useState<{ id: string; name: string }[]>([]);
   const [nuggets, setNuggets] = useState<ExtractedNugget[]>([]);
   const [videoId, setVideoId] = useState("");
   const [savingProgress, setSavingProgress] = useState(0);
@@ -68,26 +59,6 @@ export function YoutubeImportDialog({
     }
   }, []);
 
-  // Fetch personas when site changes
-  useEffect(() => {
-    if (!siteId) {
-      setPersonas([]);
-      setPersonaId("");
-      return;
-    }
-    (async () => {
-      try {
-        const res = await fetch(`/api/personas?site_id=${siteId}`);
-        if (res.ok) {
-          const data = await res.json();
-          setPersonas(data);
-        }
-      } catch {
-        // silent
-      }
-    })();
-  }, [siteId]);
-
   useEffect(() => {
     if (open) fetchSites();
   }, [open, fetchSites]);
@@ -97,8 +68,7 @@ export function YoutubeImportDialog({
     if (!open) {
       setStep("input");
       setUrl("");
-      setSiteId("");
-      setPersonaId("");
+      setSelectedSiteIds([]);
       setExtraTags("");
       setNuggets([]);
       setVideoId("");
@@ -157,13 +127,22 @@ export function YoutubeImportDialog({
 
   const selectedCount = nuggets.filter((n) => n.selected).length;
 
-  // Step 3: Save selected nuggets
+  function toggleSite(id: string) {
+    setSelectedSiteIds((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+    );
+  }
+
+  // Step 3: Save selected nuggets (one per site, or once with null if no site)
   async function handleSave() {
     const toSave = nuggets.filter((n) => n.selected);
     if (toSave.length === 0) return;
 
+    const siteIds = selectedSiteIds.length > 0 ? selectedSiteIds : [null];
+    const totalOps = toSave.length * siteIds.length;
+
     setStep("saving");
-    setSavingTotal(toSave.length);
+    setSavingTotal(totalOps);
     setSavingProgress(0);
     let saved = 0;
 
@@ -173,27 +152,29 @@ export function YoutubeImportDialog({
       .filter(Boolean);
 
     for (const nugget of toSave) {
-      try {
-        const payload = {
-          content: nugget.content,
-          source_type: "youtube" as const,
-          source_ref: `https://youtube.com/watch?v=${videoId}`,
-          site_id: siteId || null,
-          persona_id: personaId || null,
-          tags: [...nugget.tags, ...additionalTags],
-        };
+      for (const sId of siteIds) {
+        try {
+          const payload = {
+            content: nugget.content,
+            source_type: "youtube" as const,
+            source_ref: `https://youtube.com/watch?v=${videoId}`,
+            site_id: sId,
+            persona_id: null,
+            tags: [...nugget.tags, ...additionalTags],
+          };
 
-        const res = await fetch("/api/nuggets", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
+          const res = await fetch("/api/nuggets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
 
-        if (res.ok) saved++;
-      } catch {
-        // continue with next
+          if (res.ok) saved++;
+        } catch {
+          // continue with next
+        }
+        setSavingProgress((prev) => prev + 1);
       }
-      setSavingProgress((prev) => prev + 1);
     }
 
     setSavedCount(saved);
@@ -232,47 +213,36 @@ export function YoutubeImportDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Site (optionnel)</Label>
-                <Select
-                  value={siteId || "__none__"}
-                  onValueChange={(v) => setSiteId(v === "__none__" ? "" : v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Aucun site" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Aucun site</SelectItem>
-                    {sites.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-2">
+              <Label>Sites (optionnel)</Label>
+              <div className="flex flex-wrap gap-2">
+                {sites.map((s) => (
+                  <label
+                    key={s.id}
+                    className={`flex items-center gap-2 rounded-md border px-3 py-1.5 cursor-pointer text-sm transition-colors ${
+                      selectedSiteIds.includes(s.id)
+                        ? "bg-primary/10 border-primary/40 text-primary"
+                        : "hover:bg-muted"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedSiteIds.includes(s.id)}
+                      onChange={() => toggleSite(s.id)}
+                      className="h-3.5 w-3.5 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    {s.name}
+                  </label>
+                ))}
               </div>
-
-              <div className="space-y-2">
-                <Label>Persona (optionnel)</Label>
-                <Select
-                  value={personaId || "__none__"}
-                  onValueChange={(v) => setPersonaId(v === "__none__" ? "" : v)}
-                  disabled={!siteId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Aucune persona" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Aucune persona</SelectItem>
-                    {personas.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {sites.length === 0 && (
+                <p className="text-xs text-muted-foreground">Aucun site configure.</p>
+              )}
+              {selectedSiteIds.length > 1 && (
+                <p className="text-xs text-muted-foreground">
+                  Chaque nugget sera duplique pour les {selectedSiteIds.length} sites selectionnes.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
