@@ -34,8 +34,8 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     temperature: 0.8,
   },
   critique: {
-    provider: 'anthropic',
-    model: 'claude-sonnet-4-20250514',
+    provider: 'google',
+    model: 'gemini-3.1-pro-preview',
     maxTokens: 2048,
     temperature: 0.3,
   },
@@ -88,11 +88,11 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
 const FALLBACK_MODEL: Record<string, { provider: AIProvider; model: string }> = {
   'claude-sonnet-4-20250514': { provider: 'google', model: 'gemini-2.0-flash' },
   'claude-haiku-4-5-20251001': { provider: 'google', model: 'gemini-2.0-flash' },
-  'gpt-4o': { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
+  'gpt-4o': { provider: 'google', model: 'gemini-2.0-flash' },
   'gpt-4o-mini': { provider: 'google', model: 'gemini-2.0-flash' },
-  'gemini-3.1-pro-preview': { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
-  'gemini-3-flash-preview': { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
-  'gemini-2.0-flash': { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
+  'gemini-3.1-pro-preview': { provider: 'google', model: 'gemini-2.0-flash' },
+  'gemini-3-flash-preview': { provider: 'google', model: 'gemini-2.0-flash' },
+  'gemini-2.0-flash': { provider: 'google', model: 'gemini-3-flash-preview' },
 }
 
 // ---- Retry / fallback helpers ----

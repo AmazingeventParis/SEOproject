@@ -12,7 +12,6 @@ const PIPELINE_STEPS: { status: ArticleStatus; label: string }[] = [
   { status: "media", label: "Media" },
   { status: "seo_check", label: "SEO" },
   { status: "reviewing", label: "Relecture" },
-  { status: "publishing", label: "Publication" },
   { status: "published", label: "Publie" },
 ];
 

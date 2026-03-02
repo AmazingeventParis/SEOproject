@@ -10,14 +10,15 @@ interface StaleArticle {
 }
 
 /**
- * Detecte les articles publies depuis plus de 90 jours pour un site donne.
+ * Detecte les articles publies depuis plus de 120 jours (~4 mois) pour un site donne.
  */
 export async function detectStaleArticles(siteId: string): Promise<StaleArticle[]> {
   const supabase = getServerClient();
 
-  const ninetyDaysAgo = new Date();
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-  const cutoffDate = ninetyDaysAgo.toISOString();
+  const cutoffDays = 120; // 4 mois
+  const cutoffDateObj = new Date();
+  cutoffDateObj.setDate(cutoffDateObj.getDate() - cutoffDays);
+  const cutoffDate = cutoffDateObj.toISOString();
 
   const { data, error } = await supabase
     .from("seo_articles")

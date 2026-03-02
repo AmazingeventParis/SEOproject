@@ -34,32 +34,67 @@ export interface SiloLinkMap {
 
 // ---- Constants ----
 
-const MIN_LINK_SUGGESTIONS = 5
-const MAX_LINK_SUGGESTIONS = 8
+const MIN_LINKS = 3
+const TARGET_LINKS = 5
+const MAX_LINKS = 8
+
+// ---- Anchor text variation ----
+
+/**
+ * Generate varied anchor texts for a target article.
+ * Google rewards diversity in anchor texts — avoid always using the exact keyword.
+ */
+function generateAnchorVariations(keyword: string, title: string | null): string[] {
+  const variations: string[] = [keyword]
+  if (title && title.toLowerCase() !== keyword.toLowerCase()) {
+    variations.push(title)
+  }
+  // Partial keyword (first 2-3 significant words)
+  const words = keyword.split(/\s+/)
+  if (words.length >= 3) {
+    variations.push(words.slice(0, 2).join(' '))
+  }
+  return variations
+}
+
+/**
+ * Pick the best anchor text: prefer one that actually appears in the content.
+ */
+function pickBestAnchor(variations: string[], contentLower: string): string {
+  for (const v of variations) {
+    if (contentLower.includes(v.toLowerCase())) return v
+  }
+  return variations[0]
+}
 
 // ---- Internal link generation ----
 
 /**
- * Generate internal link suggestions for an article within its silo.
+ * Generate internal link suggestions for an article.
  *
- * For each sibling article in the silo, checks whether the current article's
- * content mentions the sibling's keyword. If so, suggests an internal link
- * with the keyword as anchor text. Existing silo links are also included.
+ * Strategy:
+ * 1. Same-silo articles (highest priority — topical relevance)
+ * 2. Cross-silo articles from the same site (pillar pages, popular articles)
+ * 3. Pad with title-based suggestions if under minimum
+ *
+ * Target: 3-5 links per article, max 8.
  *
  * @param articleId  The current article's UUID
  * @param siloId    The silo UUID containing the article
- * @returns         Array of link suggestions (5-8 max)
+ * @param siteId    The site UUID for cross-silo links
+ * @returns         Array of link suggestions
  */
 export async function generateInternalLinks(
   articleId: string,
-  siloId: string
+  siloId: string,
+  siteId?: string
 ): Promise<InternalLinkSuggestion[]> {
   const supabase = getServerClient()
 
   // Fetch the current article's content for keyword matching
   const { data: currentArticle, error: currentError } = await supabase
     .from('seo_articles')
-    .select('content_html, keyword')
+    .select('content_html, keyword, site_id')
     .eq('id', articleId)
     .single()
 
@@ -70,6 +105,7 @@ export async function generateInternalLinks(
   }
 
   const currentContent = (currentArticle.content_html ?? '').toLowerCase()
+  const effectiveSiteId = siteId || currentArticle.site_id
 
   // Fetch all other articles in the same silo
   const { data: siloArticles, error: siloError } = await supabase
@@ -100,8 +136,9 @@ export async function generateInternalLinks(
   )
 
   const suggestions: InternalLinkSuggestion[] = []
+  const suggestedIds = new Set<string>()
 
-  // Include existing links as non-suggested entries
+  // --- Phase 1: Include existing silo links ---
   for (const link of existingLinks ?? []) {
     if (link.source_article_id !== articleId) continue
 
@@ -115,45 +152,69 @@ export async function generateInternalLinks(
       anchorText: link.anchor_text,
       suggested: false,
     })
+    suggestedIds.add(targetArticle.id)
   }
 
-  // Suggest new links based on keyword mentions in content
+  // --- Phase 2: Same-silo keyword-based links (highest relevance) ---
   for (const article of siloArticles ?? []) {
     if (!article.title || !article.slug) continue
-    if (alreadyLinkedTargets.has(article.id)) continue
+    if (alreadyLinkedTargets.has(article.id) || suggestedIds.has(article.id)) continue
 
-    const keywordLower = article.keyword.toLowerCase()
+    const variations = generateAnchorVariations(article.keyword, article.title)
+    const anchor = pickBestAnchor(variations, currentContent)
 
-    // Check if the current article's content mentions this keyword
-    if (currentContent.includes(keywordLower)) {
+    // Check if any variation is mentioned in content
+    const hasMatch = variations.some(v => currentContent.includes(v.toLowerCase()))
+    if (hasMatch) {
       suggestions.push({
         targetArticleId: article.id,
         targetKeyword: article.keyword,
         targetSlug: article.slug,
-        anchorText: article.keyword,
+        anchorText: anchor,
         suggested: true,
       })
+      suggestedIds.add(article.id)
     }
   }
 
-  // Enforce 5-8 limit: prioritize existing links, then suggested ones
-  if (suggestions.length > MAX_LINK_SUGGESTIONS) {
-    // Keep existing links first, then fill with suggestions
-    const existing = suggestions.filter((s) => !s.suggested)
-    const suggested = suggestions.filter((s) => s.suggested)
-    const remaining = MAX_LINK_SUGGESTIONS - existing.length
-    return [...existing, ...suggested.slice(0, Math.max(0, remaining))].slice(
-      0,
-      MAX_LINK_SUGGESTIONS
-    )
+  // --- Phase 3: Cross-silo links from the same site (published articles only) ---
+  if (suggestions.length < TARGET_LINKS && effectiveSiteId) {
+    const { data: crossSiloArticles } = await supabase
+      .from('seo_articles')
+      .select('id, title, keyword, slug, silo_id')
+      .eq('site_id', effectiveSiteId)
+      .neq('id', articleId)
+      .in('status', ['published', 'reviewing', 'media', 'writing'])
+      .not('slug', 'is', null)
+      .limit(50)
+
+    for (const article of crossSiloArticles ?? []) {
+      if (suggestions.length >= TARGET_LINKS) break
+      if (!article.slug || !article.title) continue
+      if (article.silo_id === siloId) continue // already handled
+      if (suggestedIds.has(article.id)) continue
+
+      const variations = generateAnchorVariations(article.keyword, article.title)
+      const hasMatch = variations.some(v => currentContent.includes(v.toLowerCase()))
+      if (hasMatch) {
+        const anchor = pickBestAnchor(variations, currentContent)
+        suggestions.push({
+          targetArticleId: article.id,
+          targetKeyword: article.keyword,
+          targetSlug: article.slug,
+          anchorText: anchor,
+          suggested: true,
+        })
+        suggestedIds.add(article.id)
+      }
+    }
   }
 
-  // If fewer than minimum, pad with title-based suggestions for unlinked articles
-  if (suggestions.length < MIN_LINK_SUGGESTIONS) {
-    const suggestedIds = new Set(suggestions.map((s) => s.targetArticleId))
-
+  // --- Phase 4: Pad with title-based suggestions if below minimum ---
+  if (suggestions.length < MIN_LINKS) {
+    // Same-silo first
     for (const article of siloArticles ?? []) {
-      if (suggestions.length >= MIN_LINK_SUGGESTIONS) break
+      if (suggestions.length >= MIN_LINKS) break
       if (!article.title || !article.slug) continue
       if (suggestedIds.has(article.id)) continue
 
@@ -164,10 +225,12 @@ export async function generateInternalLinks(
         anchorText: article.title,
         suggested: true,
       })
+      suggestedIds.add(article.id)
     }
   }
 
-  return suggestions.slice(0, MAX_LINK_SUGGESTIONS)
+  // Enforce max: prioritize existing > same-silo > cross-silo
+  return suggestions.slice(0, MAX_LINKS)
 }
 
 // ---- HTML link injection ----

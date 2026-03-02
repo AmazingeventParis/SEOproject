@@ -126,6 +126,25 @@ export function generateAltText(
   return alt;
 }
 
+/**
+ * Generate a title attribute for an image (tooltip on hover).
+ * Different from alt: title provides additional context, not a description.
+ * Helps with accessibility and gives a small SEO signal.
+ */
+export function generateImageTitle(
+  keyword: string,
+  heading: string | null,
+  imageType: "hero" | "section"
+): string {
+  if (imageType === "hero") {
+    return capitalize(keyword)
+  }
+  if (heading) {
+    return `${capitalize(heading)} - ${capitalize(keyword)}`
+  }
+  return capitalize(keyword)
+}
+
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }

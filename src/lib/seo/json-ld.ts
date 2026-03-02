@@ -157,6 +157,71 @@ export function generateBreadcrumbSchema(
   }
 }
 
+// ---- HowTo schema ----
+
+export interface HowToStep {
+  name: string
+  text: string
+}
+
+/**
+ * Generate a Schema.org HowTo JSON-LD object.
+ * Used for tutorial/informational articles that have step-by-step content.
+ *
+ * @param title  The article title (becomes HowTo name)
+ * @param steps  Array of step name/text pairs (extracted from H2/H3 sections)
+ * @returns      A JSON-LD HowTo object, or null if fewer than 2 steps
+ */
+export function generateHowToSchema(
+  title: string,
+  description: string,
+  steps: HowToStep[]
+): Record<string, unknown> | null {
+  if (steps.length < 2) return null
+
+  return {
+    '@type': 'HowTo',
+    name: title,
+    description,
+    step: steps.map((s, i) => ({
+      '@type': 'HowToStep',
+      position: i + 1,
+      name: s.name,
+      text: s.text,
+    })),
+  }
+}
+
+// ---- Review schema ----
+
+/**
+ * Generate a Schema.org Review JSON-LD object.
+ * Used for review/comparison articles.
+ *
+ * @param itemName    The product/service being reviewed
+ * @param reviewBody  Summary of the review (from meta description)
+ * @param authorName  The reviewer/persona name
+ * @returns           A JSON-LD Review object
+ */
+export function generateReviewSchema(
+  itemName: string,
+  reviewBody: string,
+  authorName: string
+): Record<string, unknown> {
+  return {
+    '@type': 'Review',
+    itemReviewed: {
+      '@type': 'Thing',
+      name: itemName,
+    },
+    reviewBody,
+    author: {
+      '@type': 'Person',
+      name: authorName,
+    },
+  }
+}
+
 // ---- Graph assembler ----
 
 /**

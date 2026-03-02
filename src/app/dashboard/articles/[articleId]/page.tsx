@@ -70,6 +70,8 @@ import {
   MessageSquarePlus,
   X,
   Undo2,
+  BarChart3,
+  TrendingUp,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -799,6 +801,29 @@ export default function ArticleDetailPage() {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [writeProgress, setWriteProgress] = useState<{ current: number; total: number } | null>(null);
+  const [gscAnalysis, setGscAnalysis] = useState<Record<string, unknown> | null>(null);
+  const [gscLoading, setGscLoading] = useState(false);
+
+  const fetchGscAnalysis = useCallback(async () => {
+    setGscLoading(true);
+    try {
+      const res = await fetch(`/api/articles/${articleId}/gsc-analysis`);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Erreur GSC");
+      }
+      const data = await res.json();
+      setGscAnalysis(data);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Analyse GSC",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
+      });
+    } finally {
+      setGscLoading(false);
+    }
+  }, [articleId, toast]);
 
   const fetchArticle = useCallback(async () => {
     try {
@@ -806,6 +831,9 @@ export default function ArticleDetailPage() {
       if (!res.ok) throw new Error("Erreur");
       const data = await res.json();
       setArticle(data);
+      // Load cached GSC analysis from serp_data
+      const cached = (data.serp_data as Record<string, unknown>)?.gsc_analysis;
+      if (cached) setGscAnalysis(cached as Record<string, unknown>);
     } catch {
       toast({
         variant: "destructive",
@@ -1472,20 +1500,28 @@ export default function ArticleDetailPage() {
                 Publier sur WordPress
               </Button>
             )}
-            {article.status === "published" && article.wp_url && (
-              <a
-                href={article.wp_url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Button variant="outline">
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Voir sur WordPress
-                </Button>
-              </a>
+            {article.status === "published" && (
+              <>
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1.5 py-1 px-3">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Publie (brouillon WP)
+                </Badge>
+                {article.wp_url && (
+                  <a
+                    href={article.wp_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button variant="outline">
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Voir sur WordPress
+                    </Button>
+                  </a>
+                )}
+              </>
             )}
-            {/* Rollback button — visible when not draft/published */}
-            {article.status !== "draft" && article.status !== "published" && (
+            {/* Rollback button — visible when not draft */}
+            {article.status !== "draft" && (
               <Button
                 variant="outline"
                 onClick={rollbackPipeline}
@@ -2369,6 +2405,143 @@ export default function ArticleDetailPage() {
               blocks={blocks}
               siteDomain={article.seo_sites?.domain || null}
             />
+          )}
+
+          {/* GSC Performance Analysis — only for published articles */}
+          {(article.status === "published" || article.status === "refresh_needed") && (
+            <Card className="border-blue-200">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4 text-blue-600" />
+                      Performance GSC
+                    </CardTitle>
+                    <CardDescription>
+                      Donnees Google Search Console (90 derniers jours)
+                      {typeof gscAnalysis?.fetchedAt === "string" && (
+                        <span className="ml-2 text-xs">
+                          — Derniere analyse : {format(new Date(gscAnalysis.fetchedAt), "dd MMM yyyy HH:mm", { locale: fr })}
+                        </span>
+                      )}
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchGscAnalysis}
+                    disabled={gscLoading}
+                  >
+                    {gscLoading ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <TrendingUp className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    {gscAnalysis ? "Actualiser" : "Analyser"}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {!gscAnalysis ? (
+                  <p className="text-sm text-muted-foreground">
+                    Cliquez sur &quot;Analyser&quot; pour recuperer les donnees de performance GSC.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Summary metrics */}
+                    {!!gscAnalysis.summary && (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {(() => {
+                          const s = gscAnalysis.summary as Record<string, number>;
+                          return [
+                            { label: "Clics", value: String(s.totalClicks ?? 0), color: "text-blue-700" },
+                            { label: "Impressions", value: String(s.totalImpressions ?? 0), color: "text-purple-700" },
+                            { label: "CTR moyen", value: (s.avgCtr ?? 0) + "%", color: "text-green-700" },
+                            { label: "Position moy.", value: String(s.avgPosition ?? 0), color: "text-amber-700" },
+                          ].map((stat) => (
+                            <div key={stat.label} className="bg-muted/50 rounded-lg p-3 text-center">
+                              <p className="text-xs text-muted-foreground">{stat.label}</p>
+                              <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Recommendations */}
+                    {Array.isArray(gscAnalysis.recommendations) && (gscAnalysis.recommendations as Array<Record<string, unknown>>).length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium">Recommandations</h4>
+                        {(gscAnalysis.recommendations as Array<Record<string, unknown>>).map((rec, i) => (
+                          <div
+                            key={i}
+                            className={`flex items-start gap-2 text-sm p-3 rounded-lg border ${
+                              rec.severity === "critical"
+                                ? "bg-red-50 border-red-200 text-red-800"
+                                : rec.severity === "warning"
+                                ? "bg-amber-50 border-amber-200 text-amber-800"
+                                : "bg-blue-50 border-blue-200 text-blue-800"
+                            }`}
+                          >
+                            {rec.severity === "critical" ? (
+                              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                            ) : rec.severity === "warning" ? (
+                              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                            ) : (
+                              <TrendingUp className="h-4 w-4 shrink-0 mt-0.5" />
+                            )}
+                            <div>
+                              <p>{String(rec.message)}</p>
+                              {!!rec.data && Array.isArray((rec.data as Record<string, unknown>).queries) && (
+                                <ul className="mt-1.5 space-y-0.5 text-xs opacity-80">
+                                  {(((rec.data as Record<string, unknown>).queries) as Array<Record<string, string | number>>).slice(0, 3).map((q, j) => (
+                                    <li key={j}>
+                                      &bull; <span className="font-medium">{String(q.keyword)}</span>
+                                      {" — "}pos. {String(q.position)}{q.impressions ? `, ${String(q.impressions)} imp.` : ""}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Top queries table */}
+                    {Array.isArray(gscAnalysis.topQueries) && (gscAnalysis.topQueries as Array<Record<string, unknown>>).length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Top requetes</h4>
+                        <div className="rounded-md border overflow-auto max-h-[300px]">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-xs">Mot-cle</TableHead>
+                                <TableHead className="text-xs text-right">Clics</TableHead>
+                                <TableHead className="text-xs text-right">Impressions</TableHead>
+                                <TableHead className="text-xs text-right">CTR</TableHead>
+                                <TableHead className="text-xs text-right">Position</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {(gscAnalysis.topQueries as Array<Record<string, unknown>>).map((q, i) => (
+                                <TableRow key={i}>
+                                  <TableCell className="text-xs font-medium">{q.keyword as string}</TableCell>
+                                  <TableCell className="text-xs text-right">{q.clicks as number}</TableCell>
+                                  <TableCell className="text-xs text-right">{q.impressions as number}</TableCell>
+                                  <TableCell className="text-xs text-right">{q.ctr as number}%</TableCell>
+                                  <TableCell className="text-xs text-right">{q.position as number}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {/* JSON-LD */}

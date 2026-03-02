@@ -13,6 +13,21 @@ Phases 1-4 terminées. Projet en production.
 
 <!-- Ajouter les nouvelles entrées en haut -->
 
+### 2026-02-27 (2)
+- 5 optimisations pipeline et publication WordPress
+  - **Images strategiques (plus 1 par H2)** : plan-architect ne force plus `generate_image: true` sur chaque H2. L'IA choisit strategiquement 4-5 sections visuelles avec repartition equilibree. Regle "OBLIGATOIRE" remplacee par "STRATEGIQUE, PAS SYSTEMATIQUE".
+  - **Decoupe H3 des sections longues** : nouvelle regle dans plan-architect — si un H2 depasse 400 mots, il doit etre decoupe en 2-4 sous-sections H3 (150-300 mots chacune) avec directives d'ecriture propres.
+  - **Maillage interne silo + sitemap WP** : nouvelle fonction `getAllPublishedPosts()` dans `wordpress/client.ts` (fetch jusqu'a 200 posts publies). Le plan-architect recoit les articles DB + posts WP dedupliques. L'etape SEO injecte aussi des liens depuis le sitemap WP (matching par overlap de mots du titre dans le contenu).
+  - **Categories WP existantes uniquement** : nouvelle fonction `findBestCategory()` (match exact, slug, partiel, overlap de mots). Ne cree JAMAIS de nouvelle categorie. Le publish essaie d'abord le niche du site, puis le keyword de l'article.
+  - **Espacement Gutenberg 50px** : remplacement du `style="margin-top:50px"` inline par un vrai bloc spacer Gutenberg (`<!-- wp:spacer -->`) avant chaque section H2/H3/H4.
+
+### 2026-02-27
+- 4 ameliorations post-publication
+  - **Fix publication bloquee a 90%** : Transition directe `reviewing → published` (suppression de l'etat intermediaire `publishing`). La barre de progression atteint 100% immediatement apres publication. Suppression de `publishing` dans les step labels du pipeline progress.
+  - **Badge brouillon WP** : Badge vert "Publie (brouillon WP)" affiche dans les boutons d'action pour les articles publies. Bouton rollback disponible depuis l'etat `published` (retour vers `reviewing`).
+  - **Detection de rafraichissement 120 jours** : Seuil passe de 90 a 120 jours (~4 mois) dans `refresh-detector.ts`.
+  - **Analyse GSC pour articles publies** : Nouvel endpoint `/api/articles/[articleId]/gsc-analysis` qui recupere les donnees GSC (90 jours), genere des recommandations (CTR faible, mots-cles en position 5-20, performance du mot-cle principal). Carte "Performance GSC" dans l'onglet SEO avec metriques (clics, impressions, CTR, position), recommandations colorees par severite, tableau des top requetes. Donnees mises en cache dans `serp_data.gsc_analysis`.
+
 ### 2026-02-26 (7)
 - 4 ameliorations pipeline SEO
   - **Annee courante dans les prompts** : plan-architect et block-writer injectent `new Date().getFullYear()` (section "Annee de reference"). Nouvelle colonne `year_tag INTEGER` dans seo_articles (sauvegardee dans executePlan). Migration ajoutee.

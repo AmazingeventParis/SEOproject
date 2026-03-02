@@ -56,15 +56,9 @@ const TRANSITIONS: PipelineTransition[] = [
     to: 'reviewing',
     step: 'seo',
   },
-  // Reviewing -> Publishing (push to WordPress)
+  // Reviewing -> Published (push to WordPress — single-step publish)
   {
     from: 'reviewing',
-    to: 'publishing',
-    step: 'publish',
-  },
-  // Publishing -> Published (done)
-  {
-    from: 'publishing',
     to: 'published',
     step: 'publish',
   },
@@ -103,7 +97,7 @@ const ROLLBACK_MAP: Partial<Record<ArticleStatus, ArticleStatus>> = {
   media: 'writing',
   seo_check: 'media',
   reviewing: 'media',
-  publishing: 'reviewing',
+  published: 'reviewing',
 }
 
 /**

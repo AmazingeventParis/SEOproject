@@ -18,10 +18,10 @@ import { buildPlanArchitectPrompt } from '@/lib/ai/prompts/plan-architect'
 import { buildBlockWriterPrompt } from '@/lib/ai/prompts/block-writer'
 import { generateImage, buildImagePrompt, generateHeroImage } from '@/lib/media/fal-ai'
 import { optimizeForWeb } from '@/lib/media/sharp-processor'
-import { generateSeoFilename, generateAltText } from '@/lib/media/seo-rename'
-import { generateArticleSchema, generateFAQSchema, generateBreadcrumbSchema, assembleJsonLd } from '@/lib/seo/json-ld'
+import { generateSeoFilename, generateAltText, generateImageTitle } from '@/lib/media/seo-rename'
+import { generateArticleSchema, generateFAQSchema, generateBreadcrumbSchema, generateHowToSchema, generateReviewSchema, assembleJsonLd } from '@/lib/seo/json-ld'
 import { generateInternalLinks, injectLinksIntoHtml } from '@/lib/seo/internal-links'
-import { createPost, updatePost, uploadMedia, findOrCreateCategory } from '@/lib/wordpress/client'
+import { createPost, updatePost, uploadMedia, findBestCategory, getAllPublishedPosts } from '@/lib/wordpress/client'
 
 /**
  * Extract and parse JSON from AI response text.
@@ -356,7 +356,22 @@ async function executePlan(
     .not('slug', 'is', null)
     .not('title', 'is', null)
     .limit(100)
-  const siteArticles = (siteArticlesData || []) as { keyword: string; title: string | null; slug: string | null }[]
+  const dbArticles = (siteArticlesData || []) as { keyword: string; title: string | null; slug: string | null }[]
+
+  // Also fetch WordPress sitemap (all published posts) for comprehensive internal linking
+  let wpPosts: { title: string; slug: string }[] = []
+  try {
+    wpPosts = await getAllPublishedPosts(article.site_id)
+  } catch {
+    // WordPress not reachable — continue with DB articles only
+  }
+
+  // Merge DB articles + WP sitemap, deduplicate by slug
+  const slugSet = new Set(dbArticles.map(a => a.slug))
+  const wpOnlyPosts = wpPosts
+    .filter(p => !slugSet.has(p.slug))
+    .map(p => ({ keyword: p.title, title: p.title, slug: p.slug }))
+  const siteArticles = [...dbArticles, ...wpOnlyPosts]
 
   const persona = article.seo_personas as { name: string; role: string; tone_description: string | null; bio: string | null; writing_style_examples: Record<string, unknown>[] } | null
   const serpDataRaw = article.serp_data as {
@@ -710,25 +725,75 @@ async function executeMedia(
   }
 
   // 2. Generate images for 'image' type blocks AND H2 blocks with generate_image === true
+  //    Limite : max 6 images par article (hero incluse), reparties homogenement
+  const MAX_IMAGES = 6
+  const maxSectionImages = MAX_IMAGES - (heroMediaId ? 1 : 0)
+
   const updatedBlocks = [...contentBlocks]
+
+  // Collect all candidate block indices
+  const candidates: number[] = []
   for (let i = 0; i < updatedBlocks.length; i++) {
     const block = updatedBlocks[i]
-
     const isImageBlock = block.type === 'image' && !(block.content_html && block.content_html.includes('<img'))
     const isH2WithImage = block.type === 'h2' && block.generate_image === true && !(block.content_html && block.content_html.includes('<img'))
+    if (isImageBlock || isH2WithImage) candidates.push(i)
+  }
 
-    if (!isImageBlock && !isH2WithImage) {
-      continue
+  // Select up to maxSectionImages candidates, evenly spaced
+  let selectedIndices: Set<number>
+  if (candidates.length <= maxSectionImages) {
+    selectedIndices = new Set(candidates)
+  } else {
+    selectedIndices = new Set<number>()
+    for (let s = 0; s < maxSectionImages; s++) {
+      const idx = Math.round(s * (candidates.length - 1) / (maxSectionImages - 1))
+      selectedIndices.add(candidates[idx])
     }
+  }
+
+  const selectedList = Array.from(selectedIndices)
+  for (const i of selectedList) {
+    const block = updatedBlocks[i]
+    const isImageBlock = block.type === 'image' && !(block.content_html && block.content_html.includes('<img'))
 
     try {
-      const promptContext = block.image_prompt_hint || block.heading || ''
-      const prompt = buildImagePrompt(article.keyword, promptContext, article.title || article.keyword)
+      // Gather context: for H2 blocks, collect the content of the H2 and its children
+      // For image blocks, use the preceding H2 section's content
+      let sectionContent = block.content_html || ''
+      if (block.type === 'h2') {
+        // Collect children content (H3, paragraphs, lists) until next H2
+        for (let j = i + 1; j < updatedBlocks.length; j++) {
+          if (updatedBlocks[j].type === 'h2') break
+          if (updatedBlocks[j].content_html) sectionContent += ' ' + updatedBlocks[j].content_html
+        }
+      } else if (block.type === 'image') {
+        // Look back to find the parent H2 section content
+        for (let j = i - 1; j >= 0; j--) {
+          if (updatedBlocks[j].type === 'h2') {
+            sectionContent = updatedBlocks[j].content_html || ''
+            // Also collect forward from that H2
+            for (let k = j + 1; k < i; k++) {
+              if (updatedBlocks[k].content_html) sectionContent += ' ' + updatedBlocks[k].content_html
+            }
+            break
+          }
+        }
+      }
+
+      const prompt = buildImagePrompt(
+        article.keyword,
+        block.heading || '',
+        sectionContent,
+        block.image_prompt_hint,
+        article.title || article.keyword,
+      )
       const imageResult = await generateImage(prompt, { aspectRatio: "16:9" })
       const imgBuffer = await fetch(imageResult.url).then(r => r.arrayBuffer())
       const optimized = await optimizeForWeb(Buffer.from(imgBuffer))
       const filename = generateSeoFilename(article.keyword, block.heading || null, 'section')
       const altText = generateAltText(article.keyword, block.heading || null, 'section', block.image_prompt_hint)
+      const imgTitle = generateImageTitle(article.keyword, block.heading || null, 'section')
 
       const wpMedia = await uploadMedia(article.site_id, {
         buffer: optimized.buffer,
@@ -740,12 +805,12 @@ async function executeMedia(
         // For dedicated image blocks: replace content entirely
         updatedBlocks[i] = {
           ...block,
-          content_html: `<figure><img src="${wpMedia.url}" alt="${altText}" width="${optimized.width}" height="${optimized.height}" loading="lazy" />${block.heading ? `<figcaption>${block.heading}</figcaption>` : ''}</figure>`,
+          content_html: `<figure><img src="${wpMedia.url}" alt="${altText}" title="${imgTitle}" width="${optimized.width}" height="${optimized.height}" loading="lazy" />${block.heading ? `<figcaption>${block.heading}</figcaption>` : ''}</figure>`,
           status: 'written' as const,
         }
       } else {
         // For H2 blocks: prepend image before existing content
-        const imageHtml = `<figure class="section-image"><img src="${wpMedia.url}" alt="${altText}" width="${optimized.width}" height="${optimized.height}" loading="lazy" /></figure>`
+        const imageHtml = `<figure class="section-image"><img src="${wpMedia.url}" alt="${altText}" title="${imgTitle}" width="${optimized.width}" height="${optimized.height}" loading="lazy" /></figure>`
         updatedBlocks[i] = {
           ...block,
           content_html: imageHtml + (block.content_html || ''),
@@ -845,36 +910,133 @@ async function executeSeo(
   )
   schemas.push(breadcrumb)
 
-  const jsonLd = assembleJsonLd(schemas)
-
-  // 2. Internal links (if article is in a silo)
-  let linksInjected = 0
-  let updatedBlocks = [...contentBlocks]
-  if (article.silo_id) {
-    const linkSuggestions = await generateInternalLinks(article.id, article.silo_id)
-    const linksToInject = linkSuggestions
-      .filter(l => l.targetSlug)
-      .map(l => ({
-        anchorText: l.anchorText,
-        url: `https://${site?.domain || ''}/${l.targetSlug}`,
+  // HowTo schema — for informational/traffic articles with H2 step-like sections
+  const intent = article.search_intent
+  if (intent === 'informational' || intent === 'traffic') {
+    const h2Blocks = contentBlocks.filter(b => b.type === 'h2' && b.heading && b.content_html && b.status !== 'pending')
+    if (h2Blocks.length >= 3) {
+      const steps = h2Blocks.map(b => ({
+        name: b.heading || '',
+        text: b.content_html.replace(/<[^>]*>/g, '').trim().slice(0, 300),
       }))
-
-    if (linksToInject.length > 0) {
-      updatedBlocks = updatedBlocks.map(block => {
-        if (block.content_html && block.type !== 'image') {
-          const newHtml = injectLinksIntoHtml(block.content_html, linksToInject)
-          if (newHtml !== block.content_html) {
-            linksInjected++
-            return { ...block, content_html: newHtml }
-          }
-        }
-        return block
-      })
+      const howTo = generateHowToSchema(
+        article.title || article.keyword,
+        article.meta_description || '',
+        steps,
+      )
+      if (howTo) schemas.push(howTo)
     }
   }
 
-  // 3. Verify meta description
-  const metaDesc = article.meta_description || ''
+  // Review schema — for review/comparison articles
+  if (intent === 'review' || intent === 'comparison') {
+    const reviewSchema = generateReviewSchema(
+      article.keyword,
+      article.meta_description || '',
+      persona?.name || 'Expert',
+    )
+    schemas.push(reviewSchema)
+  }
+
+  const jsonLd = assembleJsonLd(schemas)
+
+  // 2. Internal links (silo + WordPress sitemap)
+  let linksInjected = 0
+  let updatedBlocks = [...contentBlocks]
+
+  // Gather links from silo DB
+  const linksToInject: { anchorText: string; url: string }[] = []
+  if (article.silo_id) {
+    const linkSuggestions = await generateInternalLinks(article.id, article.silo_id, article.site_id)
+    for (const l of linkSuggestions) {
+      if (l.targetSlug) {
+        linksToInject.push({
+          anchorText: l.anchorText,
+          url: `https://${site?.domain || ''}/${l.targetSlug}`,
+        })
+      }
+    }
+  }
+
+  // Also find WP sitemap links that match content keywords
+  try {
+    const wpPosts = await getAllPublishedPosts(article.site_id)
+    const currentContent = updatedBlocks
+      .filter(b => b.content_html)
+      .map(b => b.content_html.toLowerCase())
+      .join(' ')
+    const existingSlugs = new Set(linksToInject.map(l => new URL(l.url).pathname.replace(/^\/|\/$/g, '')))
+
+    for (const post of wpPosts) {
+      if (linksToInject.length >= 8) break
+      if (existingSlugs.has(post.slug)) continue
+      if (post.slug === article.slug) continue
+
+      // Check if the post title words appear in our content
+      const titleWords = post.title.toLowerCase().split(/\s+/).filter(w => w.length >= 4)
+      const matchCount = titleWords.filter(w => currentContent.includes(w)).length
+      if (matchCount >= 2) {
+        linksToInject.push({
+          anchorText: post.title,
+          url: post.link || `https://${site?.domain || ''}/${post.slug}`,
+        })
+        existingSlugs.add(post.slug)
+      }
+    }
+  } catch {
+    // WordPress not reachable — continue with silo links only
+  }
+
+  if (linksToInject.length > 0) {
+    updatedBlocks = updatedBlocks.map(block => {
+      if (block.content_html && block.type !== 'image') {
+        const newHtml = injectLinksIntoHtml(block.content_html, linksToInject)
+        if (newHtml !== block.content_html) {
+          linksInjected++
+          return { ...block, content_html: newHtml }
+        }
+      }
+      return block
+    })
+  }
+
+  // 3. Re-generate meta description from actual written content (Gemini Flash)
+  let metaDesc = article.meta_description || ''
+  let metaRegenerated = false
+  try {
+    const writtenText = updatedBlocks
+      .filter(b => b.content_html && b.status !== 'pending')
+      .map(b => b.content_html.replace(/<[^>]*>/g, ''))
+      .join(' ')
+      .slice(0, 2000)
+
+    if (writtenText.length > 200) {
+      const metaResponse = await routeAI('generate_meta', [{
+        role: 'user',
+        content: [
+          `Genere une meta description SEO optimisee pour cet article.`,
+          `Mot-cle principal : "${article.keyword}"`,
+          `Titre : "${article.title || article.keyword}"`,
+          `Contenu (extrait) : ${writtenText}`,
+          ``,
+          `Regles :`,
+          `- Exactement 140-155 caracteres (CRITIQUE)`,
+          `- Inclure le mot-cle "${article.keyword}" naturellement`,
+          `- Inciter au clic (promesse de valeur, chiffre ou question)`,
+          `- Pas de guillemets francais, pas de tirets cadratins`,
+          `- Reponds UNIQUEMENT avec la meta description, rien d'autre`,
+        ].join('\n'),
+      }])
+      const newMeta = metaResponse.content.trim().replace(/^["']|["']$/g, '')
+      if (newMeta.length >= 100 && newMeta.length <= 170) {
+        metaDesc = newMeta
+        metaRegenerated = true
+      }
+    }
+  } catch {
+    // Keep existing meta description on error
+  }
+
   const metaDescLength = metaDesc.length
   const metaDescOk = metaDescLength >= 120 && metaDescLength <= 160
 
@@ -883,13 +1045,18 @@ async function executeSeo(
   const nuggetDensity = contentBlocks.length > 0 ? blocksWithNuggets / contentBlocks.length : 0
 
   // 5. Update article
+  const updatePayload: Record<string, unknown> = {
+    json_ld: jsonLd,
+    content_blocks: updatedBlocks,
+    nugget_density_score: nuggetDensity,
+  }
+  if (metaRegenerated) {
+    updatePayload.meta_description = metaDesc
+  }
+
   await supabase
     .from('seo_articles')
-    .update({
-      json_ld: jsonLd,
-      content_blocks: updatedBlocks,
-      nugget_density_score: nuggetDensity,
-    })
+    .update(updatePayload)
     .eq('id', article.id)
 
   return {
@@ -898,10 +1065,61 @@ async function executeSeo(
     output: {
       schemasGenerated: schemas.length,
       linksInjected,
-      metaDescription: { length: metaDescLength, ok: metaDescOk },
+      metaDescription: { length: metaDescLength, ok: metaDescOk, regenerated: metaRegenerated },
       nuggetDensity: Math.round(nuggetDensity * 100),
     },
   }
+}
+
+// ---- Table inline styles for WordPress ----
+
+/**
+ * CSS bloc injecte une seule fois dans le HTML publie.
+ * Gere le zebra-striping, hover et responsive (impossible en inline pur).
+ */
+const WP_TABLE_CSS = `<style>
+.seo-table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;margin:20px 0;border-radius:8px;box-shadow:0 4px 15px rgba(0,0,0,.05)}
+.seo-table-wrap table{width:100%;border-collapse:collapse;min-width:600px;font-size:.95rem;line-height:1.5}
+.seo-table-wrap th{padding:14px 16px;font-weight:600;text-align:left;border-bottom:2px solid #e2e8f0;white-space:nowrap}
+.seo-table-wrap td{padding:12px 16px;border-bottom:1px solid #f1f5f9;text-align:left;vertical-align:top}
+.seo-table-wrap tbody tr:nth-child(even){background:#f8fafc}
+.seo-table-wrap tbody tr:hover{background:#f1f5f9;transition:background-color .15s ease}
+.seo-table-wrap tbody tr:last-child td{border-bottom:none}
+@media(max-width:640px){.seo-table-wrap table{font-size:.85rem}.seo-table-wrap th,.seo-table-wrap td{padding:10px 12px}}
+</style>`
+
+/**
+ * Replace .table-container / bare <table> with inline-styled wrapper for WordPress.
+ * Uses theme_color from the site config for header background if available.
+ */
+function inlineTableStyles(html: string, themeColor: string | null): string {
+  const headerBg = themeColor || '#1e293b'
+  const headerStyle = `style="background:${headerBg};color:#fff;padding:14px 16px;font-weight:600;text-align:left;border:none;white-space:nowrap"`
+
+  // Replace <div class="table-container"> wrappers with .seo-table-wrap
+  let result = html.replace(
+    /<div\s+class="table-container">\s*(<table[\s\S]*?<\/table>)\s*<\/div>/g,
+    (_match, tableHtml: string) => {
+      const styled = applyThStyles(tableHtml, headerStyle)
+      return `<div class="seo-table-wrap">${styled}</div>`
+    }
+  )
+
+  // Also catch bare <table> not already wrapped
+  result = result.replace(
+    /(?<!<div class="seo-table-wrap">)\s*(<table(?!\s*class="seo-)[\s\S]*?<\/table>)/g,
+    (_match, tableHtml: string) => {
+      const styled = applyThStyles(tableHtml, headerStyle)
+      return `<div class="seo-table-wrap">${styled}</div>`
+    }
+  )
+
+  return result
+}
+
+/** Apply inline style to all <th> tags inside a table HTML string */
+function applyThStyles(tableHtml: string, thStyle: string): string {
+  return tableHtml.replace(/<th(?:\s[^>]*)?>/g, `<th ${thStyle}>`)
 }
 
 // ---- Publish step ----
@@ -913,15 +1131,23 @@ async function executePublish(
   const contentBlocks = (article.content_blocks || []) as ContentBlock[]
   const site = article.seo_sites
 
-  // 1. Assemble full HTML from content blocks
+  // 1. Assemble full HTML from content blocks with Gutenberg spacers between sections
+  const GUTENBERG_SPACER = `<!-- wp:spacer {"height":"50px"} -->\n<div style="height:50px" aria-hidden="true" class="wp-block-spacer"></div>\n<!-- /wp:spacer -->`
+
   const htmlParts: string[] = []
+  let isFirstBlock = true
   for (const block of contentBlocks) {
     if (!block.content_html) continue
     if (block.heading && (block.type === 'h2' || block.type === 'h3' || block.type === 'h4')) {
       const tag = block.type
-      htmlParts.push(`<${tag} style="margin-top:50px">${block.heading}</${tag}>`)
+      // Add spacer before each heading section (not before the very first block)
+      if (!isFirstBlock) {
+        htmlParts.push(GUTENBERG_SPACER)
+      }
+      htmlParts.push(`<${tag}>${block.heading}</${tag}>`)
     }
     htmlParts.push(block.content_html)
+    isFirstBlock = false
   }
 
   // Inject JSON-LD script tag at the end
@@ -930,7 +1156,11 @@ async function executePublish(
     htmlParts.push(`<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`)
   }
 
-  const fullHtml = htmlParts.join('\n\n')
+  // Apply table styles for WordPress (inline + CSS block)
+  let fullHtml = htmlParts.join('\n\n')
+  if (fullHtml.includes('<table')) {
+    fullHtml = WP_TABLE_CSS + '\n' + inlineTableStyles(fullHtml, site?.theme_color || null)
+  }
 
   // 2. Extract intro as excerpt (first paragraph block without heading)
   const introBlock = contentBlocks.find(b => b.type === 'paragraph' && !b.heading && b.content_html)
@@ -951,12 +1181,17 @@ async function executePublish(
 
   const heroMediaId = (mediaRun?.output as Record<string, unknown>)?.heroMediaId as number | undefined
 
-  // 4. Find or create WP category based on site niche
+  // 4. Find best matching WP category (NEVER create new ones)
   let categoryIds: number[] | undefined
   try {
-    if (site?.niche) {
-      const catId = await findOrCreateCategory(article.site_id, site.niche)
-      categoryIds = [catId]
+    // Try matching by niche first, then by keyword
+    const searchTerms = [site?.niche, article.keyword].filter(Boolean) as string[]
+    for (const term of searchTerms) {
+      const catId = await findBestCategory(article.site_id, term)
+      if (catId) {
+        categoryIds = [catId]
+        break
+      }
     }
   } catch {
     // Category assignment is optional — continue without it

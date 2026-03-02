@@ -131,12 +131,13 @@ Chaque bloc DOIT avoir :
 - **'mixed'** : si la section necessite du contexte narratif + un element visuel (tableau ou liste)
 - **'prose'** : pour les sections narratives, analytiques, ou explicatives
 
-## DECISION IMAGE PAR H2 (OBLIGATOIRE)
+## DECISION IMAGE (STRATEGIQUE, PAS SYSTEMATIQUE)
 
-Pour chaque bloc de type H2, tu DOIS decider si une illustration est pertinente :
-- **generate_image: true** : pour les sections qui beneficient d'un visuel (concepts abstraits, processus, produits, avant/apres)
-- **generate_image: false** : pour les FAQ, les tableaux de comparaison purs, les listes simples
+NE PAS mettre une image sur chaque H2. Les images doivent etre selectionnees de facon strategique :
+- **generate_image: true** : UNIQUEMENT pour les sections qui beneficient REELLEMENT d'un visuel (concepts abstraits, processus, produits, avant/apres, resultats visuels). Maximum 5-6 images dans l'article entier (hero inclus).
+- **generate_image: false** : pour les FAQ, les tableaux, les listes, les sections courtes, les sections techniques pures
 - Si true, fournis **image_prompt_hint** : description de la scene/concept a illustrer (en anglais, style photo editoriale)
+- Repartis les images de facon equilibree dans l'article (pas 3 images d'affilee puis plus rien)
 
 ## OPTIMISATION E-E-A-T
 ${SEO_EEAT_RULES}
@@ -146,9 +147,22 @@ ${INTENT_STRATEGIES[searchIntent]?.plan || 'Structure guide complet standard.'}
 
 Tu DOIS respecter cette strategie de structure. L'intention de recherche determine TOUT : le nombre de mots, l'ordre des sections, les formats de blocs, et la presence ou non d'une FAQ.
 
+## DECOUPE H3 DES SECTIONS LONGUES (OBLIGATOIRE)
+
+Si une section H2 couvre un sujet large qui necessite plus de 400 mots, tu DOIS la decouper en sous-sections H3 :
+- Chaque H3 traite un aspect specifique du sujet du H2 parent
+- 2-4 H3 par H2 maximum
+- Le H2 reste le "chapeau" thematique, les H3 approfondissent
+- Chaque H3 : 150-300 mots
+- Les H3 ont leur propre writing_directive et format_hint
+- Exemple : H2 "Les meilleurs outils SEO" → H3 "Outils de recherche de mots-cles", H3 "Outils d'analyse technique", H3 "Outils de suivi de positionnement"
+
+NE DECOUPE PAS en H3 si la section H2 est courte (<300 mots) ou si le sujet est unitaire.
+
 ## CONTENU
 - Respecte la fourchette de mots indiquee dans la strategie ci-dessus
-- Chaque bloc : 150-500 mots
+- Chaque bloc H2 sans H3 : 150-500 mots
+- Chaque bloc H3 : 150-300 mots
 - Section FAQ (optionnelle) avec le heading "FAQ" en type "faq". Ne l'inclus PAS si la strategie l'interdit (ex: discover). L'utilisateur pourra l'ajouter manuellement plus tard si besoin.
 ${SEO_FAQ_RULES}
 - Blocs "list" pour les elements enumeratifs
@@ -261,7 +275,7 @@ IMPORTANT :
 - La meta_description doit inciter au clic et contenir le mot-cle principal
 - "writing_directive" est OBLIGATOIRE sur chaque bloc
 - "format_hint" est OBLIGATOIRE sur chaque bloc
-- "generate_image" est OBLIGATOIRE sur les blocs de type "h2" (false pour les autres types)
+- "generate_image" doit etre present sur chaque bloc (true ou false). NE PAS forcer true sur chaque H2 — choisis strategiquement les 4-5 sections les plus visuelles
 - "image_prompt_hint" est requis uniquement si generate_image est true
 - "internal_link_targets" est OBLIGATOIRE sur les blocs de type "h2" (tableau vide [] si aucun lien pertinent)`
 
@@ -449,14 +463,15 @@ EXCEPTION SLUG : les slugs ne doivent JAMAIS contenir d'annee (un slug est intem
 1. PYRAMIDE INVERSEE : le premier H2 repond DIRECTEMENT a l'intention de recherche
 2. Hn SEMANTIQUES : chaque H2 est une question ou promesse claire, comprehensible isolement
 3. WRITING DIRECTIVES : chaque bloc a une directive d'ecriture specifique et un format_hint
-4. IMAGES : decide pour chaque H2 si une image est pertinente (generate_image + image_prompt_hint)
+4. IMAGES : choisis strategiquement 4-5 sections pour les images (pas toutes les H2). Repartis equilibre.
 5. Analyse les SERP pour surpasser les contenus existants en profondeur et en valeur
 6. Integre les questions PAA dans une section FAQ dediee (si pertinent selon l'intention)
 7. Assigne les nuggets pertinents aux blocs appropries
 8. Propose 3 variantes de titre H1 (question, promesse, specifique) + meta description optimisee
 9. Vise 1500-3000 mots repartis equilibrement
 10. Au moins un H2 doit contenir le mot-cle principal ou une variante tres proche
-11. BLOC INTRO OBLIGATOIRE : le PREMIER element de content_blocks doit etre un bloc type "paragraph", heading null, 100-140 mots, contenant le mot-cle principal. Ce bloc precede le premier H2.
+11. DECOUPE H3 : si un H2 necessite plus de 400 mots, decoupe-le en H3 specifiques (2-4 H3 par H2)
+12. BLOC INTRO OBLIGATOIRE : le PREMIER element de content_blocks doit etre un bloc type "paragraph", heading null, 100-140 mots, contenant le mot-cle principal. Ce bloc precede le premier H2.
 
 Retourne UNIQUEMENT le JSON, rien d'autre.`
 

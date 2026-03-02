@@ -223,6 +223,49 @@ export async function uploadMedia(
 }
 
 /**
+ * Fetch all published posts from WordPress (titles + slugs only).
+ * Used for internal linking: provides a full sitemap of existing content.
+ * Paginates up to 200 posts for performance.
+ */
+export async function getAllPublishedPosts(
+  siteId: string
+): Promise<{ title: string; slug: string; link: string }[]> {
+  const creds = await getWPCredentials(siteId)
+  const posts: { title: string; slug: string; link: string }[] = []
+
+  for (let page = 1; page <= 2; page++) {
+    const response = await fetch(
+      `${apiBase(creds)}/posts?per_page=100&page=${page}&status=publish&_fields=id,title,slug,link`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: buildAuthHeader(creds),
+          'Content-Type': 'application/json',
+        },
+      }
+    )
+
+    if (!response.ok) break
+
+    const data: { title: { rendered: string }; slug: string; link: string }[] = await response.json()
+    if (data.length === 0) break
+
+    for (const p of data) {
+      posts.push({
+        title: p.title.rendered.replace(/&#8217;/g, "'").replace(/&amp;/g, '&').replace(/&#8211;/g, '-'),
+        slug: p.slug,
+        link: p.link,
+      })
+    }
+
+    // If less than 100, no more pages
+    if (data.length < 100) break
+  }
+
+  return posts
+}
+
+/**
  * Retrieve all categories from the WordPress site (up to 100).
  */
 export async function getCategories(siteId: string): Promise<WPCategory[]> {
@@ -248,21 +291,21 @@ export async function getCategories(siteId: string): Promise<WPCategory[]> {
 }
 
 /**
- * Create a new category on the WordPress site.
+ * Find the best matching existing category by name. Returns the category ID or null.
+ * NEVER creates new categories — only selects from existing ones.
  */
-/**
- * Find or create a category by name. Returns the category ID.
- */
-export async function findOrCreateCategory(
+export async function findBestCategory(
   siteId: string,
   categoryName: string
-): Promise<number> {
+): Promise<number | null> {
   const existing = await getCategories(siteId)
+  if (existing.length === 0) return null
+
   const normalized = categoryName.toLowerCase().trim()
 
   // Try exact name match (case-insensitive)
-  const match = existing.find(c => c.name.toLowerCase().trim() === normalized)
-  if (match) return match.id
+  const exactMatch = existing.find(c => c.name.toLowerCase().trim() === normalized)
+  if (exactMatch) return exactMatch.id
 
   // Try slug match
   const slug = normalized
@@ -271,8 +314,45 @@ export async function findOrCreateCategory(
   const slugMatch = existing.find(c => c.slug === slug)
   if (slugMatch) return slugMatch.id
 
-  // Create new category
-  const newCat = await createCategory(siteId, categoryName, slug)
+  // Try partial match (category name contained in input or vice versa)
+  const partialMatch = existing.find(c => {
+    const catName = c.name.toLowerCase().trim()
+    return catName.includes(normalized) || normalized.includes(catName)
+  })
+  if (partialMatch) return partialMatch.id
+
+  // Try word overlap: pick the category with the most words in common
+  const inputWords = normalized.split(/\s+/)
+  let bestOverlap = 0
+  let bestCat: typeof existing[0] | null = null
+  for (const cat of existing) {
+    if (cat.slug === 'uncategorized' || cat.slug === 'non-classe') continue
+    const catWords = cat.name.toLowerCase().split(/\s+/)
+    const overlap = inputWords.filter(w => catWords.some(cw => cw.includes(w) || w.includes(cw))).length
+    if (overlap > bestOverlap) {
+      bestOverlap = overlap
+      bestCat = cat
+    }
+  }
+  if (bestCat && bestOverlap > 0) return bestCat.id
+
+  return null
+}
+
+/**
+ * @deprecated Use findBestCategory instead. Kept for backward compatibility.
+ */
+export async function findOrCreateCategory(
+  siteId: string,
+  categoryName: string
+): Promise<number> {
+  const found = await findBestCategory(siteId, categoryName)
+  if (found) return found
+  // Fallback: create new (legacy behavior)
+  const normalizedSlug = categoryName.toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  const newCat = await createCategory(siteId, categoryName, normalizedSlug)
   return newCat.id
 }
 

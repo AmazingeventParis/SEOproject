@@ -182,13 +182,24 @@ export default function ArticlesPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {articles.map((article) => (
+          {articles.map((article) => {
+            // Bande de couleur gauche selon la phase
+            const phase =
+              article.status === "draft"
+                ? "border-l-gray-300"
+                : article.status === "published"
+                ? "border-l-green-500 bg-green-50/30"
+                : article.status === "refresh_needed"
+                ? "border-l-red-500 bg-red-50/30"
+                : "border-l-blue-500"; // en cours de creation
+
+            return (
             <Link
               key={article.id}
               href={`/dashboard/articles/${article.id}`}
               className="block"
             >
-              <div className="flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50 cursor-pointer">
+              <div className={`flex items-start gap-4 rounded-lg border border-l-4 ${phase} p-4 transition-colors hover:bg-muted/50 cursor-pointer`}>
                 {/* Left: status + keyword */}
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -236,7 +247,8 @@ export default function ArticlesPage() {
                 </div>
               </div>
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
