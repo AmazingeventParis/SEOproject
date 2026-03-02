@@ -435,11 +435,13 @@ async function executePlan(
     plan = extractJSON(aiResponse.content)
   } catch (parseError) {
     const msg = parseError instanceof Error ? parseError.message : String(parseError)
-    console.error('[Plan Parse Error]', msg)
+    const contentLen = aiResponse.content?.length || 0
+    const tail = aiResponse.content?.slice(-200) || ''
+    console.error('[Plan Parse Error]', msg, `| len=${contentLen} tokensOut=${aiResponse.tokensOut} tail=${tail}`)
     return {
       success: false,
       runId: '',
-      error: `Impossible de parser le plan genere par l'IA : ${msg}`,
+      error: `Impossible de parser le plan genere par l'IA : ${msg} [len=${contentLen}, tokensOut=${aiResponse.tokensOut}, fin: ...${tail.slice(-100)}]`,
       tokensIn: aiResponse.tokensIn,
       tokensOut: aiResponse.tokensOut,
       modelUsed: aiResponse.model,
