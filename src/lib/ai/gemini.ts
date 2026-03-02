@@ -61,18 +61,23 @@ export async function callGemini(options: {
   system?: string
   maxTokens?: number
   temperature?: number
+  jsonMode?: boolean
 }): Promise<AIResponse> {
   const start = Date.now()
   const client = await getClient()
 
   const modelName = options.model || 'gemini-2.5-flash'
+  const generationConfig: Record<string, unknown> = {
+    maxOutputTokens: options.maxTokens || 2048,
+    temperature: options.temperature ?? 0.7,
+  }
+  if (options.jsonMode) {
+    generationConfig.responseMimeType = 'application/json'
+  }
   const model = client.getGenerativeModel({
     model: modelName,
     systemInstruction: options.system || undefined,
-    generationConfig: {
-      maxOutputTokens: options.maxTokens || 2048,
-      temperature: options.temperature ?? 0.7,
-    },
+    generationConfig: generationConfig as import('@google/generative-ai').GenerationConfig,
   })
 
   // Convert messages to Gemini's chat format

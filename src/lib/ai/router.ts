@@ -24,8 +24,9 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
   plan_article: {
     provider: 'google',
     model: 'gemini-2.5-flash',
-    maxTokens: 4096,
+    maxTokens: 16384,
     temperature: 0.7,
+    jsonMode: true,
   },
   write_block: {
     provider: 'google',
@@ -68,24 +69,28 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     model: 'gemini-2.5-flash',
     maxTokens: 2048,
     temperature: 0.3,
+    jsonMode: true,
   },
   analyze_competitor_content: {
     provider: 'google',
     model: 'gemini-2.5-flash',
     maxTokens: 2048,
     temperature: 0.2,
+    jsonMode: true,
   },
   evaluate_authority_links: {
     provider: 'google',
     model: 'gemini-2.5-flash',
     maxTokens: 1024,
     temperature: 0.3,
+    jsonMode: true,
   },
   extract_nuggets: {
     provider: 'google',
     model: 'gemini-2.5-flash',
     maxTokens: 4096,
     temperature: 0.3,
+    jsonMode: true,
   },
 }
 
@@ -136,7 +141,7 @@ function callProvider(
   }
   if (config.provider === 'anthropic') return callClaude(opts)
   if (config.provider === 'openai') return callOpenAI(opts)
-  return callGemini(opts)
+  return callGemini({ ...opts, jsonMode: config.jsonMode })
 }
 
 /**
