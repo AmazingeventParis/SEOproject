@@ -41,49 +41,49 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
   },
   generate_title: {
     provider: 'google',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     maxTokens: 512,
     temperature: 0.7,
   },
   generate_meta: {
     provider: 'google',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     maxTokens: 512,
     temperature: 0.5,
   },
   extract_keywords: {
     provider: 'google',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     maxTokens: 1024,
     temperature: 0.2,
   },
   summarize: {
     provider: 'google',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     maxTokens: 1024,
     temperature: 0.3,
   },
   analyze_serp: {
     provider: 'google',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     maxTokens: 2048,
     temperature: 0.3,
   },
   analyze_competitor_content: {
     provider: 'google',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     maxTokens: 2048,
     temperature: 0.2,
   },
   evaluate_authority_links: {
     provider: 'google',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     maxTokens: 1024,
     temperature: 0.3,
   },
   extract_nuggets: {
     provider: 'google',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     maxTokens: 4096,
     temperature: 0.3,
   },
@@ -92,13 +92,13 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
 // ---- Cross-provider fallback map ----
 
 const FALLBACK_MODEL: Record<string, { provider: AIProvider; model: string }> = {
-  'claude-sonnet-4-20250514': { provider: 'google', model: 'gemini-2.0-flash' },
-  'claude-haiku-4-5-20251001': { provider: 'google', model: 'gemini-2.0-flash' },
-  'gpt-4o': { provider: 'google', model: 'gemini-2.0-flash' },
-  'gpt-4o-mini': { provider: 'google', model: 'gemini-2.0-flash' },
-  'gemini-3.1-pro-preview': { provider: 'google', model: 'gemini-2.0-flash' },
-  'gemini-3-flash-preview': { provider: 'google', model: 'gemini-2.0-flash' },
-  'gemini-2.0-flash': { provider: 'google', model: 'gemini-3-flash-preview' },
+  'claude-sonnet-4-20250514': { provider: 'google', model: 'gemini-2.5-flash' },
+  'claude-haiku-4-5-20251001': { provider: 'google', model: 'gemini-2.5-flash' },
+  'gpt-4o': { provider: 'google', model: 'gemini-2.5-flash' },
+  'gpt-4o-mini': { provider: 'google', model: 'gemini-2.5-flash' },
+  'gemini-3.1-pro-preview': { provider: 'google', model: 'gemini-2.5-flash' },
+  'gemini-3-flash-preview': { provider: 'google', model: 'gemini-2.5-flash' },
+  'gemini-2.5-flash': { provider: 'google', model: 'gemini-3-flash-preview' },
 }
 
 // ---- Retry / fallback helpers ----
@@ -309,7 +309,7 @@ const COST_PER_1K_TOKENS: Record<string, { input: number; output: number }> = {
   'claude-haiku-4-5-20251001': { input: 0.001, output: 0.005 },
   'gemini-3.1-pro-preview': { input: 0.002, output: 0.012 },
   'gemini-3-flash-preview': { input: 0.0005, output: 0.003 },
-  'gemini-2.0-flash': { input: 0.0001, output: 0.0004 },
+  'gemini-2.5-flash': { input: 0.0001, output: 0.0004 },
   'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
   'gpt-4o': { input: 0.0025, output: 0.01 },
 }
@@ -351,7 +351,7 @@ export const AVAILABLE_MODELS = [
     tag: 'Rapide',
   },
   {
-    id: 'gemini-2.0-flash',
+    id: 'gemini-2.5-flash',
     label: 'Gemini 2.0 Flash',
     provider: 'google' as const,
     costInput: 0.10,

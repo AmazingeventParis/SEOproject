@@ -65,7 +65,7 @@ export async function callGemini(options: {
   const start = Date.now()
   const client = await getClient()
 
-  const modelName = options.model || 'gemini-2.0-flash'
+  const modelName = options.model || 'gemini-2.5-flash'
   const model = client.getGenerativeModel({
     model: modelName,
     systemInstruction: options.system || undefined,
@@ -163,7 +163,7 @@ export async function generateWithGemini(
   const start = Date.now()
   const client = await getClient()
 
-  const modelName = options?.model || 'gemini-2.0-flash'
+  const modelName = options?.model || 'gemini-2.5-flash'
   const model = client.getGenerativeModel({
     model: modelName,
     systemInstruction: options?.system || undefined,

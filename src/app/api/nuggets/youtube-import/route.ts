@@ -95,7 +95,7 @@ async function extractNuggetsFromVideo(videoUrl: string): Promise<{ content: str
   const apiKey = await resolveGeminiKey();
   const genai = new GoogleGenerativeAI(apiKey);
   const model = genai.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash",
     generationConfig: {
       maxOutputTokens: 4096,
       temperature: 0.3,

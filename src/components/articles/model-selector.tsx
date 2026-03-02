@@ -43,8 +43,8 @@ const MODELS = [
     tagColor: "bg-cyan-100 text-cyan-700 border-cyan-200",
   },
   {
-    id: "gemini-2.0-flash",
-    label: "Gemini 2.0 Flash",
+    id: "gemini-2.5-flash",
+    label: "Gemini 2.5 Flash",
     costInput: 0.1,
     costOutput: 0.4,
     tag: "Economique",

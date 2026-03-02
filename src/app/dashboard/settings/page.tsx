@@ -16,7 +16,7 @@ const AVAILABLE_MODELS = [
   { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", tag: "Equilibre" },
   { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", tag: "Puissant" },
   { id: "gemini-3-flash-preview", label: "Gemini 3 Flash", tag: "Rapide" },
-  { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash", tag: "Economique" },
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", tag: "Economique" },
   { id: "gpt-4o-mini", label: "GPT-4o mini", tag: "Economique+" },
   { id: "gpt-4o", label: "GPT-4o", tag: "Premium" },
 ]
