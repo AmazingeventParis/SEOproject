@@ -446,8 +446,12 @@ async function executePlan(
     }
   }
 
+  // Ensure content_blocks and title_suggestions are arrays
+  if (!Array.isArray(plan.content_blocks)) plan.content_blocks = []
+  if (!Array.isArray(plan.title_suggestions)) plan.title_suggestions = []
+
   // Ensure intro block exists as first element (type paragraph, heading null, before first H2)
-  const blocks = plan.content_blocks || []
+  const blocks = plan.content_blocks
   const firstBlock = blocks[0]
   const hasIntro = firstBlock && firstBlock.type === 'paragraph' && !firstBlock.heading
   if (!hasIntro) {
