@@ -318,7 +318,7 @@ Voici des extraits authentiques de ${persona.name}. Adapte la structure du plan 
   if (serpData) {
     user += `\n\n## DONNEES SERP (Top resultats Google actuels)`
 
-    if (serpData.organic.length > 0) {
+    if (serpData.organic?.length > 0) {
       user += `\n\n### Top resultats organiques :`
       for (const result of serpData.organic.slice(0, 10)) {
         user += `\n${result.position}. "${result.title}" (${result.domain})`
@@ -326,14 +326,14 @@ Voici des extraits authentiques de ${persona.name}. Adapte la structure du plan 
       }
     }
 
-    if (serpData.peopleAlsoAsk.length > 0) {
+    if (serpData.peopleAlsoAsk?.length > 0) {
       user += `\n\n### Questions "People Also Ask" (a integrer dans la FAQ) :`
       for (const paa of serpData.peopleAlsoAsk) {
         user += `\n- ${paa.question}`
       }
     }
 
-    if (serpData.relatedSearches.length > 0) {
+    if (serpData.relatedSearches?.length > 0) {
       user += `\n\n### Recherches associees (mots-cles secondaires potentiels) :`
       for (const rs of serpData.relatedSearches) {
         user += `\n- ${rs.query}`
@@ -386,14 +386,14 @@ Marque ces entrees avec "is_money_page": true dans internal_link_targets.`
       user += `\n\n### Metriques du contenu concurrent`
       user += `\n- Nombre de mots moyen : ${competitorContent.avgWordCount}`
 
-      if (competitorContent.commonHeadings.length > 0) {
+      if (competitorContent.commonHeadings?.length > 0) {
         user += `\n\n### H2 recurrents chez les concurrents :`
         for (const heading of competitorContent.commonHeadings) {
           user += `\n- ${heading}`
         }
       }
 
-      if (competitorContent.tfidfKeywords.length > 0) {
+      if (competitorContent.tfidfKeywords?.length > 0) {
         user += `\n\n### Termes TF-IDF les plus importants (top 20) :`
         for (const term of competitorContent.tfidfKeywords.slice(0, 20)) {
           user += `\n- "${term.term}" (score: ${term.tfidf.toFixed(4)}, ${term.df} pages)`
@@ -405,10 +405,10 @@ Marque ces entrees avec "is_money_page": true dans internal_link_targets.`
       // Use selectedContentGaps if defined (user selection), otherwise fall back to all contentGaps
       const rawGaps = selectedContentGaps !== undefined
         ? selectedContentGaps
-        : semanticAnalysis.contentGaps
+        : (semanticAnalysis.contentGaps || [])
 
       // Normalize gaps: objects → descriptive strings, strings → as-is
-      const gapsToUse = rawGaps.map(g => {
+      const gapsToUse = (rawGaps || []).map(g => {
         if (typeof g === 'string') return g
         const obj = g as { label: string; type: string; description: string }
         return obj.description ? `[${obj.type}] ${obj.label} — ${obj.description}` : obj.label
@@ -422,26 +422,26 @@ IMPORTANT : les lacunes entre crochets indiquent un FORMAT SPECIFIQUE a respecte
         }
       }
 
-      if (semanticAnalysis.semanticField.length > 0) {
+      if (semanticAnalysis.semanticField?.length > 0) {
         user += `\n\n### Champ semantique a integrer :`
         user += `\n${semanticAnalysis.semanticField.join(', ')}`
       }
 
-      if (semanticAnalysis.recommendedH2Structure.length > 0) {
+      if (semanticAnalysis.recommendedH2Structure?.length > 0) {
         user += `\n\n### Structure H2 recommandee :`
         for (const h2 of semanticAnalysis.recommendedH2Structure) {
           user += `\n- ${h2}`
         }
       }
 
-      if (semanticAnalysis.keyDifferentiators.length > 0) {
+      if (semanticAnalysis.keyDifferentiators?.length > 0) {
         user += `\n\n### Angles differenciateurs :`
         for (const diff of semanticAnalysis.keyDifferentiators) {
           user += `\n- ${diff}`
         }
       }
 
-      if (semanticAnalysis.mustAnswerQuestions.length > 0) {
+      if (semanticAnalysis.mustAnswerQuestions?.length > 0) {
         user += `\n\n### Questions incontournables :`
         for (const q of semanticAnalysis.mustAnswerQuestions) {
           user += `\n- ${q}`
