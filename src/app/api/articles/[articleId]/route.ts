@@ -13,7 +13,7 @@ const contentBlockSchema = z.object({
   model_used: z.string().nullish(),
   status: z.enum(["pending", "written", "approved"]),
   writing_directive: z.string().nullish(),
-  format_hint: z.enum(["prose", "bullets", "table", "mixed"]).nullish(),
+  format_hint: z.string().nullish(),
   generate_image: z.boolean().nullish(),
   image_prompt_hint: z.string().nullish(),
   internal_link_targets: z.array(z.object({
