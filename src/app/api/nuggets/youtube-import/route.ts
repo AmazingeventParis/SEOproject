@@ -133,7 +133,7 @@ async function extractNuggetsFromVideo(videoUrl: string): Promise<{ content: str
 
 function extractJsonFromText(text: string): string {
   // Remove markdown code fences
-  let cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
 
   // Find the first { and its matching closing }
   const start = cleaned.indexOf("{");
