@@ -1,15 +1,15 @@
 // ============================================================
 // Google Gemini SDK wrapper
-// Uses @google/generative-ai for text generation
+// Uses @google/genai (new unified SDK) for text generation
 // ============================================================
 
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenAI } from '@google/genai'
 import type { AIMessage, AIResponse } from './types'
 import { getServerClient } from '@/lib/supabase/client'
 
 // ---- Client factory ----
 
-let genai: GoogleGenerativeAI | null = null
+let genai: GoogleGenAI | null = null
 let cachedKey: string | null = null
 
 async function resolveApiKey(): Promise<string> {
@@ -38,10 +38,10 @@ async function resolveApiKey(): Promise<string> {
   )
 }
 
-async function getClient(): Promise<GoogleGenerativeAI> {
+async function getClient(): Promise<GoogleGenAI> {
   const apiKey = await resolveApiKey()
   if (!genai || cachedKey !== apiKey) {
-    genai = new GoogleGenerativeAI(apiKey)
+    genai = new GoogleGenAI({ apiKey })
     cachedKey = apiKey
   }
   return genai
@@ -67,21 +67,24 @@ export async function callGemini(options: {
   const client = await getClient()
 
   const modelName = options.model || 'gemini-2.5-flash'
-  const generationConfig: Record<string, unknown> = {
+
+  // Build config
+  const config: Record<string, unknown> = {
     maxOutputTokens: options.maxTokens || 2048,
     temperature: options.temperature ?? 0.7,
   }
-  if (options.jsonMode) {
-    generationConfig.responseMimeType = 'application/json'
+  if (options.system) {
+    config.systemInstruction = options.system
   }
-  const model = client.getGenerativeModel({
-    model: modelName,
-    systemInstruction: options.system || undefined,
-    generationConfig: generationConfig as import('@google/generative-ai').GenerationConfig,
-  })
+  if (options.jsonMode) {
+    config.responseMimeType = 'application/json'
+  }
+  // Gemini 3.x: disable thinking to avoid cost/latency/signature issues
+  if (modelName.startsWith('gemini-3')) {
+    config.thinkingConfig = { thinkingLevel: 'none' }
+  }
 
-  // Convert messages to Gemini's chat format
-  // Gemini expects role: 'user' | 'model' (not 'assistant')
+  // Convert messages to chat history format
   const allMessages = options.messages
   const history = allMessages.slice(0, -1).map((m) => ({
     role: m.role === 'assistant' ? ('model' as const) : ('user' as const),
@@ -89,11 +92,14 @@ export async function callGemini(options: {
   }))
   const lastMessage = allMessages[allMessages.length - 1]
 
-  const chat = model.startChat({ history })
-  const result = await chat.sendMessage(lastMessage.content)
-  const response = result.response
-  const text = response.text()
-  const usage = response.usageMetadata
+  const chat = client.chats.create({
+    model: modelName,
+    history,
+    config,
+  })
+  const result = await chat.sendMessage({ message: lastMessage.content })
+  const text = result.text ?? ''
+  const usage = result.usageMetadata
 
   return {
     content: text,
@@ -169,19 +175,25 @@ export async function generateWithGemini(
   const client = await getClient()
 
   const modelName = options?.model || 'gemini-2.5-flash'
-  const model = client.getGenerativeModel({
-    model: modelName,
-    systemInstruction: options?.system || undefined,
-    generationConfig: {
-      maxOutputTokens: options?.maxTokens || 2048,
-      temperature: options?.temperature ?? 0.7,
-    },
-  })
 
-  const result = await model.generateContent(prompt)
-  const response = result.response
-  const text = response.text()
-  const usage = response.usageMetadata
+  const config: Record<string, unknown> = {
+    maxOutputTokens: options?.maxTokens || 2048,
+    temperature: options?.temperature ?? 0.7,
+  }
+  if (options?.system) {
+    config.systemInstruction = options.system
+  }
+  if (modelName.startsWith('gemini-3')) {
+    config.thinkingConfig = { thinkingLevel: 'none' }
+  }
+
+  const result = await client.models.generateContent({
+    model: modelName,
+    contents: prompt,
+    config,
+  })
+  const text = result.text ?? ''
+  const usage = result.usageMetadata
 
   return {
     content: text,

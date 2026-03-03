@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { YoutubeTranscript } from "youtube-transcript";
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { routeAI } from "@/lib/ai/router";
 import { getServerClient } from "@/lib/supabase/client";
 
@@ -100,27 +100,27 @@ const SAFETY_SETTINGS = [
 
 async function extractNuggetsFromVideo(videoUrl: string): Promise<{ content: string; tags: string[] }[]> {
   const apiKey = await resolveGeminiKey();
-  const genai = new GoogleGenerativeAI(apiKey);
-  const model = genai.getGenerativeModel({
+  const client = new GoogleGenAI({ apiKey });
+
+  const result = await client.models.generateContent({
     model: "gemini-2.5-flash",
-    generationConfig: {
+    contents: [
+      {
+        fileData: {
+          fileUri: videoUrl,
+          mimeType: "video/*",
+        },
+      },
+      { text: EXTRACT_PROMPT },
+    ],
+    config: {
       maxOutputTokens: 4096,
       temperature: 0.3,
+      safetySettings: SAFETY_SETTINGS,
     },
-    safetySettings: SAFETY_SETTINGS,
   });
 
-  const result = await model.generateContent([
-    {
-      fileData: {
-        fileUri: videoUrl,
-        mimeType: "video/*",
-      },
-    },
-    { text: EXTRACT_PROMPT },
-  ]);
-
-  const text = result.response.text();
+  const text = result.text ?? "";
   const jsonStr = extractJsonFromText(text);
   const parsed = JSON.parse(jsonStr);
 

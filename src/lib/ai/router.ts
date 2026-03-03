@@ -30,7 +30,7 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
   },
   write_block: {
     provider: 'google',
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.1-pro-preview',
     maxTokens: 8192,
     temperature: 0.8,
   },
@@ -66,7 +66,7 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
   },
   analyze_serp: {
     provider: 'google',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.1-pro-preview',
     maxTokens: 2048,
     temperature: 0.3,
     jsonMode: true,
@@ -108,7 +108,7 @@ const FALLBACK_MODEL: Record<string, { provider: AIProvider; model: string }> = 
   'claude-haiku-4-5-20251001': { provider: 'google', model: 'gemini-2.5-flash' },
   'gpt-4o': { provider: 'google', model: 'gemini-2.5-flash' },
   'gpt-4o-mini': { provider: 'google', model: 'gemini-2.5-flash' },
-  'gemini-3.1-pro-preview': { provider: 'google', model: 'gemini-2.5-flash' },
+  'gemini-3.1-pro-preview': { provider: 'google', model: 'gemini-3-flash-preview' },
   'gemini-3-flash-preview': { provider: 'google', model: 'gemini-2.5-flash' },
   'gemini-2.5-flash': { provider: 'google', model: 'gemini-3-flash-preview' },
 }
@@ -212,12 +212,60 @@ async function callWithRetryAndFallback(
   }
 }
 
+// ---- Tasks forced on gemini-3.1-pro-preview WITHOUT fallback ----
+// These tasks must fail loudly so we can diagnose 3.1 errors.
+const NO_FALLBACK_TASKS = new Set<AITask>(['analyze_serp', 'plan_article'])
+
+/**
+ * Call provider with retries only (no cross-provider fallback).
+ * Logs the full raw error on failure for debugging.
+ */
+async function callWithRetryNoFallback(
+  task: AITask,
+  config: ModelConfig,
+  messages: AIMessage[],
+  system?: string,
+): Promise<AIResponse> {
+  const retryDelays = [1000, 2000]
+
+  // --- Attempt 1 ---
+  try {
+    return await callProvider(config, messages, system)
+  } catch (err) {
+    console.error(
+      `[ai-router] [${task}] ${config.model} ERREUR BRUTE (tentative 1):`,
+      err,
+    )
+    if (!isRetryableError(err)) throw err
+  }
+
+  // --- Attempts 2-3: retry same model ---
+  for (let i = 0; i < retryDelays.length; i++) {
+    await sleep(retryDelays[i])
+    try {
+      return await callProvider(config, messages, system)
+    } catch (err) {
+      console.error(
+        `[ai-router] [${task}] ${config.model} ERREUR BRUTE (tentative ${i + 2}):`,
+        err,
+      )
+      if (!isRetryableError(err)) throw err
+    }
+  }
+
+  // No fallback — throw
+  throw new Error(
+    `[ai-router] [${task}] ${config.model} a echoue apres 3 tentatives sans fallback`
+  )
+}
+
 // ---- Main routing functions ----
 
 /**
  * Route an AI task to the appropriate provider and model.
- * Automatically retries once then falls back to an alternate provider
- * on transient errors (429, 503, 529).
+ * For analyze_serp / plan_article / write_block: forced on gemini-3.1-pro-preview
+ * with NO fallback — errors are logged raw for debugging.
+ * Other tasks: retry + cross-provider fallback as before.
  *
  * @param task     The task type (determines which model to use)
  * @param messages The conversation messages
@@ -230,6 +278,9 @@ export async function routeAI(
   system?: string
 ): Promise<AIResponse> {
   const config = TASK_ROUTING[task]
+  if (NO_FALLBACK_TASKS.has(task)) {
+    return callWithRetryNoFallback(task, config, messages, system)
+  }
   return callWithRetryAndFallback(config, messages, system)
 }
 

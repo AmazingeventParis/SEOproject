@@ -47,6 +47,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
   const lastEmittedHtml = useRef<string>("");
   const [tableDialogOpen, setTableDialogOpen] = useState(false);
   const [selectedText, setSelectedText] = useState("");
+  const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -104,6 +105,35 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
     setSelectedText(text);
     setTableDialogOpen(true);
   }, [editor]);
+
+  // Close context menu on click anywhere or Escape
+  useEffect(() => {
+    if (!contextMenuPos) return;
+    const handleClose = () => setContextMenuPos(null);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setContextMenuPos(null);
+    };
+    document.addEventListener("mousedown", handleClose);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClose);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [contextMenuPos]);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (!editor) return;
+      const { from, to } = editor.state.selection;
+      if (from === to) return; // No selection → native menu
+      e.preventDefault();
+      // Clamp position so menu stays on screen
+      const x = Math.min(e.clientX, window.innerWidth - 220);
+      const y = Math.min(e.clientY, window.innerHeight - 50);
+      setContextMenuPos({ x, y });
+    },
+    [editor]
+  );
 
   const handleTableInsert = useCallback(
     (tableHtml: string) => {
@@ -230,10 +260,42 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
       </div>
 
       {/* Editor content */}
-      <EditorContent
-        editor={editor}
-        className="prose prose-sm max-w-none p-3 min-h-[200px] focus-within:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[180px]"
-      />
+      <div onContextMenu={handleContextMenu}>
+        <EditorContent
+          editor={editor}
+          className="prose prose-sm max-w-none p-3 min-h-[200px] focus-within:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[180px]"
+        />
+      </div>
+
+      {/* Context menu */}
+      {contextMenuPos && (
+        <div
+          className="fixed z-50 min-w-[180px] bg-popover text-popover-foreground border rounded-lg shadow-lg p-1 animate-in fade-in duration-150"
+          style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <button
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
+            onClick={() => {
+              setContextMenuPos(null);
+              editor.chain().focus().toggleBlockquote().run();
+            }}
+          >
+            <Quote className="h-4 w-4" />
+            Mettre en citation
+          </button>
+          <button
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
+            onClick={() => {
+              setContextMenuPos(null);
+              openTableBuilder();
+            }}
+          >
+            <Table2 className="h-4 w-4" />
+            Convertir en tableau
+          </button>
+        </div>
+      )}
 
       {/* Table builder dialog */}
       <TableBuilderDialog
