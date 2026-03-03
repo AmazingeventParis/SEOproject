@@ -21,6 +21,7 @@ import {
   Table2,
   Undo,
   Redo,
+  Loader2,
 } from "lucide-react";
 import { TableBuilderDialog } from "@/components/table-builder-dialog";
 
@@ -48,6 +49,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
   const [tableDialogOpen, setTableDialogOpen] = useState(false);
   const [selectedText, setSelectedText] = useState("");
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const [generatingTable, setGeneratingTable] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -143,10 +145,34 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
     [editor]
   );
 
+  const generateTableFromSelection = useCallback(async () => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    const text = editor.state.doc.textBetween(from, to, "\n");
+    if (!text.trim()) return;
+
+    setGeneratingTable(true);
+    try {
+      const res = await fetch("/api/ai/generate-table", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur");
+      editor.chain().focus().deleteSelection().insertContent(data.html).run();
+    } catch (err) {
+      console.error("[generate-table]", err);
+      alert("Erreur lors de la generation du tableau : " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setGeneratingTable(false);
+    }
+  }, [editor]);
+
   if (!editor) return null;
 
   return (
-    <div className="border rounded-md overflow-hidden">
+    <div className="border rounded-md overflow-hidden relative">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-0.5 border-b bg-muted/50 p-1">
         <Button
@@ -267,6 +293,16 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
         />
       </div>
 
+      {/* Loading overlay */}
+      {generatingTable && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/60 rounded-md">
+          <div className="flex items-center gap-2 bg-popover border rounded-lg px-4 py-2 shadow-lg">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Generation du tableau...</span>
+          </div>
+        </div>
+      )}
+
       {/* Context menu */}
       {contextMenuPos && (
         <div
@@ -288,7 +324,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
             onClick={() => {
               setContextMenuPos(null);
-              openTableBuilder();
+              generateTableFromSelection();
             }}
           >
             <Table2 className="h-4 w-4" />

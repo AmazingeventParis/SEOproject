@@ -99,6 +99,12 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     temperature: 0.4,
     jsonMode: true,
   },
+  generate_table: {
+    provider: 'google',
+    model: 'gemini-3-flash-preview',
+    maxTokens: 2048,
+    temperature: 0.3,
+  },
 }
 
 // ---- Cross-provider fallback map ----

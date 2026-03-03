@@ -17,6 +17,7 @@ export type AITask =
   | 'evaluate_authority_links'   // Evaluate authority link candidates -> Gemini Flash
   | 'extract_nuggets'            // Extract knowledge nuggets from transcript -> Gemini Flash
   | 'generate_backlink_sentences' // Generate transition sentences for reverse backlinks -> Gemini Flash
+  | 'generate_table'              // Convert selected text into a responsive HTML table -> Gemini Flash
 
 export interface AIMessage {
   role: 'user' | 'assistant' | 'system'
