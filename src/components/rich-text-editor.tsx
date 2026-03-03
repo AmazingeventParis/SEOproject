@@ -272,7 +272,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
         <div
           className="fixed z-50 min-w-[180px] bg-popover text-popover-foreground border rounded-lg shadow-lg p-1 animate-in fade-in duration-150"
           style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
-          onMouseDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
         >
           <button
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"

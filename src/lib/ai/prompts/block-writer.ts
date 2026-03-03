@@ -195,7 +195,8 @@ Cette strategie PRIME sur les regles generales en cas de conflit.
 - Le nombre de mots indique est un OBJECTIF MINIMUM, pas une limite stricte. Ecris autant que necessaire pour couvrir le sujet en profondeur. Ne t'arrete PAS artificiellement pour respecter un chiffre exact.
 - N'invente PAS de statistiques ou de chiffres - sois honnete
 - Pas d'introduction du style "Voyons maintenant..." ou "Dans cette section..."
-- Va droit au sujet`
+- Va droit au sujet
+- PERTINENCE ABSOLUE : chaque phrase doit etre directement liee au mot-cle principal et au titre de l'article. N'aborde JAMAIS de sujet connexe ou tangentiel qui n'est pas explicitement demande dans le titre ou la directive d'ecriture. Si un concept semble "voisin" mais n'est pas le sujet, NE L'INCLUS PAS.`
 
   // ---- User prompt ----
   let user = `## MISSION
