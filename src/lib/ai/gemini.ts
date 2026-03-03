@@ -81,7 +81,7 @@ export async function callGemini(options: {
   }
   // Gemini 3.x: disable thinking to avoid cost/latency/signature issues
   if (modelName.startsWith('gemini-3')) {
-    config.thinkingConfig = { thinkingLevel: 'none' }
+    config.thinkingConfig = { thinkingBudget: 0 }
   }
 
   // Convert messages to chat history format
@@ -184,7 +184,7 @@ export async function generateWithGemini(
     config.systemInstruction = options.system
   }
   if (modelName.startsWith('gemini-3')) {
-    config.thinkingConfig = { thinkingLevel: 'none' }
+    config.thinkingConfig = { thinkingBudget: 0 }
   }
 
   const result = await client.models.generateContent({
