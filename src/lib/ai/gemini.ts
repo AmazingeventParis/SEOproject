@@ -79,9 +79,15 @@ export async function callGemini(options: {
   if (options.jsonMode) {
     config.responseMimeType = 'application/json'
   }
-  // Gemini 3.x: disable thinking to avoid cost/latency/signature issues
+  // Gemini 3.x thinking config:
+  // - JSON mode: disable thinking (thought signatures break JSON parsing)
+  // - Text mode: enable thinking at low level (better quality writing)
   if (modelName.startsWith('gemini-3')) {
-    config.thinkingConfig = { thinkingBudget: 0 }
+    if (options.jsonMode) {
+      config.thinkingConfig = { thinkingBudget: 0 }
+    } else {
+      config.thinkingConfig = { thinkingBudget: 2048 }
+    }
   }
 
   // Convert messages to chat history format
@@ -183,8 +189,9 @@ export async function generateWithGemini(
   if (options?.system) {
     config.systemInstruction = options.system
   }
+  // Single-turn: enable low thinking for better quality
   if (modelName.startsWith('gemini-3')) {
-    config.thinkingConfig = { thinkingBudget: 0 }
+    config.thinkingConfig = { thinkingBudget: 2048 }
   }
 
   const result = await client.models.generateContent({
