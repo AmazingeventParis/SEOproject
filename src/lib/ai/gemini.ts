@@ -79,14 +79,14 @@ export async function callGemini(options: {
   if (options.jsonMode) {
     config.responseMimeType = 'application/json'
   }
-  // Gemini 3.x thinking config:
-  // - JSON mode: disable thinking (thought signatures break JSON parsing)
-  // - Text mode: enable thinking at low level (better quality writing)
+  // Gemini 3.x thinking config (uses thinking_level, not legacy thinkingBudget):
+  // - JSON mode: LOW thinking (cannot disable on 3.1 Pro)
+  // - Text mode: MEDIUM thinking for better quality writing
   if (modelName.startsWith('gemini-3')) {
     if (options.jsonMode) {
-      config.thinkingConfig = { thinkingBudget: 0 }
+      config.thinkingConfig = { thinkingLevel: 'LOW' }
     } else {
-      config.thinkingConfig = { thinkingBudget: 2048 }
+      config.thinkingConfig = { thinkingLevel: 'MEDIUM' }
     }
   }
 
@@ -189,9 +189,9 @@ export async function generateWithGemini(
   if (options?.system) {
     config.systemInstruction = options.system
   }
-  // Single-turn: enable low thinking for better quality
+  // Single-turn: enable medium thinking for better quality
   if (modelName.startsWith('gemini-3')) {
-    config.thinkingConfig = { thinkingBudget: 2048 }
+    config.thinkingConfig = { thinkingLevel: 'MEDIUM' }
   }
 
   const result = await client.models.generateContent({
