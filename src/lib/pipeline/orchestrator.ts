@@ -22,6 +22,8 @@ import { generateSeoFilename, generateAltText, generateImageTitle } from '@/lib/
 import { generateArticleSchema, generateFAQSchema, generateBreadcrumbSchema, generateHowToSchema, generateReviewSchema, assembleJsonLd } from '@/lib/seo/json-ld'
 import { generateInternalLinks, injectLinksIntoHtml } from '@/lib/seo/internal-links'
 import { createPost, updatePost, uploadMedia, findBestCategory, getAllPublishedPosts } from '@/lib/wordpress/client'
+import { analyzeKeywordDensity } from '@/lib/seo/keyword-analysis'
+import { buildCritiquePrompt, validateCritiqueResult } from '@/lib/ai/prompts/critique'
 
 /**
  * Extract and parse JSON from AI response text.
@@ -683,6 +685,16 @@ async function executeWriteBlock(
     .some(b => b.content_html?.includes(selectedAuth?.url || '___'))
   const shouldInjectAuth = selectedAuth && block.type === 'h2' && !alreadyPlaced
 
+  // Get the content of the immediately preceding written block for coherence
+  let previousBlockContent: string | undefined
+  for (let i = blockIndex - 1; i >= 0; i--) {
+    const prev = contentBlocks[i]
+    if (prev.content_html && (prev.status === 'written' || prev.status === 'approved')) {
+      previousBlockContent = prev.content_html
+      break
+    }
+  }
+
   const prompt = buildBlockWriterPrompt({
     keyword: article.keyword,
     searchIntent: article.search_intent,
@@ -696,6 +708,7 @@ async function executeWriteBlock(
     },
     nuggets: (nuggets || []).map((n: { id: string; content: string; tags: string[] }) => ({ id: n.id, content: n.content, tags: n.tags })),
     previousHeadings,
+    previousBlockContent,
     articleTitle: article.title || article.keyword,
     internalLinkTargets,
     siteDomain: siteDomain || undefined,
@@ -807,6 +820,7 @@ async function executeMedia(
   }
 
   const selectedList = Array.from(selectedIndices)
+  let sectionImageIdx = 0
   for (const i of selectedList) {
     const block = updatedBlocks[i]
     const isImageBlock = block.type === 'image' && !(block.content_html && block.content_html.includes('<img'))
@@ -846,8 +860,9 @@ async function executeMedia(
       const imgBuffer = await fetch(imageResult.url).then(r => r.arrayBuffer())
       const optimized = await optimizeForWeb(Buffer.from(imgBuffer))
       const filename = generateSeoFilename(article.keyword, block.heading || null, 'section')
-      const altText = generateAltText(article.keyword, block.heading || null, 'section', block.image_prompt_hint)
+      const altText = generateAltText(article.keyword, block.heading || null, 'section', block.image_prompt_hint, sectionImageIdx)
       const imgTitle = generateImageTitle(article.keyword, block.heading || null, 'section')
+      sectionImageIdx++
 
       const wpMedia = await uploadMedia(article.site_id, {
         buffer: optimized.buffer,
@@ -1098,11 +1113,199 @@ async function executeSeo(
   const blocksWithNuggets = contentBlocks.filter(b => b.nugget_ids && b.nugget_ids.length > 0).length
   const nuggetDensity = contentBlocks.length > 0 ? blocksWithNuggets / contentBlocks.length : 0
 
-  // 5. Update article
+  // 5. SEO Audit — sub-step A: programmatic heading verification
+  const headingIssues: string[] = []
+  const headingBlocks = updatedBlocks.filter(
+    (b) => b.type === 'h2' || b.type === 'h3' || b.type === 'h4'
+  )
+  const h2Blocks = headingBlocks.filter((b) => b.type === 'h2')
+
+  // Check heading lengths
+  for (const block of headingBlocks) {
+    if (block.heading && block.heading.length > 80) {
+      headingIssues.push(
+        `${block.type.toUpperCase()} trop long (${block.heading.length} chars) : "${block.heading.slice(0, 60)}…"`
+      )
+    }
+  }
+
+  // Check keyword in at least one H2
+  const kwWords = article.keyword.toLowerCase().split(/\s+/).filter((w) => w.length >= 3)
+  const hasKeywordInH2 = h2Blocks.some((b) => {
+    if (!b.heading) return false
+    const headingLower = b.heading.toLowerCase()
+    return kwWords.filter((w) => headingLower.includes(w)).length >= Math.ceil(kwWords.length * 0.5)
+  })
+  if (!hasKeywordInH2 && h2Blocks.length > 0) {
+    headingIssues.push(
+      `Aucun H2 ne contient le mot-cle principal "${article.keyword}" (au moins un H2 devrait l'inclure)`
+    )
+  }
+
+  // Check heading hierarchy (no H3 without H2 parent, no H4 without H3 parent)
+  let lastH2Seen = false
+  let lastH3Seen = false
+  for (const block of updatedBlocks) {
+    if (block.type === 'h2') {
+      lastH2Seen = true
+      lastH3Seen = false
+    } else if (block.type === 'h3') {
+      if (!lastH2Seen) {
+        headingIssues.push(
+          `H3 "${block.heading?.slice(0, 50) || '(sans titre)'}" apparait avant tout H2 (hierarchie cassee)`
+        )
+      }
+      lastH3Seen = true
+    } else if (block.type === 'h4') {
+      if (!lastH3Seen) {
+        headingIssues.push(
+          `H4 "${block.heading?.slice(0, 50) || '(sans titre)'}" apparait sans H3 parent (hierarchie cassee)`
+        )
+      }
+    }
+  }
+
+  // Check H2 count
+  if (h2Blocks.length < 3) {
+    headingIssues.push(`Seulement ${h2Blocks.length} H2 detecte(s) — minimum recommande : 3`)
+  } else if (h2Blocks.length > 8) {
+    headingIssues.push(`${h2Blocks.length} H2 detectes — maximum recommande : 8 (risque de dilution)`)
+  }
+
+  // 5b. SEO Audit — sub-step B: keyword density analysis
+  const writtenHtml = updatedBlocks
+    .filter((b) => b.content_html && b.status !== 'pending')
+    .map((b) => b.content_html)
+    .join(' ')
+  const keywordDensityResult = analyzeKeywordDensity(writtenHtml, article.keyword)
+
+  // Check keyword in first 100 words of intro
+  const introBlock = updatedBlocks.find(
+    (b) => b.type === 'paragraph' && !b.heading && b.content_html && b.status !== 'pending'
+  )
+  let keywordInIntro = false
+  if (introBlock) {
+    const introText = introBlock.content_html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+    const first100Words = introText.split(/\s+/).slice(0, 100).join(' ').toLowerCase()
+    keywordInIntro = first100Words.includes(article.keyword.toLowerCase())
+  }
+
+  // 5c. SEO Audit — sub-step C: AI critique
+  let critiqueResult = null
+  try {
+    const fullContentHtml = updatedBlocks
+      .filter((b) => b.content_html && b.status !== 'pending')
+      .map((b) => {
+        if (b.heading) return `<${b.type === 'h2' ? 'h2' : b.type === 'h3' ? 'h3' : b.type === 'h4' ? 'h4' : 'p'}>${b.heading}</${b.type === 'h2' ? 'h2' : b.type === 'h3' ? 'h3' : b.type === 'h4' ? 'h4' : 'p'}>\n${b.content_html}`
+        return b.content_html
+      })
+      .join('\n')
+
+    if (fullContentHtml.length > 500 && persona) {
+      const critiquePrompts = buildCritiquePrompt({
+        keyword: article.keyword,
+        searchIntent: article.search_intent || undefined,
+        title: article.title || article.keyword,
+        contentHtml: fullContentHtml,
+        persona: {
+          name: persona.name,
+          role: persona.role,
+          tone_description: persona.tone_description,
+          bio: persona.bio,
+        },
+      })
+
+      const critiqueResponse = await routeAI('critique', [
+        { role: 'user', content: critiquePrompts.user },
+      ], critiquePrompts.system)
+
+      const parsed = extractJSON<Record<string, unknown>>(critiqueResponse.content)
+      critiqueResult = validateCritiqueResult(parsed)
+    }
+  } catch (err) {
+    console.warn('[seo-audit] Critique AI failed, skipping:', err)
+  }
+
+  // 5d. SEO Audit — sub-step D: auto-correct problematic headings
+  const headingCorrections: { before: string; after: string; blockIndex: number }[] = []
+  const faultyHeadings = headingBlocks.filter((b) => {
+    if (!b.heading) return false
+    if (b.heading.length > 80) return true
+    // Also fix missing keyword in H2 if no H2 has it
+    if (b.type === 'h2' && !hasKeywordInH2) return true
+    return false
+  })
+
+  if (faultyHeadings.length > 0) {
+    try {
+      const headingFixPrompt = [
+        `Corrige les titres (headings) suivants d'un article SEO sur "${article.keyword}".`,
+        ``,
+        `Regles :`,
+        `- Maximum 70 caracteres par heading`,
+        `- Au moins un H2 doit contenir le mot-cle "${article.keyword}" naturellement`,
+        `- Garde le sens et l'intention du heading original`,
+        `- Pas de guillemets francais, pas de tirets cadratins`,
+        `- Reponds UNIQUEMENT en JSON : [{ "original": "...", "corrected": "..." }, ...]`,
+        ``,
+        `Headings a corriger :`,
+        ...faultyHeadings.map(
+          (b) => `- [${b.type.toUpperCase()}] "${b.heading}"`
+        ),
+      ].join('\n')
+
+      const fixResponse = await routeAI('generate_title', [
+        { role: 'user', content: headingFixPrompt },
+      ])
+
+      const fixes = extractJSON<{ original: string; corrected: string }[]>(fixResponse.content)
+      if (Array.isArray(fixes)) {
+        for (const fix of fixes) {
+          const blockIdx = updatedBlocks.findIndex(
+            (b) => b.heading === fix.original
+          )
+          if (blockIdx !== -1 && fix.corrected && fix.corrected !== fix.original) {
+            headingCorrections.push({
+              before: fix.original,
+              after: fix.corrected,
+              blockIndex: blockIdx,
+            })
+            updatedBlocks[blockIdx] = {
+              ...updatedBlocks[blockIdx],
+              heading: fix.corrected,
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[seo-audit] Heading correction failed, skipping:', err)
+    }
+  }
+
+  // Build seo_audit object
+  const seoAudit = {
+    auditedAt: new Date().toISOString(),
+    headings: {
+      issues: headingIssues,
+      corrections: headingCorrections.map((c) => ({ before: c.before, after: c.after })),
+    },
+    keywordDensity: {
+      keyword: keywordDensityResult.keyword,
+      count: keywordDensityResult.count,
+      density: keywordDensityResult.density,
+      status: keywordDensityResult.status,
+    },
+    keywordInIntro,
+    ...(critiqueResult ? { critique: critiqueResult } : {}),
+  }
+
+  // 6. Update article
+  const existingSerpData = (article.serp_data || {}) as Record<string, unknown>
   const updatePayload: Record<string, unknown> = {
     json_ld: jsonLd,
     content_blocks: updatedBlocks,
     nugget_density_score: nuggetDensity,
+    serp_data: { ...existingSerpData, seo_audit: seoAudit },
   }
   if (metaRegenerated) {
     updatePayload.meta_description = metaDesc
@@ -1121,6 +1324,13 @@ async function executeSeo(
       linksInjected,
       metaDescription: { length: metaDescLength, ok: metaDescOk, regenerated: metaRegenerated },
       nuggetDensity: Math.round(nuggetDensity * 100),
+      seoAudit: {
+        headingIssues: headingIssues.length,
+        headingCorrections: headingCorrections.length,
+        keywordDensity: keywordDensityResult.density,
+        keywordInIntro,
+        critiqueScore: critiqueResult?.score ?? null,
+      },
     },
   }
 }

@@ -33,6 +33,7 @@ interface BlockWriterParams {
   }
   nuggets: { id: string; content: string; tags: string[] }[]
   previousHeadings: string[]
+  previousBlockContent?: string
   articleTitle: string
   internalLinkTargets?: { target_slug: string; target_title: string; suggested_anchor_context: string; is_money_page?: boolean }[]
   siteDomain?: string
@@ -54,7 +55,7 @@ interface BlockWriterPrompt {
 export function buildBlockWriterPrompt(
   params: BlockWriterParams
 ): BlockWriterPrompt {
-  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, articleTitle, internalLinkTargets, siteDomain, authorityLink, siteThemeColor } = params
+  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleTitle, internalLinkTargets, siteDomain, authorityLink, siteThemeColor } = params
 
   // ---- System prompt ----
   const system = `Tu es un redacteur web expert en SEO, specialise dans la creation de contenu de haute qualite optimise pour le referencement naturel.
@@ -196,7 +197,8 @@ Cette strategie PRIME sur les regles generales en cas de conflit.
 - N'invente PAS de statistiques ou de chiffres - sois honnete
 - Pas d'introduction du style "Voyons maintenant..." ou "Dans cette section..."
 - Va droit au sujet
-- PERTINENCE ABSOLUE : chaque phrase doit etre directement liee au mot-cle principal et au titre de l'article. N'aborde JAMAIS de sujet connexe ou tangentiel qui n'est pas explicitement demande dans le titre ou la directive d'ecriture. Si un concept semble "voisin" mais n'est pas le sujet, NE L'INCLUS PAS.`
+- PERTINENCE ABSOLUE : chaque phrase doit etre directement liee au mot-cle principal et au titre de l'article. N'aborde JAMAIS de sujet connexe ou tangentiel qui n'est pas explicitement demande dans le titre ou la directive d'ecriture. Si un concept semble "voisin" mais n'est pas le sujet, NE L'INCLUS PAS.
+- TABLEAUX DANS LES SECTIONS LONGUES : si le bloc depasse 250 mots, tu DOIS inclure au moins 1 tableau HTML responsive pour synthetiser des donnees cles, comparer des options, ou recapituler des points essentiels. Le tableau DOIT utiliser la structure <div class="table-container"><table>...</table></div>. Cela facilite la lecture et attire l'oeil du lecteur sur les informations importantes. Le tableau ne remplace pas le texte — il le complete en condensant les points cles visuellement.`
 
   // ---- User prompt ----
   let user = `## MISSION
@@ -219,6 +221,21 @@ L'article contient deja les sections suivantes avant ce bloc :`
     }
   } else {
     user += `\n(Ce bloc est le premier de l'article)`
+  }
+
+  // Inject the content of the immediately preceding block for coherence
+  if (previousBlockContent) {
+    // Strip HTML tags and truncate to avoid bloating the prompt
+    const plainPrevious = previousBlockContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 800)
+    user += `\n\n## CONTENU DE LA SECTION PRECEDENTE (pour assurer la coherence)
+Voici les derniers paragraphes ecrits juste avant ce bloc :
+---
+${plainPrevious}
+---
+REGLES DE COHERENCE :
+- NE REPETE PAS les idees, exemples, chiffres ou formulations deja presents ci-dessus
+- Enchaine NATURELLEMENT : le debut de ton bloc doit couler comme une suite logique
+- Si la section precedente a mentionne un concept, approfondis-le ou passe a l'aspect suivant — jamais de redite`
   }
 
   // Add nuggets to integrate

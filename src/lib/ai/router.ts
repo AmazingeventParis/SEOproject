@@ -115,7 +115,7 @@ const FALLBACK_MODEL: Record<string, { provider: AIProvider; model: string }> = 
   'gpt-4o': { provider: 'google', model: 'gemini-2.5-flash' },
   'gpt-4o-mini': { provider: 'google', model: 'gemini-2.5-flash' },
   'gemini-3.1-pro-preview': { provider: 'google', model: 'gemini-3-flash-preview' },
-  'gemini-3-flash-preview': { provider: 'google', model: 'gemini-2.5-flash' },
+  'gemini-3-flash-preview': { provider: 'google', model: 'gemini-3.1-pro-preview' },
   'gemini-2.5-flash': { provider: 'google', model: 'gemini-3-flash-preview' },
 }
 
