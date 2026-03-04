@@ -98,6 +98,7 @@ const ROLLBACK_MAP: Partial<Record<ArticleStatus, ArticleStatus>> = {
   seo_check: 'media',
   reviewing: 'media',
   published: 'reviewing',
+  refresh_needed: 'published',
 }
 
 /**

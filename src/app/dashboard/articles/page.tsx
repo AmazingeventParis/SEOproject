@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Loader2, Plus, Search } from "lucide-react";
+import { Download, FileText, Loader2, Plus, Search } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -213,6 +213,12 @@ export default function ArticlesPage() {
                       <span className="text-xs text-muted-foreground">
                         {article.seo_personas.name}
                       </span>
+                    )}
+                    {article.wp_post_id && !article.serp_data && (
+                      <Badge variant="outline" className="text-xs bg-indigo-50 text-indigo-700 border-indigo-200 gap-1">
+                        <Download className="h-3 w-3" />
+                        Importe
+                      </Badge>
                     )}
                   </div>
 

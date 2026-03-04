@@ -77,40 +77,66 @@ export function generateSeoFilename(
 }
 
 /**
- * Generate descriptive alt text for an image.
+ * French alt text templates indexed by image position/context.
+ * Each template includes the keyword naturally for SEO.
+ * Variety avoids repetitive alt patterns across an article.
+ */
+const ALT_HERO_TEMPLATES = [
+  (kw: string) => `Illustration principale sur ${kw}`,
+  (kw: string) => `Guide complet : ${kw}`,
+  (kw: string) => `Tout savoir sur ${kw}`,
+];
+
+const ALT_SECTION_TEMPLATES = [
+  (kw: string, h: string) => `${h} en rapport avec ${kw}`,
+  (kw: string, h: string) => `${h} : conseils sur ${kw}`,
+  (kw: string, h: string) => `${h} pour mieux comprendre ${kw}`,
+  (kw: string, h: string) => `${h} et ${kw} expliques en detail`,
+  (kw: string, h: string) => `Illustration de ${h.toLowerCase()} dans le contexte de ${kw}`,
+];
+
+const ALT_SECTION_NO_HEADING_TEMPLATES = [
+  (kw: string) => `Illustration detaillee sur ${kw}`,
+  (kw: string) => `Exemple concret en lien avec ${kw}`,
+  (kw: string) => `Visuel explicatif sur ${kw}`,
+];
+
+/**
+ * Generate descriptive alt text for an image — always in French, SEO-optimized.
  *
  * Strategy:
- * - Uses the image_prompt_hint (scene description) when available
- * - Falls back to heading + keyword
- * - Always includes the keyword naturally
- * - Describes the visual scene, not just the topic
+ * - Always in French (image_prompt_hint is English for the AI image generator, never used in alt)
+ * - Includes the keyword naturally for SEO
+ * - Uses heading context for section images
+ * - Varied templates to avoid repetitive patterns
  * - Max 125 characters
  */
 export function generateAltText(
   keyword: string,
   heading: string | null,
   imageType: "hero" | "section",
-  imagePromptHint?: string | null
+  imagePromptHint?: string | null,
+  sectionIndex?: number
 ): string {
+  const kw = keyword.toLowerCase();
   let alt: string;
 
-  if (imagePromptHint) {
-    // Use the scene description from the plan, ensure keyword is present
-    const hint = imagePromptHint
-      .replace(/^editorial photo(graph)?\s*(showing|of|illustrating)?\s*/i, "")
-      .replace(/\.$/, "");
-    const keywordLower = keyword.toLowerCase();
-    const hintLower = hint.toLowerCase();
-
-    if (hintLower.includes(keywordLower) || hintLower.includes(keywordLower.split(" ")[0])) {
-      alt = capitalize(hint);
+  if (imageType === "hero") {
+    const idx = (sectionIndex || 0) % ALT_HERO_TEMPLATES.length;
+    alt = ALT_HERO_TEMPLATES[idx](kw);
+  } else if (heading) {
+    // Clean heading: remove trailing punctuation and normalize
+    const cleanHeading = heading.replace(/[?!.:]+$/, "").trim();
+    const idx = (sectionIndex || 0) % ALT_SECTION_TEMPLATES.length;
+    // If heading already contains the keyword, use a simpler format
+    if (cleanHeading.toLowerCase().includes(kw)) {
+      alt = `${capitalize(cleanHeading)} : illustration et conseils`;
     } else {
-      alt = `${capitalize(hint)} - ${keyword}`;
+      alt = ALT_SECTION_TEMPLATES[idx](kw, capitalize(cleanHeading));
     }
-  } else if (heading && imageType === "section") {
-    alt = `${heading} : photo illustrant ${keyword.toLowerCase()}`;
   } else {
-    alt = `Photo illustrant ${keyword.toLowerCase()}`;
+    const idx = (sectionIndex || 0) % ALT_SECTION_NO_HEADING_TEMPLATES.length;
+    alt = ALT_SECTION_NO_HEADING_TEMPLATES[idx](kw);
   }
 
   // Truncate at last space within limit

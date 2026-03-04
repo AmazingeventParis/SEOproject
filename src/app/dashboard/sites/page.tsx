@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { getBrowserClient } from "@/lib/supabase/client";
 import type { Site } from "@/lib/supabase/types";
 import { SiteDialog } from "@/components/sites/site-dialog";
+import { WpImportDialog } from "@/components/sites/wp-import-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -15,13 +16,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Globe, Pencil, Plus, Trash2 } from "lucide-react";
+import { Calendar, Download, Globe, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 
 export default function SitesPage() {
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSite, setEditingSite] = useState<Site | undefined>(undefined);
+  const [importSiteId, setImportSiteId] = useState<string | null>(null);
+  const [yearUpdateLoading, setYearUpdateLoading] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchSites = useCallback(async () => {
@@ -80,6 +83,39 @@ export default function SitesPage() {
         title: "Erreur",
         description: "Impossible de supprimer le site.",
       });
+    }
+  }
+
+  async function handleYearUpdate(site: Site) {
+    const confirmed = window.confirm(
+      `Mettre a jour les annees de tous les articles publies du site "${site.name}" vers ${new Date().getFullYear()} ?`
+    );
+    if (!confirmed) return;
+
+    setYearUpdateLoading(site.id);
+    try {
+      const res = await fetch(`/api/sites/${site.id}/year-update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pushToWp: false }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Erreur");
+      }
+      const data = await res.json();
+      toast({
+        title: "Annees mises a jour",
+        description: `${data.updated} article(s) mis a jour, ${data.skipped} ignore(s).${data.errors?.length ? ` ${data.errors.length} erreur(s).` : ""}`,
+      });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description: err instanceof Error ? err.message : "Echec de la mise a jour",
+      });
+    } finally {
+      setYearUpdateLoading(null);
     }
   }
 
@@ -154,6 +190,27 @@ export default function SitesPage() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        onClick={() => setImportSiteId(site.id)}
+                        title="Importer depuis WordPress"
+                      >
+                        <Download className="h-4 w-4 text-indigo-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleYearUpdate(site)}
+                        disabled={yearUpdateLoading === site.id}
+                        title="Mettre a jour les annees"
+                      >
+                        {yearUpdateLoading === site.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Calendar className="h-4 w-4 text-amber-600" />
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => handleEdit(site)}
                         title="Modifier"
                       >
@@ -183,6 +240,23 @@ export default function SitesPage() {
         site={editingSite}
         onSuccess={fetchSites}
       />
+
+      {/* WP Import Dialog */}
+      {importSiteId && (
+        <WpImportDialog
+          open={!!importSiteId}
+          onOpenChange={(open) => {
+            if (!open) setImportSiteId(null);
+          }}
+          siteId={importSiteId}
+          onSuccess={() => {
+            toast({
+              title: "Import reussi",
+              description: "Les articles importes sont visibles dans la liste des articles.",
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

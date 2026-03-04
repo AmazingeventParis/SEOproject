@@ -27,7 +27,7 @@ interface PlanArchitectParams {
     peopleAlsoAsk: { question: string }[]
     relatedSearches: { query: string }[]
   }
-  nuggets: { id: string; content: string; tags: string[] }[]
+  nuggets: { id: string; content: string; tags: string[]; source_type?: string }[]
   existingSiloArticles?: { title: string | null; keyword: string; slug: string | null }[]
   moneyPage?: { url: string; description: string } | null
   competitorContent?: {
@@ -358,10 +358,18 @@ Voici des extraits authentiques de ${persona.name}. Adapte la structure du plan 
   // Add nuggets if available
   if (nuggets.length > 0) {
     user += `\n\n## NUGGETS DISPONIBLES (contenus authentiques du persona)
-Assigne les nuggets pertinents aux blocs via leur ID dans nugget_ids.`
+Ces nuggets sont des pepites de connaissance REELLES du persona. Ils rendent le contenu unique et humain.
+
+REGLES D'ASSIGNATION :
+- Assigne les nuggets pertinents aux blocs via leur ID dans \`nugget_ids\`
+- Chaque nugget ne doit etre assigne qu'a UN SEUL bloc (pas de doublon)
+- Assigne en priorite les nuggets dont les tags correspondent au sujet du bloc
+- Un bloc peut avoir 0 a 3 nuggets — ne force JAMAIS un nugget non pertinent
+- Les nuggets de type "youtube" ou "vocal" sont souvent des temoignages riches — place-les dans les sections ou l'experience personnelle renforce la credibilite`
 
     for (const nugget of nuggets) {
       user += `\n\n### Nugget [${nugget.id}]`
+      if (nugget.source_type) user += ` (source: ${nugget.source_type})`
       user += `\nTags: ${nugget.tags.join(', ') || 'aucun'}`
       user += `\nContenu: "${nugget.content}"`
     }

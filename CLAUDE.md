@@ -13,6 +13,37 @@ Phases 1-4 terminées. Projet en production.
 
 <!-- Ajouter les nouvelles entrées en haut -->
 
+### 2026-03-04
+- Systeme d'import WordPress + refresh contenu
+  - **Import WP** : nouveau endpoint `GET /api/sites/[siteId]/wp-posts` (liste posts WP non importes) + `POST /api/sites/[siteId]/wp-import` (import batch avec parsing HTML → ContentBlock[])
+  - **HTML Parser** : `src/lib/pipeline/html-parser.ts` — split par headings (h2/h3/h4), detection FAQ (`<details>/<summary>`), detection listes, extraction mot-cle principal (`extractMainKeyword`)
+  - **WP Import Dialog** : `src/components/sites/wp-import-dialog.tsx` — dialog multi-etapes (chargement → selection checkable → import), selection persona/silo optionnelle, resultats detailles
+  - **MAJ annees batch** : `POST /api/sites/[siteId]/year-update` — remplace annees obsoletes dans content_blocks + content_html + JSON-LD dateModified, push WP optionnel
+  - **Refresh enrichi** : `executeRefresh` met a jour dateModified dans JSON-LD, push WP optionnel (flag `pushToWp`), suggestions de nuggets a injecter (match par mots-cles)
+  - **Endpoint refresh** : `POST /api/articles/[articleId]/refresh` (nouveau)
+  - **Carte Refresh** : dans l'onglet SEO pour articles published/refresh_needed — scores critique, blocs MAJ, nuggets suggeres, boutons "Lancer le refresh" et "Refresh + MAJ WP"
+  - **State machine** : rollback `refresh_needed → published` ajoute
+  - **Badge "Importe"** : dans la liste articles pour les articles importes (wp_post_id + serp_data null)
+  - **Page sites** : boutons "Importer depuis WordPress" (ouvre dialog) et "Mettre a jour les annees" (batch avec confirmation) par site
+
+### 2026-03-03
+- Audit SEO complet dans l'etape Verification SEO
+  - **Sous-etape A — Verification headings** (programmatique, pas d'IA) : longueur >80 chars, mot-cle dans au moins 1 H2 (match par mots a 50%), hierarchie Hn (H3 sans H2 parent, H4 sans H3), alerte si <3 ou >8 H2
+  - **Sous-etape B — Densite mots-cles** : reutilise `analyzeKeywordDensity()` de `keyword-analysis.ts`, verification mot-cle dans les 100 premiers mots de l'intro
+  - **Sous-etape C — Critique IA** : reutilise `buildCritiquePrompt()` + `validateCritiqueResult()` de `critique.ts`, route vers `gemini-2.5-flash` via `routeAI('critique')`, retourne 4 scores (global, E-E-A-T, lisibilite, SEO) + issues + suggestions
+  - **Sous-etape D — Correction auto des headings** : si headings trop longs ou mot-cle absent, appel `routeAI('generate_title')` pour corriger, mise a jour directe dans `content_blocks`
+  - **Stockage** : `serp_data.seo_audit` (JSONB) avec auditedAt, headings (issues + corrections), keywordDensity, keywordInIntro, critique
+  - **Card Audit SEO** (frontend) : dans l'onglet SEO entre Links Summary et GSC. 4 scores en grille colores (vert >=75, jaune 60-74, rouge <60), densite mot-cle + badge statut, mot-cle dans intro badge, corrections headings avant/apres, issues AlertTriangle, suggestions Sparkles
+- Balises alt images en francais optimisees SEO
+  - **Refonte `generateAltText()`** dans `seo-rename.ts` : le `imagePromptHint` (anglais pour Fal.ai) n'est plus utilise pour le alt
+  - **Templates varies en francais** : 3 templates hero, 5 templates section avec heading, 3 templates section sans heading. Index de rotation (`sectionIndex`) pour eviter la repetition
+  - **Mot-cle integre naturellement** dans chaque alt. Si le heading contient deja le mot-cle, format simplifie
+  - Orchestrator mis a jour : compteur `sectionImageIdx` incremente par image pour varier les templates
+- Forcage Gemini 3.1 Pro + debug erreurs
+  - **Modeles changes** : `analyze_serp` (gemini-2.5-flash → gemini-3.1-pro-preview), `write_block` (gemini-3-flash-preview → gemini-3.1-pro-preview), `plan_article` (deja gemini-3.1-pro-preview)
+  - **Fallback supprime** pour ces 3 taches : nouveau `NO_FALLBACK_TASKS` Set + fonction `callWithRetryNoFallback()` (3 tentatives, pas de cross-provider fallback)
+  - **Log erreur brute** : `console.error` avec tag `[ai-router] [task_name] ERREUR BRUTE (tentative N):` + objet erreur complet pour debug dans les logs Coolify
+
 ### 2026-03-02
 - Import de nuggets depuis YouTube
   - **Extraction automatique** : coller une URL YouTube → transcription auto via `youtube-transcript` (gratuit, pas d'API key) → extraction IA via Gemini 2.0 Flash → selection manuelle → sauvegarde

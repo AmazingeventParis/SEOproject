@@ -195,7 +195,7 @@ export async function executeStep(
         result = await executePublish(article as ArticleWithRelations)
         break
       case 'refresh':
-        result = await executeRefresh(article as ArticleWithRelations)
+        result = await executeRefresh(article as ArticleWithRelations, input)
         break
       default:
         result = { success: false, runId: run.id, error: `Step "${step}" non implemente` }
@@ -1675,6 +1675,7 @@ async function executePublish(
 
 async function executeRefresh(
   article: ArticleWithRelations,
+  input?: Record<string, unknown>,
 ): Promise<PipelineRunResult> {
   const supabase = getServerClient()
   const contentBlocks = (article.content_blocks || []) as ContentBlock[]
@@ -1757,7 +1758,42 @@ async function executeRefresh(
     return { ...block, content_html: updatedHtml }
   })
 
-  // 7. Build refresh audit object
+  // 7. Update dateModified in JSON-LD
+  const existingJsonLd = article.json_ld as Record<string, unknown> | null
+  if (existingJsonLd) {
+    const now = new Date().toISOString()
+    if (Array.isArray(existingJsonLd['@graph'])) {
+      for (const item of existingJsonLd['@graph'] as Record<string, unknown>[]) {
+        if (item['@type'] === 'Article') item.dateModified = now
+      }
+    } else if (existingJsonLd['@type'] === 'Article') {
+      existingJsonLd.dateModified = now
+    }
+  }
+
+  // 9. Suggest nuggets for injection
+  let suggestedNuggets: { id: string; content: string; tags: string[] }[] = []
+  try {
+    const { data: nuggets } = await supabase
+      .from('seo_nuggets')
+      .select('id, content, tags')
+      .eq('site_id', article.site_id)
+      .limit(10)
+    if (nuggets && nuggets.length > 0) {
+      const keywordLower = article.keyword.toLowerCase()
+      suggestedNuggets = nuggets
+        .filter((n) => {
+          const text = `${n.content} ${(n.tags || []).join(' ')}`.toLowerCase()
+          return keywordLower.split(' ').some((w: string) => w.length > 3 && text.includes(w))
+        })
+        .slice(0, 5)
+        .map(n => ({ id: n.id, content: n.content, tags: n.tags || [] }))
+    }
+  } catch {
+    // non-blocking
+  }
+
+  // 10. Build refresh audit
   const refreshAudit = {
     refreshedAt: new Date().toISOString(),
     previousYearTag: article.year_tag,
@@ -1766,23 +1802,50 @@ async function executeRefresh(
     staleBlocksUpdated: staleBlocks.length,
     critique: critiqueResult,
     keywordDensity,
+    suggestedNuggets,
   }
 
-  // 8. Save all updates
+  // 11. Save all updates
   const mergedSerpData = {
     ...existingSerpData,
     ...(serpUpdate || {}),
     refresh_audit: refreshAudit,
   }
 
+  const updatePayload: Record<string, unknown> = {
+    serp_data: mergedSerpData,
+    year_tag: currentYear,
+    content_blocks: updatedBlocks,
+  }
+  if (existingJsonLd) {
+    updatePayload.json_ld = existingJsonLd
+  }
+
   await supabase
     .from('seo_articles')
-    .update({
-      serp_data: mergedSerpData,
-      year_tag: currentYear,
-      content_blocks: updatedBlocks,
-    })
+    .update(updatePayload)
     .eq('id', article.id)
+
+  // 12. Optional: push updated content to WordPress
+  let wpPushed = false
+  if (input?.pushToWp && article.wp_post_id) {
+    try {
+      const assembledHtml = updatedBlocks
+        .map((b: ContentBlock) => {
+          if (b.heading) {
+            const tag = b.type === 'h2' ? 'h2' : b.type === 'h3' ? 'h3' : b.type === 'h4' ? 'h4' : 'h2'
+            return `<${tag}>${b.heading}</${tag}>\n${b.content_html || ''}`
+          }
+          return b.content_html || ''
+        })
+        .join('\n\n')
+
+      await updatePost(article.site_id, article.wp_post_id, { content: assembledHtml })
+      wpPushed = true
+    } catch (wpErr) {
+      console.warn('[refresh] WP push failed:', wpErr)
+    }
+  }
 
   return {
     success: true,
@@ -1792,7 +1855,9 @@ async function executeRefresh(
       yearUpdated: currentYear,
       staleBlocksFixed: staleBlocks.length,
       critiqueScore: critiqueResult?.score || null,
-      message: `Refresh termine : ${staleBlocks.length} bloc(s) mis a jour, annee ${currentYear}.`,
+      wpPushed,
+      suggestedNuggetsCount: suggestedNuggets.length,
+      message: `Refresh termine : ${staleBlocks.length} bloc(s) mis a jour, annee ${currentYear}.${wpPushed ? ' Pousse vers WP.' : ''}`,
     },
   }
 }

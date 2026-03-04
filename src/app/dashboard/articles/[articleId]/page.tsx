@@ -1025,15 +1025,19 @@ export default function ArticleDetailPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [editingBlockId]);
 
-  async function runPipelineAction(endpoint: string, label: string) {
+  async function runPipelineAction(endpoint: string, label: string, extraInput?: Record<string, unknown>) {
     setActionLoading(label);
     try {
+      const bodyData: Record<string, unknown> = {};
+      if (selectedModel) bodyData.model = selectedModel;
+      if (extraInput) Object.assign(bodyData, extraInput);
+      const hasBody = Object.keys(bodyData).length > 0;
       const fetchOptions: RequestInit = {
         method: "POST",
-        ...(selectedModel
+        ...(hasBody
           ? {
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ model: selectedModel }),
+              body: JSON.stringify(bodyData),
             }
           : {}),
       };
@@ -3082,6 +3086,178 @@ export default function ArticleDetailPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Refresh Card — only for published / refresh_needed articles */}
+          {(article.status === "published" || article.status === "refresh_needed") && (() => {
+            const refreshAudit = (article.serp_data as Record<string, unknown>)?.refresh_audit as {
+              refreshedAt?: string
+              previousYearTag?: number
+              newYearTag?: number
+              serpUpdated?: boolean
+              staleBlocksUpdated?: number
+              critique?: { score: number; eeat_score: number; readability: number; seo_score: number; issues: string[]; suggestions: string[] }
+              keywordDensity?: { keyword: string; count: number; density: number; status: string }
+              suggestedNuggets?: { id: string; content: string; tags: string[] }[]
+            } | undefined
+
+            return (
+              <Card className="border-amber-200">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <RefreshCw className="h-4 w-4 text-amber-600" />
+                        Refresh contenu
+                      </CardTitle>
+                      <CardDescription>
+                        Mise a jour automatique (annees, SERP, critique SEO)
+                        {refreshAudit?.refreshedAt && (
+                          <span className="ml-2 text-xs">
+                            — Dernier refresh : {format(new Date(refreshAudit.refreshedAt), "dd MMM yyyy HH:mm", { locale: fr })}
+                          </span>
+                        )}
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {article.wp_post_id && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => runPipelineAction("refresh", "RefreshWP", { pushToWp: true })}
+                          disabled={!!actionLoading}
+                        >
+                          {actionLoading === "RefreshWP" ? (
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Globe className="mr-1.5 h-3.5 w-3.5" />
+                          )}
+                          Refresh + MAJ WP
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => runPipelineAction("refresh", "Refresh")}
+                        disabled={!!actionLoading}
+                      >
+                        {actionLoading === "Refresh" ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        Lancer le refresh
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {!refreshAudit ? (
+                    <p className="text-sm text-muted-foreground">
+                      Aucun refresh effectue. Cliquez sur &quot;Lancer le refresh&quot; pour analyser et mettre a jour cet article.
+                    </p>
+                  ) : (
+                    <>
+                      {/* Refresh summary */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="bg-muted/50 rounded-lg p-3 text-center">
+                          <p className="text-xs text-muted-foreground">Annee</p>
+                          <p className="text-lg font-bold text-amber-700">{refreshAudit.newYearTag}</p>
+                        </div>
+                        <div className="bg-muted/50 rounded-lg p-3 text-center">
+                          <p className="text-xs text-muted-foreground">Blocs MAJ</p>
+                          <p className="text-lg font-bold text-blue-700">{refreshAudit.staleBlocksUpdated || 0}</p>
+                        </div>
+                        <div className="bg-muted/50 rounded-lg p-3 text-center">
+                          <p className="text-xs text-muted-foreground">SERP MAJ</p>
+                          <p className="text-lg font-bold">{refreshAudit.serpUpdated ? "Oui" : "Non"}</p>
+                        </div>
+                        {refreshAudit.critique && (
+                          <div className="bg-muted/50 rounded-lg p-3 text-center">
+                            <p className="text-xs text-muted-foreground">Score global</p>
+                            <p className={`text-lg font-bold ${
+                              refreshAudit.critique.score >= 75 ? "text-green-600" :
+                              refreshAudit.critique.score >= 60 ? "text-yellow-600" :
+                              "text-red-600"
+                            }`}>{refreshAudit.critique.score}/100</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Critique scores */}
+                      {refreshAudit.critique && (
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { label: "E-E-A-T", score: refreshAudit.critique.eeat_score },
+                            { label: "Lisibilite", score: refreshAudit.critique.readability },
+                            { label: "SEO", score: refreshAudit.critique.seo_score },
+                          ].map((s) => (
+                            <div
+                              key={s.label}
+                              className={`rounded-lg border p-2 text-center ${
+                                s.score >= 75 ? "border-green-200 bg-green-50 text-green-700" :
+                                s.score >= 60 ? "border-yellow-200 bg-yellow-50 text-yellow-700" :
+                                "border-red-200 bg-red-50 text-red-700"
+                              }`}
+                            >
+                              <p className="text-xs">{s.label}</p>
+                              <p className="text-sm font-bold">{s.score}/100</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Critique issues */}
+                      {refreshAudit.critique?.issues && refreshAudit.critique.issues.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-medium mb-1.5 flex items-center gap-1">
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                            Points a ameliorer
+                          </h4>
+                          <ul className="space-y-1 text-sm">
+                            {refreshAudit.critique.issues.map((issue, i) => (
+                              <li key={i} className="flex items-start gap-1.5 text-muted-foreground">
+                                <span className="text-amber-500 mt-1">-</span>
+                                {issue}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Suggested nuggets */}
+                      {refreshAudit.suggestedNuggets && refreshAudit.suggestedNuggets.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-medium mb-1.5 flex items-center gap-1">
+                            <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+                            Nuggets a injecter
+                          </h4>
+                          <div className="space-y-1.5">
+                            {refreshAudit.suggestedNuggets.map((nugget) => (
+                              <div
+                                key={nugget.id}
+                                className="text-sm bg-purple-50 border border-purple-200 rounded-lg p-2"
+                              >
+                                <p className="text-purple-800 line-clamp-2">{nugget.content}</p>
+                                {nugget.tags.length > 0 && (
+                                  <div className="flex gap-1 mt-1">
+                                    {nugget.tags.slice(0, 3).map((tag) => (
+                                      <Badge key={tag} variant="secondary" className="text-[10px] py-0">
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })()}
 
           {/* JSON-LD */}
           <Card>
