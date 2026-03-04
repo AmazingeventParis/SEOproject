@@ -72,6 +72,7 @@ import {
   Undo2,
   BarChart3,
   TrendingUp,
+  Copy,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -163,9 +164,38 @@ function SerpDataDisplay({ serpData }: { serpData: Record<string, unknown> }) {
       {cannibalization != null && (
         <div>
           <h4 className="text-sm font-medium mb-2">Cannibalisation</h4>
-          <pre className="text-xs bg-muted p-3 rounded-md overflow-auto">
-            {JSON.stringify(cannibalization, null, 2)}
-          </pre>
+          {(() => {
+            const c = cannibalization as { hasConflict?: boolean; conflicts?: Array<{ keyword: string; title: string | null; status: string; similarity: number }>; recommendation?: string; maxSimilarity?: number };
+            if (!c.hasConflict) {
+              return <p className="text-sm text-green-600">Aucun risque de cannibalisation detecte.</p>;
+            }
+            return (
+              <div className="space-y-2">
+                {c.recommendation && (
+                  <p className="text-sm text-amber-700 bg-amber-50 p-2 rounded">{c.recommendation}</p>
+                )}
+                {Array.isArray(c.conflicts) && c.conflicts.length > 0 && (
+                  <div className="space-y-1.5">
+                    {c.conflicts.map((conf, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs border rounded px-2.5 py-1.5">
+                        <div className="min-w-0">
+                          <span className="font-medium">{conf.title || conf.keyword}</span>
+                          <span className="text-muted-foreground ml-2">({conf.status})</span>
+                        </div>
+                        <Badge variant="outline" className={
+                          conf.similarity > 0.8 ? "bg-red-50 text-red-700 border-red-200" :
+                          conf.similarity > 0.6 ? "bg-amber-50 text-amber-700 border-amber-200" :
+                          "bg-yellow-50 text-yellow-700 border-yellow-200"
+                        }>
+                          {Math.round(conf.similarity * 100)}%
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
@@ -985,6 +1015,16 @@ export default function ArticleDetailPage() {
     fetchPipelineRuns();
   }, [fetchArticle, fetchPipelineRuns]);
 
+  // Warn before navigating away with unsaved edits
+  useEffect(() => {
+    if (!editingBlockId) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [editingBlockId]);
+
   async function runPipelineAction(endpoint: string, label: string) {
     setActionLoading(label);
     try {
@@ -1094,8 +1134,11 @@ export default function ArticleDetailPage() {
               const parsed = JSON.parse(line.slice(6));
               if (eventType === "progress") {
                 setWriteProgress({ current: parsed.current, total: parsed.total });
+              } else if (eventType === "error") {
+                throw new Error(parsed.error || "Erreur lors de la redaction d'un bloc");
               }
-            } catch {
+            } catch (parseErr) {
+              if (parseErr instanceof Error && parseErr.message.includes("Erreur")) throw parseErr;
               // skip invalid JSON
             }
           }
@@ -1104,9 +1147,16 @@ export default function ArticleDetailPage() {
 
       toast({
         title: "Redaction terminee",
-        description: "Tous les blocs ont ete rediges.",
+        description: "Tous les blocs ont ete rediges. Lancez l'etape Media pour continuer.",
       });
       await Promise.all([fetchArticle(), fetchPipelineRuns()]);
+      // Auto-prompt: ask user to launch next step
+      setTimeout(() => {
+        toast({
+          title: "Etape suivante",
+          description: "Cliquez sur 'Generer les images' pour continuer le pipeline.",
+        });
+      }, 1500);
     } catch (err) {
       toast({
         variant: "destructive",
@@ -2530,6 +2580,171 @@ export default function ArticleDetailPage() {
             />
           )}
 
+          {/* SEO Audit Card */}
+          {(() => {
+            const seoAudit = (article.serp_data as Record<string, unknown>)?.seo_audit as {
+              auditedAt: string
+              headings: { issues: string[]; corrections: { before: string; after: string }[] }
+              keywordDensity: { keyword: string; count: number; density: number; status: string }
+              keywordInIntro: boolean
+              critique?: { score: number; eeat_score: number; readability: number; seo_score: number; issues: string[]; suggestions: string[] }
+            } | undefined
+            if (!seoAudit) return null
+
+            const scoreColor = (score: number) =>
+              score >= 75 ? "text-green-600 bg-green-50 border-green-200" :
+              score >= 60 ? "text-yellow-600 bg-yellow-50 border-yellow-200" :
+              "text-red-600 bg-red-50 border-red-200"
+
+            const densityBadge = (status: string) =>
+              status === "optimal" ? "bg-green-100 text-green-700" :
+              status === "too_low" ? "bg-yellow-100 text-yellow-700" :
+              "bg-red-100 text-red-700"
+
+            const densityLabel = (status: string) =>
+              status === "optimal" ? "Optimal" :
+              status === "too_low" ? "Trop bas" : "Trop eleve"
+
+            return (
+              <Card className="border-purple-200">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-purple-600" />
+                    Audit SEO
+                  </CardTitle>
+                  <CardDescription>
+                    Analyse automatique lors de la verification SEO
+                    {seoAudit.auditedAt && (
+                      <span className="ml-2 text-xs">
+                        — {format(new Date(seoAudit.auditedAt), "dd MMM yyyy HH:mm", { locale: fr })}
+                      </span>
+                    )}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Scores grid */}
+                  {seoAudit.critique && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {[
+                        { label: "Global", value: seoAudit.critique.score },
+                        { label: "E-E-A-T", value: seoAudit.critique.eeat_score },
+                        { label: "Lisibilite", value: seoAudit.critique.readability },
+                        { label: "SEO", value: seoAudit.critique.seo_score },
+                      ].map((item) => (
+                        <div key={item.label} className={`rounded-lg border p-3 text-center ${scoreColor(item.value)}`}>
+                          <div className="text-2xl font-bold">{item.value}</div>
+                          <div className="text-xs font-medium mt-1">{item.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Keyword density + intro */}
+                  <div className="flex flex-wrap gap-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">Densite mot-cle :</span>
+                      <span className="font-medium">{seoAudit.keywordDensity.density}%</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${densityBadge(seoAudit.keywordDensity.status)}`}>
+                        {densityLabel(seoAudit.keywordDensity.status)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">({seoAudit.keywordDensity.count} occurrences)</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">Mot-cle dans l&apos;intro :</span>
+                      {seoAudit.keywordInIntro ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 flex items-center gap-1">
+                          <Check className="h-3 w-3" /> Oui
+                        </span>
+                      ) : (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700 flex items-center gap-1">
+                          <X className="h-3 w-3" /> Non
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Heading corrections */}
+                  {seoAudit.headings.corrections.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
+                        <RefreshCw className="h-3.5 w-3.5 text-blue-500" />
+                        Corrections de titres ({seoAudit.headings.corrections.length})
+                      </h4>
+                      <div className="space-y-2">
+                        {seoAudit.headings.corrections.map((c, i) => (
+                          <div key={i} className="text-xs bg-muted/50 rounded-md p-2 space-y-1">
+                            <div className="flex items-start gap-1.5">
+                              <span className="text-red-500 shrink-0">−</span>
+                              <span className="line-through text-muted-foreground">{c.before}</span>
+                            </div>
+                            <div className="flex items-start gap-1.5">
+                              <span className="text-green-500 shrink-0">+</span>
+                              <span className="font-medium">{c.after}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Heading issues */}
+                  {seoAudit.headings.issues.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 text-yellow-500" />
+                        Problemes de titres ({seoAudit.headings.issues.length})
+                      </h4>
+                      <ul className="space-y-1">
+                        {seoAudit.headings.issues.map((issue, i) => (
+                          <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                            <AlertTriangle className="h-3 w-3 text-yellow-500 shrink-0 mt-0.5" />
+                            {issue}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* AI Issues */}
+                  {seoAudit.critique && seoAudit.critique.issues.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 text-orange-500" />
+                        Problemes detectes ({seoAudit.critique.issues.length})
+                      </h4>
+                      <ul className="space-y-1">
+                        {seoAudit.critique.issues.map((issue, i) => (
+                          <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                            <AlertTriangle className="h-3 w-3 text-orange-500 shrink-0 mt-0.5" />
+                            {issue}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* AI Suggestions */}
+                  {seoAudit.critique && seoAudit.critique.suggestions.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+                        Suggestions ({seoAudit.critique.suggestions.length})
+                      </h4>
+                      <ul className="space-y-1">
+                        {seoAudit.critique.suggestions.map((sug, i) => (
+                          <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                            <Sparkles className="h-3 w-3 text-purple-500 shrink-0 mt-0.5" />
+                            {sug}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })()}
+
           {/* GSC Performance Analysis — only for published articles */}
           {(article.status === "published" || article.status === "refresh_needed") && (
             <Card className="border-blue-200">
@@ -2778,8 +2993,35 @@ export default function ArticleDetailPage() {
                           Ancre : <span className="font-medium">{suggestion.anchor_text}</span>
                         </p>
 
+                        {/* Info lien : URL article + lien editeur WP */}
+                        {article.wp_url && (
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground bg-muted/50 rounded px-2.5 py-1.5">
+                            <span className="truncate">Lier vers : <span className="font-medium text-foreground">{article.wp_url}</span></span>
+                            <a
+                              href={`${suggestion.wp_post_url.replace(/\/?$/, '').split('/').slice(0, 3).join('/')}/wp-admin/post.php?post=${suggestion.wp_post_id}&action=edit`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="shrink-0 text-blue-600 hover:underline flex items-center gap-0.5"
+                            >
+                              Editer dans WP <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </div>
+                        )}
+
                         {/* Actions */}
                         <div className="flex items-center gap-2">
+                          {/* Bouton Copier le paragraphe modifie */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              navigator.clipboard.writeText(suggestion.modified_paragraph)
+                              toast({ title: "Copie !", description: "Le paragraphe modifie a ete copie dans le presse-papier (HTML)." })
+                            }}
+                          >
+                            <Copy className="mr-1 h-3.5 w-3.5" />
+                            Copier
+                          </Button>
                           {suggestion.status === "suggested" && (
                             <>
                               <Button

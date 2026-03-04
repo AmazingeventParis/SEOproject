@@ -32,6 +32,7 @@ export interface SiteFormData {
   gsc_property: string;
   niche: string;
   theme_color: string;
+  blog_path: string;
   money_page_url: string;
   money_page_description: string;
 }
@@ -55,6 +56,7 @@ export function SiteForm({ site, onSubmit, submitLabel = "Enregistrer" }: SiteFo
     gsc_property: site?.gsc_property ?? "",
     niche: site?.niche ?? "",
     theme_color: site?.theme_color ?? "",
+    blog_path: (site as Record<string, unknown> | undefined)?.blog_path as string ?? "",
     money_page_url: site?.money_page_url ?? "",
     money_page_description: site?.money_page_description ?? "",
   });
@@ -229,6 +231,18 @@ export function SiteForm({ site, onSubmit, submitLabel = "Enregistrer" }: SiteFo
           )}
         </div>
         <p className="text-xs text-muted-foreground">Utilise pour les tableaux et elements visuels dans les articles</p>
+      </div>
+
+      {/* Blog Path */}
+      <div className="space-y-2">
+        <Label htmlFor="blog_path">Chemin du blog (optionnel)</Label>
+        <Input
+          id="blog_path"
+          placeholder="blog"
+          value={formData.blog_path}
+          onChange={(e) => handleChange("blog_path", e.target.value)}
+        />
+        <p className="text-xs text-muted-foreground">Chemin utilise dans le breadcrumb JSON-LD (defaut: &quot;blog&quot;). Ex: articles, actualites</p>
       </div>
 
       {/* Money Page */}

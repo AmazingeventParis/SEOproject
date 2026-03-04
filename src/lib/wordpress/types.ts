@@ -65,5 +65,7 @@ export interface WPUploadMediaInput {
   buffer: Buffer
   filename: string
   altText: string
+  title?: string
+  caption?: string
   mimeType?: string
 }

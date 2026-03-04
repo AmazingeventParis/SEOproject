@@ -15,10 +15,18 @@ ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS year_tag INTEGER DEFAULT NULL;
 ALTER TABLE seo_nuggets DROP CONSTRAINT IF EXISTS seo_nuggets_source_type_check;
 ALTER TABLE seo_nuggets ADD CONSTRAINT seo_nuggets_source_type_check
   CHECK (source_type IN ('vocal','tweet','note','url','observation','youtube'));
+ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS hero_image_url text DEFAULT NULL;
+ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS blog_path text DEFAULT NULL;
 `;
 
-// POST /api/migrate — Run pending schema migrations
+// POST /api/migrate — Run pending schema migrations (dev only)
 export async function POST() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { status: "error", message: "Migration route disabled in production. Run SQL manually in Supabase." },
+      { status: 403 }
+    );
+  }
   const dbPassword = process.env.POSTGRES_PASSWORD;
 
   if (!dbPassword) {

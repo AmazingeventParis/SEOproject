@@ -225,10 +225,13 @@ export async function getDailyCosts(days: number = 30): Promise<DailyCost[]> {
 export async function getMostExpensiveArticles(limit: number = 10): Promise<ArticleCost[]> {
   const supabase = getServerClient()
 
-  // Fetch all pipeline runs (select only needed fields)
+  // Fetch only runs with non-zero cost, ordered by cost desc, limited to recent 500
   const { data: runs, error: runsError } = await supabase
     .from("seo_pipeline_runs")
     .select("article_id, cost_usd, tokens_in, tokens_out")
+    .gt("cost_usd", 0)
+    .order("cost_usd", { ascending: false })
+    .limit(500)
 
   if (runsError) {
     throw new Error(`Erreur lors du chargement des runs: ${runsError.message}`)

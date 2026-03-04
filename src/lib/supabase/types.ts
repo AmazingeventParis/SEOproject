@@ -99,6 +99,7 @@ export type Database = {
           default_persona_id: string | null
           money_page_url: string | null
           money_page_description: string | null
+          blog_path: string | null
           active: boolean
           created_at: string
           updated_at: string
@@ -116,6 +117,7 @@ export type Database = {
           default_persona_id?: string | null
           money_page_url?: string | null
           money_page_description?: string | null
+          blog_path?: string | null
           active?: boolean
           created_at?: string
           updated_at?: string
@@ -133,6 +135,7 @@ export type Database = {
           default_persona_id?: string | null
           money_page_url?: string | null
           money_page_description?: string | null
+          blog_path?: string | null
           active?: boolean
           created_at?: string
           updated_at?: string
@@ -307,6 +310,7 @@ export type Database = {
           authority_link_suggestions: AuthorityLinkSuggestion[] | null
           selected_authority_link: SelectedAuthorityLink | null
           year_tag: number | null
+          hero_image_url: string | null
           created_at: string
           updated_at: string
           published_at: string | null
@@ -336,6 +340,7 @@ export type Database = {
           authority_link_suggestions?: AuthorityLinkSuggestion[] | null
           selected_authority_link?: SelectedAuthorityLink | null
           year_tag?: number | null
+          hero_image_url?: string | null
           created_at?: string
           updated_at?: string
           published_at?: string | null
@@ -365,6 +370,7 @@ export type Database = {
           authority_link_suggestions?: AuthorityLinkSuggestion[] | null
           selected_authority_link?: SelectedAuthorityLink | null
           year_tag?: number | null
+          hero_image_url?: string | null
           created_at?: string
           updated_at?: string
           published_at?: string | null

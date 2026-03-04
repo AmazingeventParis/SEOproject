@@ -94,7 +94,7 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
   },
   generate_backlink_sentences: {
     provider: 'google',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     maxTokens: 1024,
     temperature: 0.4,
     jsonMode: true,

@@ -21,7 +21,7 @@ import { optimizeForWeb } from '@/lib/media/sharp-processor'
 import { generateSeoFilename, generateAltText, generateImageTitle } from '@/lib/media/seo-rename'
 import { generateArticleSchema, generateFAQSchema, generateBreadcrumbSchema, generateHowToSchema, generateReviewSchema, assembleJsonLd } from '@/lib/seo/json-ld'
 import { generateInternalLinks, injectLinksIntoHtml } from '@/lib/seo/internal-links'
-import { createPost, updatePost, uploadMedia, findBestCategory, getAllPublishedPosts } from '@/lib/wordpress/client'
+import { createPost, updatePost, uploadMedia, findBestCategory, findOrCreateTags, getAllPublishedPosts } from '@/lib/wordpress/client'
 import { analyzeKeywordDensity } from '@/lib/seo/keyword-analysis'
 import { buildCritiquePrompt, validateCritiqueResult } from '@/lib/ai/prompts/critique'
 
@@ -249,16 +249,29 @@ async function executeAnalyze(
 ): Promise<PipelineRunResult> {
   const supabase = getServerClient()
 
-  // 1. SERP analysis
-  let serpData = null
+  // 1. SERP analysis (with 24h cache)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let serpData: any = null
   let competitorInsights = null
-  try {
-    serpData = await analyzeSERP(article.keyword)
-    competitorInsights = extractCompetitorInsights(serpData)
-  } catch (error) {
-    // SERP analysis is optional - continue if API key not set
-    const msg = error instanceof Error ? error.message : String(error)
-    if (!msg.includes('non configur') && !msg.includes('not found')) throw error
+  const existingSerpForCache = (article.serp_data || {}) as Record<string, unknown>
+  const cachedAnalyzedAt = existingSerpForCache.analyzedAt as string | undefined
+  const cacheAge = cachedAnalyzedAt ? Date.now() - new Date(cachedAnalyzedAt).getTime() : Infinity
+  const SERP_CACHE_TTL = 24 * 60 * 60 * 1000 // 24h
+
+  if (cacheAge < SERP_CACHE_TTL && existingSerpForCache.serp) {
+    // Reuse cached SERP data
+    serpData = existingSerpForCache.serp
+    competitorInsights = existingSerpForCache.insights || extractCompetitorInsights(serpData)
+    console.log(`[analyze] Reusing cached SERP data (age: ${Math.round(cacheAge / 3600000)}h)`)
+  } else {
+    try {
+      serpData = await analyzeSERP(article.keyword)
+      competitorInsights = extractCompetitorInsights(serpData)
+    } catch (error) {
+      // SERP analysis is optional - continue if API key not set
+      const msg = error instanceof Error ? error.message : String(error)
+      if (!msg.includes('non configur') && !msg.includes('not found')) throw error
+    }
   }
 
   // 2. Competitor content scraping + TF-IDF + Gemini semantic analysis
@@ -312,6 +325,7 @@ async function executeAnalyze(
   if (serpData) {
     serpDataPayload.serp = serpData
     serpDataPayload.insights = competitorInsights
+    serpDataPayload.analyzedAt = new Date().toISOString()
   }
   if (competitorContent) {
     serpDataPayload.competitorContent = {
@@ -367,12 +381,25 @@ async function executePlan(
 ): Promise<PipelineRunResult> {
   const supabase = getServerClient()
 
-  // Fetch nuggets for this site (with rich metadata for smarter assignment)
-  const { data: nuggets } = await supabase
+  // Fetch nuggets for this site, ranked by keyword relevance
+  const { data: rawNuggets } = await supabase
     .from('seo_nuggets')
     .select('id, content, tags, source_type')
     .or(`site_id.eq.${article.site_id},site_id.is.null`)
-    .limit(20)
+    .limit(50)
+
+  // Score nuggets by keyword relevance and take top 20
+  const kwWords = article.keyword.toLowerCase().split(/\s+/)
+  const nuggets = (rawNuggets || [])
+    .map(n => {
+      const content = (n.content || '').toLowerCase()
+      const tags = (n.tags || []).map((t: string) => t.toLowerCase())
+      const tagScore = kwWords.filter(w => tags.some((t: string) => t.includes(w))).length * 3
+      const contentScore = kwWords.filter(w => content.includes(w)).length
+      return { ...n, _relevance: tagScore + contentScore }
+    })
+    .sort((a, b) => b._relevance - a._relevance)
+    .slice(0, 20)
 
   // Fetch ALL published/written articles from the same site for internal linking
   const { data: siteArticlesData } = await supabase
@@ -386,7 +413,7 @@ async function executePlan(
   const dbArticles = (siteArticlesData || []) as { keyword: string; title: string | null; slug: string | null }[]
 
   // Also fetch WordPress sitemap (all published posts) for comprehensive internal linking
-  let wpPosts: { title: string; slug: string }[] = []
+  let wpPosts: { id: number; title: string; slug: string; link: string }[] = []
   try {
     wpPosts = await getAllPublishedPosts(article.site_id)
   } catch {
@@ -397,6 +424,7 @@ async function executePlan(
   const slugSet = new Set(dbArticles.map(a => a.slug))
   const wpOnlyPosts = wpPosts
     .filter(p => !slugSet.has(p.slug))
+    .filter(p => p.slug !== article.slug && p.id !== article.wp_post_id)
     .map(p => ({ keyword: p.title, title: p.title, slug: p.slug }))
   const siteArticles = [...dbArticles, ...wpOnlyPosts]
 
@@ -842,8 +870,15 @@ async function executeMedia(
       buffer: optimized.buffer,
       filename,
       altText,
+      title: `${article.title || article.keyword} - Image principale`,
+      caption: altText,
     })
     heroMediaId = wpMedia.mediaId
+    // Store hero image URL for JSON-LD schema
+    await supabase
+      .from('seo_articles')
+      .update({ hero_image_url: wpMedia.url })
+      .eq('id', article.id)
   } catch (error) {
     // Hero image generation is optional - continue with blocks
     const msg = error instanceof Error ? error.message : String(error)
@@ -927,6 +962,8 @@ async function executeMedia(
         buffer: optimized.buffer,
         filename,
         altText,
+        title: imgTitle,
+        caption: altText,
       })
 
       if (isImageBlock) {
@@ -995,6 +1032,7 @@ async function executeSeo(
     publishedAt: article.published_at,
     updatedAt: article.updated_at,
     wordCount: article.word_count,
+    imageUrl: (article as Record<string, unknown>).hero_image_url as string | undefined,
   })
   schemas.push(articleSchema)
 
@@ -1035,6 +1073,7 @@ async function executeSeo(
     site?.name || '',
     article.title || article.keyword,
     article.slug || '',
+    (site as Record<string, unknown> | null)?.blog_path as string | null,
   )
   schemas.push(breadcrumb)
 
@@ -1072,12 +1111,25 @@ async function executeSeo(
   let linksInjected = 0
   let updatedBlocks = [...contentBlocks]
 
+  // Pre-scan: extract slugs already linked by the AI during write-step
+  const existingLinkSlugs = new Set<string>()
+  const hrefRegex = /<a\s[^>]*href=["']([^"']+)["']/gi
+  const allWrittenHtml = updatedBlocks.filter(b => b.content_html).map(b => b.content_html).join(' ')
+  let hrefMatch: RegExpExecArray | null
+  while ((hrefMatch = hrefRegex.exec(allWrittenHtml)) !== null) {
+    try {
+      const url = new URL(hrefMatch[1], `https://${site?.domain || 'x.com'}`)
+      existingLinkSlugs.add(url.pathname.replace(/^\/|\/$/g, ''))
+    } catch { /* skip malformed */ }
+  }
+
   // Gather links from silo DB
   const linksToInject: { anchorText: string; url: string }[] = []
   if (article.silo_id) {
     const linkSuggestions = await generateInternalLinks(article.id, article.silo_id, article.site_id)
     for (const l of linkSuggestions) {
       if (l.targetSlug) {
+        if (existingLinkSlugs.has(l.targetSlug)) continue
         linksToInject.push({
           anchorText: l.anchorText,
           url: `https://${site?.domain || ''}/${l.targetSlug}`,
@@ -1098,6 +1150,7 @@ async function executeSeo(
     for (const post of wpPosts) {
       if (linksToInject.length >= 8) break
       if (existingSlugs.has(post.slug)) continue
+      if (existingLinkSlugs.has(post.slug)) continue
       if (post.slug === article.slug) continue
 
       // Check if the post title words appear in our content
@@ -1259,6 +1312,11 @@ async function executeSeo(
         return b.content_html
       })
       .join('\n')
+      // Strip CSS blocks, WP spacers, and figure wrappers to reduce noise for critique
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<!--\s*wp:spacer[\s\S]*?-->/gi, '')
+      .replace(/<div[^>]*style="height:\d+px"[^>]*><\/div>/gi, '')
+      .replace(/<figure[^>]*class="[^"]*section-image[^"]*"[^>]*>[\s\S]*?<\/figure>/gi, '')
 
     if (fullContentHtml.length > 500 && persona) {
       const critiquePrompts = buildCritiquePrompt({
@@ -1520,6 +1578,20 @@ async function executePublish(
     // Category assignment is optional — continue without it
   }
 
+  // 4b. Find or create WP tags from keyword + niche
+  let tagIds: number[] | undefined
+  try {
+    const tagNames = [article.keyword]
+    if (site?.niche) tagNames.push(site.niche)
+    // Extract individual meaningful words from keyword for additional tags
+    const kwWords = article.keyword.split(/\s+/).filter(w => w.length >= 5)
+    if (kwWords.length >= 2) tagNames.push(...kwWords.slice(0, 2))
+    tagIds = await findOrCreateTags(article.site_id, Array.from(new Set(tagNames)))
+    if (tagIds.length === 0) tagIds = undefined
+  } catch {
+    // Tag assignment is optional
+  }
+
   // 5. Build SEO meta for Yoast/Rank Math
   const seoMeta: Record<string, unknown> = {}
   if (article.seo_title) {
@@ -1550,6 +1622,7 @@ async function executePublish(
       excerpt,
       featured_media: heroMediaId,
       categories: categoryIds,
+      tags: tagIds,
       ...(hasSeoMeta ? { meta: seoMeta } : {}),
     })
     wpPostId = wpPost.id
@@ -1564,6 +1637,7 @@ async function executePublish(
       excerpt,
       featured_media: heroMediaId,
       categories: categoryIds,
+      tags: tagIds,
       ...(hasSeoMeta ? { meta: seoMeta } : {}),
     })
     wpPostId = result.wpPostId
@@ -1603,6 +1677,9 @@ async function executeRefresh(
   article: ArticleWithRelations,
 ): Promise<PipelineRunResult> {
   const supabase = getServerClient()
+  const contentBlocks = (article.content_blocks || []) as ContentBlock[]
+  const persona = article.seo_personas
+  const existingSerpData = (article.serp_data || {}) as Record<string, unknown>
 
   // 1. Re-analyze SERP to check for changes
   let serpUpdate = null
@@ -1615,11 +1692,95 @@ async function executeRefresh(
     if (!msg.includes('non configure')) throw error
   }
 
-  // 2. Update article with fresh SERP data and mark for refresh
+  // 2. Update year_tag to current year
+  const currentYear = new Date().getFullYear()
+
+  // 3. Run SEO audit (heading checks + keyword density + critique)
+  let critiqueResult = null
+  try {
+    const fullContentHtml = contentBlocks
+      .filter((b) => b.content_html && b.status !== 'pending')
+      .map((b) => {
+        if (b.heading) return `<${b.type === 'h2' ? 'h2' : b.type === 'h3' ? 'h3' : 'p'}>${b.heading}</${b.type === 'h2' ? 'h2' : b.type === 'h3' ? 'h3' : 'p'}>\n${b.content_html}`
+        return b.content_html
+      })
+      .join('\n')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<!--\s*wp:spacer[\s\S]*?-->/gi, '')
+
+    if (fullContentHtml.length > 500 && persona) {
+      const critiquePrompts = buildCritiquePrompt({
+        keyword: article.keyword,
+        searchIntent: article.search_intent || undefined,
+        title: article.title || article.keyword,
+        contentHtml: fullContentHtml,
+        persona: {
+          name: persona.name,
+          role: persona.role,
+          tone_description: persona.tone_description,
+          bio: persona.bio,
+        },
+      })
+      const critiqueResponse = await routeAI('critique', [
+        { role: 'user', content: critiquePrompts.user },
+      ], critiquePrompts.system)
+      const parsed = extractJSON<Record<string, unknown>>(critiqueResponse.content)
+      if (parsed) {
+        critiqueResult = validateCritiqueResult(parsed)
+      }
+    }
+  } catch (err) {
+    console.warn('[refresh] Critique failed, skipping:', err)
+  }
+
+  // 4. Keyword density analysis
+  const keywordDensity = analyzeKeywordDensity(
+    contentBlocks.filter(b => b.content_html).map(b => b.content_html).join(' '),
+    article.keyword,
+  )
+
+  // 5. Detect stale headings (outdated year references)
+  const staleBlocks: number[] = []
+  const yearRegex = /\b(202[0-5])\b/g
+  contentBlocks.forEach((block, idx) => {
+    if (!block.content_html) return
+    const matches = block.content_html.match(yearRegex)
+    if (matches && !matches.includes(String(currentYear))) {
+      staleBlocks.push(idx)
+    }
+  })
+
+  // 6. Auto-correct outdated years in content
+  const updatedBlocks = contentBlocks.map((block, idx) => {
+    if (!staleBlocks.includes(idx) || !block.content_html) return block
+    const updatedHtml = block.content_html.replace(/\b(202[0-5])\b/g, String(currentYear))
+    return { ...block, content_html: updatedHtml }
+  })
+
+  // 7. Build refresh audit object
+  const refreshAudit = {
+    refreshedAt: new Date().toISOString(),
+    previousYearTag: article.year_tag,
+    newYearTag: currentYear,
+    serpUpdated: !!serpUpdate,
+    staleBlocksUpdated: staleBlocks.length,
+    critique: critiqueResult,
+    keywordDensity,
+  }
+
+  // 8. Save all updates
+  const mergedSerpData = {
+    ...existingSerpData,
+    ...(serpUpdate || {}),
+    refresh_audit: refreshAudit,
+  }
+
   await supabase
     .from('seo_articles')
     .update({
-      serp_data: serpUpdate || article.serp_data,
+      serp_data: mergedSerpData,
+      year_tag: currentYear,
+      content_blocks: updatedBlocks,
     })
     .eq('id', article.id)
 
@@ -1628,7 +1789,10 @@ async function executeRefresh(
     runId: '',
     output: {
       serpUpdated: !!serpUpdate,
-      message: 'Article marque pour mise a jour. Utilisez write_block pour actualiser le contenu.',
+      yearUpdated: currentYear,
+      staleBlocksFixed: staleBlocks.length,
+      critiqueScore: critiqueResult?.score || null,
+      message: `Refresh termine : ${staleBlocks.length} bloc(s) mis a jour, annee ${currentYear}.`,
     },
   }
 }

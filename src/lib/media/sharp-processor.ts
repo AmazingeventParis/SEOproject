@@ -7,12 +7,6 @@ interface OptimizedImage {
   size: number;
 }
 
-interface ThumbnailResult {
-  buffer: Buffer;
-  width: number;
-  height: number;
-}
-
 interface ImageMetadata {
   width: number;
   height: number;
@@ -38,28 +32,6 @@ export async function optimizeForWeb(input: Buffer): Promise<OptimizedImage> {
     width: optimized.info.width,
     height: optimized.info.height,
     size: optimized.info.size,
-  };
-}
-
-/**
- * Generate a thumbnail at 400x300 in WebP format.
- */
-export async function generateThumbnail(
-  input: Buffer
-): Promise<ThumbnailResult> {
-  const thumbnail = await sharp(input)
-    .resize({
-      width: 400,
-      height: 300,
-      fit: "cover",
-    })
-    .webp({ quality: 75 })
-    .toBuffer({ resolveWithObject: true });
-
-  return {
-    buffer: thumbnail.data,
-    width: thumbnail.info.width,
-    height: thumbnail.info.height,
   };
 }
 

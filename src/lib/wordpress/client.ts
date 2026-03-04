@@ -199,14 +199,18 @@ export async function uploadMedia(
 
   const media: { id: number; source_url: string } = await uploadResponse.json()
 
-  // Step 2: update alt text
+  // Step 2: update alt text, title, caption
+  const mediaUpdate: Record<string, string> = { alt_text: input.altText }
+  if (input.title) mediaUpdate.title = input.title
+  if (input.caption) mediaUpdate.caption = input.caption
+
   const updateResponse = await fetch(`${apiBase(creds)}/media/${media.id}`, {
     method: 'POST',
     headers: {
       Authorization: buildAuthHeader(creds),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ alt_text: input.altText }),
+    body: JSON.stringify(mediaUpdate),
   })
 
   if (!updateResponse.ok) {
@@ -379,23 +383,6 @@ export async function findBestCategory(
 }
 
 /**
- * @deprecated Use findBestCategory instead. Kept for backward compatibility.
- */
-export async function findOrCreateCategory(
-  siteId: string,
-  categoryName: string
-): Promise<number> {
-  const found = await findBestCategory(siteId, categoryName)
-  if (found) return found
-  // Fallback: create new (legacy behavior)
-  const normalizedSlug = categoryName.toLowerCase().trim()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-  const newCat = await createCategory(siteId, categoryName, normalizedSlug)
-  return newCat.id
-}
-
-/**
  * Create a new category on the WordPress site.
  */
 export async function createCategory(
@@ -423,4 +410,56 @@ export async function createCategory(
 
   const category: WPCategory = await response.json()
   return category
+}
+
+/**
+ * Find or create WordPress tags from a list of tag names.
+ * Returns an array of WP tag IDs.
+ */
+export async function findOrCreateTags(
+  siteId: string,
+  tagNames: string[]
+): Promise<number[]> {
+  if (tagNames.length === 0) return []
+  const creds = await getWPCredentials(siteId)
+  const tagIds: number[] = []
+
+  for (const name of tagNames.slice(0, 5)) { // Max 5 tags
+    const trimmed = name.trim()
+    if (!trimmed) continue
+
+    // Search for existing tag
+    const searchRes = await fetch(
+      `${apiBase(creds)}/tags?search=${encodeURIComponent(trimmed)}&per_page=5`,
+      {
+        headers: { Authorization: buildAuthHeader(creds) },
+        signal: AbortSignal.timeout(5000),
+      }
+    )
+    if (searchRes.ok) {
+      const tags: { id: number; name: string }[] = await searchRes.json()
+      const exact = tags.find(t => t.name.toLowerCase() === trimmed.toLowerCase())
+      if (exact) {
+        tagIds.push(exact.id)
+        continue
+      }
+    }
+
+    // Create new tag
+    const createRes = await fetch(`${apiBase(creds)}/tags`, {
+      method: 'POST',
+      headers: {
+        Authorization: buildAuthHeader(creds),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: trimmed }),
+      signal: AbortSignal.timeout(5000),
+    })
+    if (createRes.ok) {
+      const tag: { id: number } = await createRes.json()
+      tagIds.push(tag.id)
+    }
+  }
+
+  return tagIds
 }

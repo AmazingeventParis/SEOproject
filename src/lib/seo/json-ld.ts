@@ -119,9 +119,12 @@ export function generateBreadcrumbSchema(
   siteDomain: string,
   siteName: string,
   articleTitle: string,
-  articleSlug: string
+  articleSlug: string,
+  blogPath?: string | null
 ): Record<string, unknown> {
   const baseUrl = `https://${siteDomain}`
+  const resolvedBlogPath = (blogPath || 'blog').replace(/^\/|\/$/g, '')
+  const blogLabel = resolvedBlogPath.charAt(0).toUpperCase() + resolvedBlogPath.slice(1)
 
   return {
     '@type': 'BreadcrumbList',
@@ -138,10 +141,10 @@ export function generateBreadcrumbSchema(
       {
         '@type': 'ListItem',
         position: 2,
-        name: 'Blog',
+        name: blogLabel,
         item: {
           '@type': 'WebPage',
-          '@id': `${baseUrl}/blog`,
+          '@id': `${baseUrl}/${resolvedBlogPath}`,
         },
       },
       {

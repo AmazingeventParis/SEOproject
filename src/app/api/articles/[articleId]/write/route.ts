@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { executeStep } from "@/lib/pipeline/orchestrator";
 
+export const maxDuration = 120;
+
 const writeBlockSchema = z.object({
   blockIndex: z.number().int().min(0, "blockIndex doit etre >= 0"),
 });

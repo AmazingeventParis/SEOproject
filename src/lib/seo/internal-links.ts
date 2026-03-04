@@ -236,11 +236,24 @@ export async function generateInternalLinks(
 // ---- HTML link injection ----
 
 /**
- * Regex pattern matching tags where we should NOT inject links.
- * Matches: <a ...>...</a>, <h1>-<h6> tags, and <img /> tags.
+ * Check if a position in HTML is inside a tag we should not modify
+ * (existing <a>, heading <h1>-<h6>, or <img>).
+ * Uses backward scanning — no global regex, no backtracking risk.
  */
-const PROTECTED_TAG_PATTERN =
-  /<(?:a\b[^>]*>[\s\S]*?<\/a>|h[1-6]\b[^>]*>[\s\S]*?<\/h[1-6]>|img\b[^>]*\/?>)/gi
+function isInsideProtectedTag(html: string, pos: number): boolean {
+  let depth = 0
+  for (let i = pos - 1; i >= 0; i--) {
+    if (html[i] === '>') { depth++; if (depth > 1) return false }
+    if (html[i] === '<') {
+      if (depth === 0) {
+        const slice = html.slice(i, Math.min(i + 10, html.length)).toLowerCase()
+        return /^<(?:a[\s>]|h[1-6][\s>]|img[\s>\/])/.test(slice)
+      }
+      depth--
+    }
+  }
+  return false
+}
 
 /**
  * Inject internal links into HTML content.
@@ -263,36 +276,22 @@ export function injectLinksIntoHtml(
     const anchorText = link.anchorText
     if (!anchorText) continue
 
-    // Build a case-insensitive regex for the anchor text, escaped for regex safety
     const escapedAnchor = anchorText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const anchorRegex = new RegExp(`(${escapedAnchor})`, 'i')
+    const anchorRegex = new RegExp(escapedAnchor, 'ig')
 
-    // Split HTML by protected tags to avoid linking inside them
-    const segments = result.split(PROTECTED_TAG_PATTERN)
-    let linked = false
-
-    const rebuilt: string[] = []
-    for (const segment of segments) {
-      // Check if this segment is a protected tag (starts with <a, <h, <img)
-      const isProtected = /^<(?:a\b|h[1-6]\b|img\b)/i.test(segment)
-
-      if (!linked && !isProtected && anchorRegex.test(segment)) {
-        // Replace the first occurrence in this unprotected segment
-        rebuilt.push(
-          segment.replace(
-            anchorRegex,
-            `<a href="${link.url}" title="${anchorText}">$1</a>`
-          )
-        )
-        linked = true
-      } else {
-        rebuilt.push(segment)
+    let match: RegExpExecArray | null
+    let injected = false
+    while ((match = anchorRegex.exec(result)) !== null) {
+      if (!isInsideProtectedTag(result, match.index)) {
+        const before = result.slice(0, match.index)
+        const anchor = `<a href="${link.url}" title="${anchorText}">${match[0]}</a>`
+        const after = result.slice(match.index + match[0].length)
+        result = before + anchor + after
+        injected = true
+        break
       }
     }
-
-    if (linked) {
-      result = rebuilt.join('')
-    }
+    if (!injected) continue
   }
 
   return result
