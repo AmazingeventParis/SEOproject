@@ -913,50 +913,60 @@ async function executeMedia(
     }
   }
 
+  // Build generation tasks for all selected blocks (will run in parallel)
   const selectedList = Array.from(selectedIndices)
-  let sectionImageIdx = 0
-  for (const i of selectedList) {
+  interface ImageTask {
+    blockIndex: number
+    isImageBlock: boolean
+    prompt: string
+    heading: string | null
+    imageHint?: string
+    sectionImageIdx: number
+  }
+  const imageTasks: ImageTask[] = []
+  for (let s = 0; s < selectedList.length; s++) {
+    const i = selectedList[s]
     const block = updatedBlocks[i]
     const isImageBlock = block.type === 'image' && !(block.content_html && block.content_html.includes('<img'))
 
-    try {
-      // Gather context: for H2 blocks, collect the content of the H2 and its children
-      // For image blocks, use the preceding H2 section's content
-      let sectionContent = block.content_html || ''
-      if (block.type === 'h2') {
-        // Collect children content (H3, paragraphs, lists) until next H2
-        for (let j = i + 1; j < updatedBlocks.length; j++) {
-          if (updatedBlocks[j].type === 'h2') break
-          if (updatedBlocks[j].content_html) sectionContent += ' ' + updatedBlocks[j].content_html
-        }
-      } else if (block.type === 'image') {
-        // Look back to find the parent H2 section content
-        for (let j = i - 1; j >= 0; j--) {
-          if (updatedBlocks[j].type === 'h2') {
-            sectionContent = updatedBlocks[j].content_html || ''
-            // Also collect forward from that H2
-            for (let k = j + 1; k < i; k++) {
-              if (updatedBlocks[k].content_html) sectionContent += ' ' + updatedBlocks[k].content_html
-            }
-            break
+    // Gather section context
+    let sectionContent = block.content_html || ''
+    if (block.type === 'h2') {
+      for (let j = i + 1; j < updatedBlocks.length; j++) {
+        if (updatedBlocks[j].type === 'h2') break
+        if (updatedBlocks[j].content_html) sectionContent += ' ' + updatedBlocks[j].content_html
+      }
+    } else if (block.type === 'image') {
+      for (let j = i - 1; j >= 0; j--) {
+        if (updatedBlocks[j].type === 'h2') {
+          sectionContent = updatedBlocks[j].content_html || ''
+          for (let k = j + 1; k < i; k++) {
+            if (updatedBlocks[k].content_html) sectionContent += ' ' + updatedBlocks[k].content_html
           }
+          break
         }
       }
+    }
 
-      const prompt = buildImagePrompt(
-        article.keyword,
-        block.heading || '',
-        sectionContent,
-        block.image_prompt_hint,
-        article.title || article.keyword,
-      )
-      const imageResult = await generateImage(prompt, { aspectRatio: "16:9" })
+    imageTasks.push({
+      blockIndex: i,
+      isImageBlock,
+      prompt: buildImagePrompt(article.keyword, block.heading || '', sectionContent, block.image_prompt_hint, article.title || article.keyword),
+      heading: block.heading || null,
+      imageHint: block.image_prompt_hint,
+      sectionImageIdx: s,
+    })
+  }
+
+  // Run all image generations in parallel (fal.ai + optimize + WP upload)
+  const imageResults = await Promise.allSettled(
+    imageTasks.map(async (task) => {
+      const imageResult = await generateImage(task.prompt, { aspectRatio: "16:9" })
       const imgBuffer = await fetch(imageResult.url).then(r => r.arrayBuffer())
       const optimized = await optimizeForWeb(Buffer.from(imgBuffer))
-      const filename = generateSeoFilename(article.keyword, block.heading || null, 'section')
-      const altText = generateAltText(article.keyword, block.heading || null, 'section', block.image_prompt_hint, sectionImageIdx)
-      const imgTitle = generateImageTitle(article.keyword, block.heading || null, 'section')
-      sectionImageIdx++
+      const filename = generateSeoFilename(article.keyword, task.heading, 'section')
+      const altText = generateAltText(article.keyword, task.heading, 'section', task.imageHint, task.sectionImageIdx)
+      const imgTitle = generateImageTitle(article.keyword, task.heading, 'section')
 
       const wpMedia = await uploadMedia(article.site_id, {
         buffer: optimized.buffer,
@@ -965,28 +975,37 @@ async function executeMedia(
         title: imgTitle,
         caption: altText,
       })
+      return { ...task, wpMedia, altText, imgTitle, optimized }
+    })
+  )
 
-      if (isImageBlock) {
-        // For dedicated image blocks: replace content entirely
-        updatedBlocks[i] = {
-          ...block,
-          content_html: `<figure><img src="${wpMedia.url}" alt="${altText}" title="${imgTitle}" width="${optimized.width}" height="${optimized.height}" loading="lazy" />${block.heading ? `<figcaption>${block.heading}</figcaption>` : ''}</figure>`,
-          status: 'written' as const,
-        }
-      } else {
-        // For H2 blocks: prepend image before existing content
-        const imageHtml = `<figure class="section-image"><img src="${wpMedia.url}" alt="${altText}" title="${imgTitle}" width="${optimized.width}" height="${optimized.height}" loading="lazy" /></figure>`
-        updatedBlocks[i] = {
-          ...block,
-          content_html: imageHtml + (block.content_html || ''),
-        }
+  // Apply successful results to blocks
+  for (const result of imageResults) {
+    if (result.status !== 'fulfilled') {
+      const reason = result.reason instanceof Error ? result.reason.message : String(result.reason)
+      if (!reason.includes('non configure') && !reason.includes('FAL_KEY')) {
+        console.warn('[media] Image generation failed:', reason)
       }
-
-      uploadedImages.push({ blockIndex: i, url: wpMedia.url, mediaId: wpMedia.mediaId })
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      if (!msg.includes('non configure') && !msg.includes('FAL_KEY')) throw error
+      continue
     }
+    const { blockIndex, isImageBlock, wpMedia, altText, imgTitle, optimized } = result.value
+    const block = updatedBlocks[blockIndex]
+
+    if (isImageBlock) {
+      updatedBlocks[blockIndex] = {
+        ...block,
+        content_html: `<figure><img src="${wpMedia.url}" alt="${altText}" title="${imgTitle}" width="${optimized.width}" height="${optimized.height}" loading="lazy" />${block.heading ? `<figcaption>${block.heading}</figcaption>` : ''}</figure>`,
+        status: 'written' as const,
+      }
+    } else {
+      const imageHtml = `<figure class="section-image"><img src="${wpMedia.url}" alt="${altText}" title="${imgTitle}" width="${optimized.width}" height="${optimized.height}" loading="lazy" /></figure>`
+      updatedBlocks[blockIndex] = {
+        ...block,
+        content_html: imageHtml + (block.content_html || ''),
+      }
+    }
+
+    uploadedImages.push({ blockIndex, url: wpMedia.url, mediaId: wpMedia.mediaId })
   }
 
   // 3. Update article
