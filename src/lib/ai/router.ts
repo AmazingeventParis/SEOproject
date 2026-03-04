@@ -36,31 +36,31 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
   },
   critique: {
     provider: 'google',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     maxTokens: 2048,
     temperature: 0.3,
   },
   generate_title: {
     provider: 'google',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     maxTokens: 512,
     temperature: 0.7,
   },
   generate_meta: {
     provider: 'google',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     maxTokens: 512,
     temperature: 0.5,
   },
   extract_keywords: {
     provider: 'google',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     maxTokens: 1024,
     temperature: 0.2,
   },
   summarize: {
     provider: 'google',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     maxTokens: 1024,
     temperature: 0.3,
   },
@@ -73,21 +73,21 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
   },
   analyze_competitor_content: {
     provider: 'google',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     maxTokens: 2048,
     temperature: 0.2,
     jsonMode: true,
   },
   evaluate_authority_links: {
     provider: 'google',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     maxTokens: 1024,
     temperature: 0.3,
     jsonMode: true,
   },
   extract_nuggets: {
     provider: 'google',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     maxTokens: 4096,
     temperature: 0.3,
     jsonMode: true,
@@ -110,13 +110,12 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
 // ---- Cross-provider fallback map ----
 
 const FALLBACK_MODEL: Record<string, { provider: AIProvider; model: string }> = {
-  'claude-sonnet-4-20250514': { provider: 'google', model: 'gemini-2.5-flash' },
-  'claude-haiku-4-5-20251001': { provider: 'google', model: 'gemini-2.5-flash' },
-  'gpt-4o': { provider: 'google', model: 'gemini-2.5-flash' },
-  'gpt-4o-mini': { provider: 'google', model: 'gemini-2.5-flash' },
+  'claude-sonnet-4-20250514': { provider: 'google', model: 'gemini-3-flash-preview' },
+  'claude-haiku-4-5-20251001': { provider: 'google', model: 'gemini-3-flash-preview' },
+  'gpt-4o': { provider: 'google', model: 'gemini-3-flash-preview' },
+  'gpt-4o-mini': { provider: 'google', model: 'gemini-3-flash-preview' },
   'gemini-3.1-pro-preview': { provider: 'google', model: 'gemini-3-flash-preview' },
   'gemini-3-flash-preview': { provider: 'google', model: 'gemini-3.1-pro-preview' },
-  'gemini-2.5-flash': { provider: 'google', model: 'gemini-3-flash-preview' },
 }
 
 // ---- Retry / fallback helpers ----
@@ -218,60 +217,13 @@ async function callWithRetryAndFallback(
   }
 }
 
-// ---- Tasks forced on gemini-3.1-pro-preview WITHOUT fallback ----
-// These tasks must fail loudly so we can diagnose 3.1 errors.
-const NO_FALLBACK_TASKS = new Set<AITask>(['analyze_serp', 'plan_article'])
-
-/**
- * Call provider with retries only (no cross-provider fallback).
- * Logs the full raw error on failure for debugging.
- */
-async function callWithRetryNoFallback(
-  task: AITask,
-  config: ModelConfig,
-  messages: AIMessage[],
-  system?: string,
-): Promise<AIResponse> {
-  const retryDelays = [1000, 2000]
-
-  // --- Attempt 1 ---
-  try {
-    return await callProvider(config, messages, system)
-  } catch (err) {
-    console.error(
-      `[ai-router] [${task}] ${config.model} ERREUR BRUTE (tentative 1):`,
-      err,
-    )
-    if (!isRetryableError(err)) throw err
-  }
-
-  // --- Attempts 2-3: retry same model ---
-  for (let i = 0; i < retryDelays.length; i++) {
-    await sleep(retryDelays[i])
-    try {
-      return await callProvider(config, messages, system)
-    } catch (err) {
-      console.error(
-        `[ai-router] [${task}] ${config.model} ERREUR BRUTE (tentative ${i + 2}):`,
-        err,
-      )
-      if (!isRetryableError(err)) throw err
-    }
-  }
-
-  // No fallback — throw
-  throw new Error(
-    `[ai-router] [${task}] ${config.model} a echoue apres 3 tentatives sans fallback`
-  )
-}
-
 // ---- Main routing functions ----
 
 /**
  * Route an AI task to the appropriate provider and model.
- * For analyze_serp / plan_article / write_block: forced on gemini-3.1-pro-preview
- * with NO fallback — errors are logged raw for debugging.
- * Other tasks: retry + cross-provider fallback as before.
+ * All tasks use retry + cross-provider fallback:
+ *   gemini-3.1-pro → gemini-3-flash
+ *   gemini-3-flash → gemini-3.1-pro
  *
  * @param task     The task type (determines which model to use)
  * @param messages The conversation messages
@@ -284,9 +236,6 @@ export async function routeAI(
   system?: string
 ): Promise<AIResponse> {
   const config = TASK_ROUTING[task]
-  if (NO_FALLBACK_TASKS.has(task)) {
-    return callWithRetryNoFallback(task, config, messages, system)
-  }
   return callWithRetryAndFallback(config, messages, system)
 }
 
@@ -378,7 +327,6 @@ const COST_PER_1K_TOKENS: Record<string, { input: number; output: number }> = {
   'claude-haiku-4-5-20251001': { input: 0.001, output: 0.005 },
   'gemini-3.1-pro-preview': { input: 0.002, output: 0.012 },
   'gemini-3-flash-preview': { input: 0.0005, output: 0.003 },
-  'gemini-2.5-flash': { input: 0.0001, output: 0.0004 },
   'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
   'gpt-4o': { input: 0.0025, output: 0.01 },
 }
@@ -418,14 +366,6 @@ export const AVAILABLE_MODELS = [
     costInput: 0.50,
     costOutput: 3.00,
     tag: 'Rapide',
-  },
-  {
-    id: 'gemini-2.5-flash',
-    label: 'Gemini 2.0 Flash',
-    provider: 'google' as const,
-    costInput: 0.10,
-    costOutput: 0.40,
-    tag: 'Economique',
   },
   {
     id: 'gpt-4o-mini',
