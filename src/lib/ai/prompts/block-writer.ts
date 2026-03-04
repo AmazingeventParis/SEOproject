@@ -34,6 +34,7 @@ interface BlockWriterParams {
   nuggets: { id: string; content: string; tags: string[] }[]
   previousHeadings: string[]
   previousBlockContent?: string
+  articleDigest?: string
   articleTitle: string
   internalLinkTargets?: { target_slug: string; target_title: string; suggested_anchor_context: string; is_money_page?: boolean }[]
   siteDomain?: string
@@ -55,7 +56,7 @@ interface BlockWriterPrompt {
 export function buildBlockWriterPrompt(
   params: BlockWriterParams
 ): BlockWriterPrompt {
-  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleTitle, internalLinkTargets, siteDomain, authorityLink, siteThemeColor } = params
+  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleDigest, articleTitle, internalLinkTargets, siteDomain, authorityLink, siteThemeColor } = params
 
   // ---- System prompt ----
   const system = `Tu es un redacteur web expert en SEO, specialise dans la creation de contenu de haute qualite optimise pour le referencement naturel.
@@ -236,6 +237,18 @@ REGLES DE COHERENCE :
 - NE REPETE PAS les idees, exemples, chiffres ou formulations deja presents ci-dessus
 - Enchaine NATURELLEMENT : le debut de ton bloc doit couler comme une suite logique
 - Si la section precedente a mentionne un concept, approfondis-le ou passe a l'aspect suivant — jamais de redite`
+  }
+
+  // Inject cumulative article digest (all sections written so far)
+  if (articleDigest) {
+    user += `\n\n## RESUME CUMULATIF DE L'ARTICLE (toutes les sections deja ecrites)
+${articleDigest}
+---
+REGLE ANTI-REDITE ABSOLUE :
+- Chaque idee, exemple, chiffre, conseil ou formulation listee ci-dessus est DEJA dans l'article
+- Tu ne dois JAMAIS repeter, reformuler ou paraphraser ces elements
+- Apporte des idees NOUVELLES, des angles DIFFERENTS, des informations COMPLEMENTAIRES
+- Si tu n'as rien de nouveau a dire sur un point, PASSE AU SUIVANT`
   }
 
   // Add nuggets to integrate

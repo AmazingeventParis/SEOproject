@@ -367,10 +367,10 @@ async function executePlan(
 ): Promise<PipelineRunResult> {
   const supabase = getServerClient()
 
-  // Fetch nuggets for this site
+  // Fetch nuggets for this site (with rich metadata for smarter assignment)
   const { data: nuggets } = await supabase
     .from('seo_nuggets')
-    .select('id, content, tags')
+    .select('id, content, tags, source_type')
     .or(`site_id.eq.${article.site_id},site_id.is.null`)
     .limit(20)
 
@@ -419,7 +419,7 @@ async function executePlan(
     searchIntent: article.search_intent,
     persona: persona || { name: 'Expert', role: 'Redacteur', tone_description: null, bio: null, writing_style_examples: [] },
     serpData: serpDataRaw?.serp as Parameters<typeof buildPlanArchitectPrompt>[0]['serpData'],
-    nuggets: (nuggets || []).map((n) => ({ id: n.id, content: n.content, tags: n.tags })),
+    nuggets: (nuggets || []).map((n: { id: string; content: string; tags: string[]; source_type?: string }) => ({ id: n.id, content: n.content, tags: n.tags, source_type: n.source_type })),
     existingSiloArticles: siteArticles,
     moneyPage,
     competitorContent: serpDataRaw?.competitorContent,
@@ -661,12 +661,55 @@ async function executeWriteBlock(
     return { success: false, runId: '', error: `Bloc #${blockIndex} introuvable` }
   }
 
-  // Fetch nuggets assigned to this block or matching the article
-  const { data: nuggets } = await supabase
-    .from('seo_nuggets')
-    .select('id, content, tags')
-    .or(`site_id.eq.${article.site_id},site_id.is.null`)
-    .limit(5)
+  // Smart nugget fetching:
+  // 1. Use nugget_ids assigned by the plan-architect (if any)
+  // 2. Fallback: match nuggets by tag overlap with article keyword
+  let matchedNuggets: { id: string; content: string; tags: string[] }[] = []
+
+  const planNuggetIds = block.nugget_ids || []
+  if (planNuggetIds.length > 0) {
+    // Priority: use nuggets assigned by the plan
+    const { data } = await supabase
+      .from('seo_nuggets')
+      .select('id, content, tags')
+      .in('id', planNuggetIds)
+    matchedNuggets = (data || []) as { id: string; content: string; tags: string[] }[]
+  }
+
+  if (matchedNuggets.length === 0) {
+    // Fallback: fetch site nuggets and rank by keyword relevance
+    const { data: allNuggets } = await supabase
+      .from('seo_nuggets')
+      .select('id, content, tags')
+      .or(`site_id.eq.${article.site_id},site_id.is.null`)
+      .limit(50)
+
+    if (allNuggets && allNuggets.length > 0) {
+      const keywordWords = article.keyword.toLowerCase().split(/\s+/)
+      const headingWords = (block.heading || '').toLowerCase().split(/\s+/).filter(w => w.length > 3)
+      const searchWords = [...keywordWords, ...headingWords]
+
+      // Score each nugget by tag + content overlap with keyword/heading
+      const scored = (allNuggets as { id: string; content: string; tags: string[] }[]).map(n => {
+        let score = 0
+        const tagStr = (n.tags || []).join(' ').toLowerCase()
+        const contentStr = n.content.toLowerCase()
+        for (const word of searchWords) {
+          if (word.length < 3) continue
+          if (tagStr.includes(word)) score += 3
+          if (contentStr.includes(word)) score += 1
+        }
+        return { ...n, score }
+      })
+
+      matchedNuggets = scored
+        .filter(n => n.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        .map(({ score: _s, ...n }) => n)
+    }
+  }
 
   const persona = article.seo_personas as { name: string; role: string; tone_description: string | null; bio: string | null; writing_style_examples: Record<string, unknown>[] } | null
   const previousHeadings = contentBlocks
@@ -695,6 +738,21 @@ async function executeWriteBlock(
     }
   }
 
+  // Build cumulative digest of ALL previously written sections to prevent repetition
+  let articleDigest: string | undefined
+  const writtenBefore = contentBlocks
+    .slice(0, blockIndex)
+    .filter((b: ContentBlock) => b.content_html && (b.status === 'written' || b.status === 'approved'))
+  if (writtenBefore.length >= 2) {
+    // Extract key ideas from each section: heading + plain text summary (150 chars max each)
+    const digestParts = writtenBefore.map((b: ContentBlock) => {
+      const plain = (b.content_html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      const summary = plain.slice(0, 150) + (plain.length > 150 ? '...' : '')
+      return `- [${b.heading || 'Intro'}] ${summary}`
+    })
+    articleDigest = digestParts.join('\n')
+  }
+
   const prompt = buildBlockWriterPrompt({
     keyword: article.keyword,
     searchIntent: article.search_intent,
@@ -706,9 +764,10 @@ async function executeWriteBlock(
       writing_directive: block.writing_directive,
       format_hint: block.format_hint,
     },
-    nuggets: (nuggets || []).map((n: { id: string; content: string; tags: string[] }) => ({ id: n.id, content: n.content, tags: n.tags })),
+    nuggets: matchedNuggets.map(n => ({ id: n.id, content: n.content, tags: n.tags })),
     previousHeadings,
     previousBlockContent,
+    articleDigest,
     articleTitle: article.title || article.keyword,
     internalLinkTargets,
     siteDomain: siteDomain || undefined,
