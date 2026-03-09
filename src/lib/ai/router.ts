@@ -106,6 +106,14 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     maxTokens: 2048,
     temperature: 0.3,
   },
+  optimize_blocks: {
+    provider: 'google',
+    model: 'gemini-3.1-pro-preview',
+    maxTokens: 16384,
+    temperature: 0.5,
+    topP: 0.85,
+    jsonMode: true,
+  },
 }
 
 // ---- Cross-provider fallback map ----

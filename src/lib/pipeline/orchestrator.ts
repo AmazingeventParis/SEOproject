@@ -24,6 +24,7 @@ import { generateInternalLinks, injectLinksIntoHtml } from '@/lib/seo/internal-l
 import { createPost, updatePost, uploadMedia, findBestCategory, findOrCreateTags, getAllPublishedPosts } from '@/lib/wordpress/client'
 import { analyzeKeywordDensity } from '@/lib/seo/keyword-analysis'
 import { buildCritiquePrompt, validateCritiqueResult } from '@/lib/ai/prompts/critique'
+import { buildOptimizeBlocksPrompt } from '@/lib/ai/prompts/optimize-blocks'
 
 /**
  * Extract and parse JSON from AI response text.
@@ -1430,6 +1431,135 @@ async function executeSeo(
     }
   }
 
+  // 5e. SEO Audit — sub-step E: auto-optimize blocks if critique score < 90
+  let optimizationResult: {
+    performed: boolean
+    scoreBefore: number
+    scoreAfter: number
+    blocksOptimized: number
+    details: { blockIndex: number; reason: string }[]
+  } | null = null
+
+  if (critiqueResult && critiqueResult.score < 90 && persona) {
+    try {
+      console.log(`[seo-audit] Score ${critiqueResult.score}/100 < 90 — lancement auto-optimisation…`)
+
+      // Build blocks with index for the prompt
+      const blocksForOptimize = updatedBlocks
+        .map((b, i) => ({
+          index: i,
+          type: b.type,
+          heading: b.heading || null,
+          content_html: b.content_html || '',
+          word_count: b.word_count || 0,
+        }))
+        .filter((b) => b.content_html && b.type !== 'image')
+
+      const optimizePrompts = buildOptimizeBlocksPrompt({
+        keyword: article.keyword,
+        searchIntent: article.search_intent || undefined,
+        articleTitle: article.title || article.keyword,
+        persona: {
+          name: persona.name,
+          role: persona.role,
+          tone_description: persona.tone_description,
+          bio: persona.bio,
+        },
+        blocks: blocksForOptimize,
+        issues: critiqueResult.issues,
+        suggestions: critiqueResult.suggestions,
+        scores: {
+          score: critiqueResult.score,
+          eeat_score: critiqueResult.eeat_score,
+          readability: critiqueResult.readability,
+          seo_score: critiqueResult.seo_score,
+        },
+      })
+
+      const optimizeResponse = await routeAI('optimize_blocks', [
+        { role: 'user', content: optimizePrompts.user },
+      ], optimizePrompts.system)
+
+      const fixes = extractJSON<{ optimized_blocks: { block_index: number; reason: string; new_content_html: string }[] }>(optimizeResponse.content)
+
+      if (fixes && Array.isArray(fixes.optimized_blocks) && fixes.optimized_blocks.length > 0) {
+        // Apply fixes to blocks
+        for (const fix of fixes.optimized_blocks) {
+          if (fix.block_index >= 0 && fix.block_index < updatedBlocks.length && fix.new_content_html) {
+            updatedBlocks[fix.block_index] = {
+              ...updatedBlocks[fix.block_index],
+              content_html: fix.new_content_html,
+              word_count: countWords(fix.new_content_html),
+            }
+          }
+        }
+
+        console.log(`[seo-audit] ${fixes.optimized_blocks.length} blocs optimises, re-run critique…`)
+
+        // Re-run critique ONCE to get updated score
+        try {
+          const reFullContentHtml = updatedBlocks
+            .filter((b) => b.content_html && b.status !== 'pending')
+            .map((b) => {
+              if (b.heading) return `<${b.type === 'h2' ? 'h2' : b.type === 'h3' ? 'h3' : b.type === 'h4' ? 'h4' : 'p'}>${b.heading}</${b.type === 'h2' ? 'h2' : b.type === 'h3' ? 'h3' : b.type === 'h4' ? 'h4' : 'p'}>\n${b.content_html}`
+              return b.content_html
+            })
+            .join('\n')
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+            .replace(/<!--\s*wp:spacer[\s\S]*?-->/gi, '')
+            .replace(/<div[^>]*style="height:\d+px"[^>]*><\/div>/gi, '')
+            .replace(/<figure[^>]*class="[^"]*section-image[^"]*"[^>]*>[\s\S]*?<\/figure>/gi, '')
+
+          const reCritiquePrompts = buildCritiquePrompt({
+            keyword: article.keyword,
+            searchIntent: article.search_intent || undefined,
+            title: article.title || article.keyword,
+            contentHtml: reFullContentHtml,
+            persona: {
+              name: persona.name,
+              role: persona.role,
+              tone_description: persona.tone_description,
+              bio: persona.bio,
+            },
+          })
+
+          const reCritiqueResponse = await routeAI('critique', [
+            { role: 'user', content: reCritiquePrompts.user },
+          ], reCritiquePrompts.system)
+
+          const newCritique = validateCritiqueResult(
+            extractJSON<Record<string, unknown>>(reCritiqueResponse.content)
+          )
+
+          optimizationResult = {
+            performed: true,
+            scoreBefore: critiqueResult.score,
+            scoreAfter: newCritique.score,
+            blocksOptimized: fixes.optimized_blocks.length,
+            details: fixes.optimized_blocks.map((f) => ({ blockIndex: f.block_index, reason: f.reason })),
+          }
+
+          console.log(`[seo-audit] Auto-optimisation terminee : ${critiqueResult.score} → ${newCritique.score}`)
+
+          // Use new critique scores for the audit
+          critiqueResult = newCritique
+        } catch (reErr) {
+          console.warn('[seo-audit] Re-critique after optimization failed:', reErr)
+          // Still record that optimization was performed
+          optimizationResult = {
+            performed: true,
+            scoreBefore: critiqueResult.score,
+            scoreAfter: critiqueResult.score, // unknown — re-critique failed
+            blocksOptimized: fixes.optimized_blocks.length,
+            details: fixes.optimized_blocks.map((f) => ({ blockIndex: f.block_index, reason: f.reason })),
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[seo-audit] Auto-optimization failed:', err)
+    }
+  }
+
   // Build seo_audit object
   const seoAudit = {
     auditedAt: new Date().toISOString(),
@@ -1445,6 +1575,7 @@ async function executeSeo(
     },
     keywordInIntro,
     ...(critiqueResult ? { critique: critiqueResult } : {}),
+    ...(optimizationResult ? { optimization: optimizationResult } : {}),
   }
 
   // 6. Update article
@@ -1478,6 +1609,11 @@ async function executeSeo(
         keywordDensity: keywordDensityResult.density,
         keywordInIntro,
         critiqueScore: critiqueResult?.score ?? null,
+        optimization: optimizationResult ? {
+          scoreBefore: optimizationResult.scoreBefore,
+          scoreAfter: optimizationResult.scoreAfter,
+          blocksOptimized: optimizationResult.blocksOptimized,
+        } : null,
       },
     },
   }
