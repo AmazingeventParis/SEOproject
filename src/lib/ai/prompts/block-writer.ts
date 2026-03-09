@@ -203,7 +203,7 @@ Cette strategie PRIME sur les regles generales en cas de conflit.
 - PERTINENCE ABSOLUE — REGLE LA PLUS IMPORTANTE :
   * Chaque phrase DOIT etre directement liee au mot-cle principal "${keyword}" et au titre de l'article
   * Si une phrase ne repond pas a la question "est-ce que cela parle SPECIFIQUEMENT de ${keyword} ?" → SUPPRIME-LA
-  * N'aborde JAMAIS de sujet connexe, voisin ou tangentiel meme s'il partage le meme domaine. Exemples de derives INTERDITES : parler d'isolation phonique dans un article sur l'isolation thermique, parler de SEO technique dans un article sur le SEO editorial, parler de budget dans un article sur la technique
+  * N'aborde JAMAIS de sujet connexe, voisin ou tangentiel meme s'il partage le meme domaine
   * Si la directive d'ecriture ou le heading mentionne un sous-sujet precis, reste STRICTEMENT sur ce sous-sujet
   * Avant de valider chaque paragraphe, verifie : "est-ce que ce paragraphe concerne bien ${keyword} et rien d'autre ?"
 - TABLEAUX DANS LES SECTIONS LONGUES : si le bloc depasse 250 mots, tu DOIS inclure au moins 1 tableau HTML responsive pour synthetiser des donnees cles, comparer des options, ou recapituler des points essentiels. Le tableau DOIT utiliser la structure <div class="table-container"><table>...</table></div>. Cela facilite la lecture et attire l'oeil du lecteur sur les informations importantes. Le tableau ne remplace pas le texte — il le complete en condensant les points cles visuellement.`
