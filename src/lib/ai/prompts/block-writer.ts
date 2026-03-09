@@ -305,16 +305,21 @@ Voici des extraits authentiques. Imite ce style, ce vocabulaire, cette structure
 
   // Inject internal link targets if available
   if (internalLinkTargets && internalLinkTargets.length > 0) {
-    user += `\n\n## LIENS INTERNES A INTEGRER`
+    user += `\n\n## LIENS INTERNES (optionnels — a placer UNIQUEMENT si naturel)`
     for (const link of internalLinkTargets) {
       const fullUrl = siteDomain ? `https://${siteDomain}/${link.target_slug.replace(/^\//, '')}` : `/${link.target_slug}`
-      user += `\n- Cible : "${link.target_title}" → ${fullUrl}`
-      user += `\n  Contexte : ${link.suggested_anchor_context}`
+      user += `\n- URL : ${fullUrl}`
       if (link.is_money_page) {
-        user += `\n  (Page prioritaire)`
+        user += ` (page prioritaire)`
       }
     }
-    user += `\nIMPORTANT : L'ancre doit etre UNIQUE et NATURELLE — pas le titre exact.`
+    user += `\n
+REGLES STRICTES DU MAILLAGE :
+- Un lien = UNE balise <a> sur 2-6 mots dans une phrase qui parle DEJA de "${keyword}"
+- INTERDIT d'ecrire une phrase ou un paragraphe pour introduire le sujet de l'article cible
+- INTERDIT de changer de sujet, de faire une analogie ou une transition vers un autre domaine pour justifier un lien
+- Si aucune phrase de cette section ne permet de placer le lien naturellement → NE LE PLACE PAS. C'est OK.
+- Le lecteur ne doit PAS remarquer que le lien a ete place intentionnellement`
   }
 
   // Inject authority link if provided

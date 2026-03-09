@@ -130,10 +130,10 @@ Regles H4 :
 export const SEO_INTERNAL_LINKING_RULES = `- L'ancre ne doit JAMAIS etre le titre exact, ni l'URL, ni le slug de la page cible
 - L'ancre = expression naturelle de 2-6 mots integree dans la phrase
 - JAMAIS de "cliquez ici" ou "en savoir plus" comme ancre
-- Chaque lien doit apporter de la valeur au lecteur
 - Max 2-3 liens internes par section H2 (pas de sur-optimisation)
 - Un meme target_slug ne peut apparaitre qu'1 fois dans tout l'article
-- Place les liens la ou c'est NATUREL par rapport au sujet de la section`
+- REGLE CRITIQUE — ZERO HORS-SUJET POUR LE MAILLAGE : un lien interne = UNE balise <a> glissee dans une phrase qui parle DEJA du sujet de l'article en cours. Tu ne dois JAMAIS ecrire de phrase, de paragraphe ou de transition dont le but est d'introduire le sujet de l'article cible. Si le sujet de l'article cible n'a aucun rapport naturel avec la phrase en cours, NE PLACE PAS le lien. Mieux vaut 0 lien interne qu'un paragraphe hors-sujet.
+- Le lien doit etre INVISIBLE pour le lecteur : il doit tomber sur un mot ou une expression qui fait deja partie du discours, pas sur un detour thematique force`
 
 /**
  * Writing style and readability rules.
