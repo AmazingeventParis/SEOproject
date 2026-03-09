@@ -92,6 +92,14 @@ REGLE ABSOLUE : nous sommes en ${currentYear}. Si un titre, un seo_title, un slu
 ## TON ROLE
 Tu generes des plans d'articles structures en PYRAMIDE INVERSEE, complets et optimises SEO. Le plan doit permettre a un redacteur de creer un contenu de haute qualite qui se positionnera en premiere page Google.
 
+## CONTRAINTE MECE (Mutuellement Exclusif, Collectivement Exhaustif)
+
+REGLE ABSOLUE : le plan doit etre MECE.
+- **Mutuellement Exclusif** : aucune idee, argument, exemple ou conseil ne doit se chevaucher entre deux sections. Si un point est traite dans le H2 "Choix des materiaux", il est INTERDIT de le rementionner dans "Mise en oeuvre". Chaque section a un PERIMETRE ETANCHE.
+- **Collectivement Exhaustif** : l'ensemble des sections couvre TOUT ce que le lecteur doit savoir sur le sujet. Aucun angle important ne manque.
+
+Pour chaque bloc, tu DOIS definir "key_ideas" : un tableau de 3-5 idees cles qui seront traitees UNIQUEMENT dans cette section. Ce perimetre est exclusif — aucune autre section ne traitera ces idees.
+
 ## STRUCTURE PYRAMIDE INVERSEE (OBLIGATOIRE)
 
 ### Principe fondamental
@@ -267,6 +275,7 @@ Tu DOIS retourner UNIQUEMENT un objet JSON valide, sans texte avant ou apres, sa
       "format_hint": "prose | bullets | table | mixed",
       "generate_image": true,
       "image_prompt_hint": "Editorial photo showing...",
+      "key_ideas": ["Idee 1 exclusive a cette section", "Idee 2", "Idee 3"],
       "internal_link_targets": [
         {
           "target_slug": "slug-de-larticle-cible",
@@ -291,7 +300,8 @@ IMPORTANT :
 - "format_hint" est OBLIGATOIRE sur chaque bloc
 - "generate_image" doit etre present sur chaque bloc (true ou false). MINIMUM 5 blocs avec generate_image: true (sauf FAQ et tableaux purs)
 - "image_prompt_hint" est requis uniquement si generate_image est true
-- "internal_link_targets" est OBLIGATOIRE sur les blocs de type "h2" (tableau vide [] si aucun lien pertinent)`
+- "internal_link_targets" est OBLIGATOIRE sur les blocs de type "h2" (tableau vide [] si aucun lien pertinent)
+- "key_ideas" est OBLIGATOIRE sur chaque bloc de contenu (3-5 idees exclusives a cette section)`
 
   // ---- User prompt ----
   let user = `## MISSION
@@ -495,6 +505,7 @@ EXCEPTION SLUG : les slugs ne doivent JAMAIS contenir d'annee (un slug est intem
 11. DECOUPE H3 : si un H2 necessite plus de 400 mots, decoupe-le en H3 specifiques (2-4 H3 par H2)
 12. BLOC INTRO OBLIGATOIRE : le PREMIER element de content_blocks doit etre un bloc type "paragraph", heading null, word_count 120, contenant le mot-cle principal. Ce bloc precede le premier H2.
 13. WORD COUNT MINIMUM : chaque bloc H2 DOIT avoir word_count >= 250. Chaque H3 >= 150. JAMAIS de word_count < 120 sauf intro. Un word_count de 30, 50 ou 80 est une ERREUR — le redacteur ne peut rien ecrire de substantiel en si peu de mots.
+14. KEY IDEAS MECE : chaque bloc a un "key_ideas" (3-5 idees) qui definit son perimetre exclusif. AUCUN chevauchement entre sections.
 
 Retourne UNIQUEMENT le JSON, rien d'autre.`
 

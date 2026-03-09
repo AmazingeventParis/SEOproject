@@ -766,16 +766,26 @@ async function executeWriteBlock(
     }
   }
 
+  // Build full article outline for MECE context injection
+  const articleOutline = contentBlocks
+    .filter((b: ContentBlock) => b.heading || b.type === 'paragraph')
+    .map((b: ContentBlock, idx: number) => {
+      const prefix = b.type === 'paragraph' && !b.heading ? 'Intro' : b.type.toUpperCase()
+      const ideas = b.key_ideas?.length ? ` → [${b.key_ideas.join(' | ')}]` : ''
+      return `${idx + 1}. [${prefix}] ${b.heading || '(intro)'}${ideas}`
+    })
+    .join('\n')
+
   // Build cumulative digest of ALL previously written sections to prevent repetition
   let articleDigest: string | undefined
   const writtenBefore = contentBlocks
     .slice(0, blockIndex)
     .filter((b: ContentBlock) => b.content_html && (b.status === 'written' || b.status === 'approved'))
   if (writtenBefore.length >= 2) {
-    // Extract key ideas from each section: heading + plain text summary (150 chars max each)
+    // Extract key ideas from each section: heading + plain text summary (500 chars max each)
     const digestParts = writtenBefore.map((b: ContentBlock) => {
       const plain = (b.content_html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-      const summary = plain.slice(0, 150) + (plain.length > 150 ? '...' : '')
+      const summary = plain.slice(0, 500) + (plain.length > 500 ? '...' : '')
       return `- [${b.heading || 'Intro'}] ${summary}`
     })
     articleDigest = digestParts.join('\n')
@@ -801,6 +811,8 @@ async function executeWriteBlock(
     siteDomain: siteDomain || undefined,
     authorityLink: shouldInjectAuth ? selectedAuth : null,
     siteThemeColor: article.seo_sites?.theme_color || undefined,
+    articleOutline,
+    blockKeyIdeas: block.key_ideas || [],
   })
 
   const aiResponse = modelOverride

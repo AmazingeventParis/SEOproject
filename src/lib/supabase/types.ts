@@ -78,6 +78,7 @@ export interface ContentBlock {
   generate_image?: boolean
   image_prompt_hint?: string
   internal_link_targets?: InternalLinkTarget[]
+  key_ideas?: string[]
 }
 
 // ---- Database type ----

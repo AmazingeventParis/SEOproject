@@ -40,6 +40,8 @@ interface BlockWriterParams {
   siteDomain?: string
   authorityLink?: { url: string; title: string; anchor_context: string } | null
   siteThemeColor?: string
+  articleOutline?: string
+  blockKeyIdeas?: string[]
 }
 
 interface BlockWriterPrompt {
@@ -56,7 +58,7 @@ interface BlockWriterPrompt {
 export function buildBlockWriterPrompt(
   params: BlockWriterParams
 ): BlockWriterPrompt {
-  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleDigest, articleTitle, internalLinkTargets, siteDomain, authorityLink, siteThemeColor } = params
+  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleDigest, articleTitle, internalLinkTargets, siteDomain, authorityLink, siteThemeColor, articleOutline, blockKeyIdeas } = params
 
   // ---- System prompt ----
   const system = `Tu es un redacteur web expert en SEO, specialise dans la creation de contenu de haute qualite optimise pour le referencement naturel.
@@ -229,19 +231,28 @@ L'article contient deja les sections suivantes avant ce bloc :`
     user += `\n(Ce bloc est le premier de l'article)`
   }
 
+  // Inject full article outline for MECE context
+  if (articleOutline) {
+    user += `\n\n## PLAN COMPLET DE L'ARTICLE
+${articleOutline}`
+  }
+
+  // Inject key_ideas for this specific block (MECE scope)
+  if (blockKeyIdeas && blockKeyIdeas.length > 0) {
+    user += `\n\n## PERIMETRE EXCLUSIF DE CETTE SECTION
+Tu DOIS traiter UNIQUEMENT ces idees cles (et rien d'autre) :
+${blockKeyIdeas.map(idea => `- ${idea}`).join('\n')}
+Tout point non liste ici appartient a une AUTRE section. Ne l'aborde PAS.`
+  }
+
   // Inject the content of the immediately preceding block for coherence
   if (previousBlockContent) {
-    // Strip HTML tags and truncate to avoid bloating the prompt
-    const plainPrevious = previousBlockContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 800)
-    user += `\n\n## CONTENU DE LA SECTION PRECEDENTE (pour assurer la coherence)
-Voici les derniers paragraphes ecrits juste avant ce bloc :
+    // Strip HTML tags — use full text up to 3000 chars for better transition context
+    const plainPrevious = previousBlockContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 3000)
+    user += `\n\n## TEXTE INTEGRAL DE LA SECTION PRECEDENTE
 ---
 ${plainPrevious}
----
-REGLES DE COHERENCE :
-- NE REPETE PAS les idees, exemples, chiffres ou formulations deja presents ci-dessus
-- Enchaine NATURELLEMENT : le debut de ton bloc doit couler comme une suite logique
-- Si la section precedente a mentionne un concept, approfondis-le ou passe a l'aspect suivant — jamais de redite`
+---`
   }
 
   // Inject cumulative article digest (all sections written so far)
@@ -331,7 +342,12 @@ Ce lien renforce l'E-E-A-T en citant une source reconnue.`
     keywordInstruction = `- Utilise des variantes et synonymes du mot-cle "${keyword}". Mot-cle principal au moins 1 fois si c'est un des derniers blocs de l'article`
   }
 
-  user += `\n\n## RAPPEL
+  user += `\n\n## 3 REGLES STRICTES
+**REGLE 1 — TRANSITION** : La premiere phrase doit creer un pont naturel avec la section precedente. Pas de "Voyons maintenant", mais une transition logique qui montre pourquoi on passe a ce nouveau point.
+**REGLE 2 — ZERO REDITE** : Ne repete AUCUN argument, exemple, chiffre ou conseil deja present dans les sections precedentes (voir le plan et le texte de la section precedente). Si un point a deja ete traite, passe-le. Apporte uniquement des idees NOUVELLES.
+**REGLE 3 — PAS DE CONCLUSION** : Ne conclus PAS cette section. Pas de phrase de synthese en fin de section ("En resume...", "Ainsi...", "En definitive..."). La derniere phrase doit rester dans le vif du sujet ou ouvrir vers la section suivante.
+
+## RAPPEL
 - Objectif minimum : ~${block.word_count} mots (ecris plus si le sujet le merite, ne coupe pas artificiellement)
 - Type de bloc : ${block.type}${block.format_hint ? ` (format: ${block.format_hint})` : ''}
 - Retourne UNIQUEMENT du HTML propre

@@ -32,7 +32,8 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     provider: 'google',
     model: 'gemini-3.1-pro-preview',
     maxTokens: 8192,
-    temperature: 0.8,
+    temperature: 0.7,
+    topP: 0.8,
   },
   critique: {
     provider: 'google',
@@ -153,7 +154,7 @@ function callProvider(
   }
   if (config.provider === 'anthropic') return callClaude(opts)
   if (config.provider === 'openai') return callOpenAI(opts)
-  return callGemini({ ...opts, jsonMode: config.jsonMode })
+  return callGemini({ ...opts, jsonMode: config.jsonMode, topP: config.topP })
 }
 
 /**

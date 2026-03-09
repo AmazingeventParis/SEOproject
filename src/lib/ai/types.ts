@@ -47,4 +47,5 @@ export interface ModelConfig {
   maxTokens: number
   temperature: number
   jsonMode?: boolean
+  topP?: number
 }

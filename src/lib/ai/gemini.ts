@@ -62,6 +62,7 @@ export async function callGemini(options: {
   maxTokens?: number
   temperature?: number
   jsonMode?: boolean
+  topP?: number
 }): Promise<AIResponse> {
   const start = Date.now()
   const client = await getClient()
@@ -73,6 +74,9 @@ export async function callGemini(options: {
     maxOutputTokens: options.maxTokens || 2048,
     temperature: options.temperature ?? 0.7,
   }
+  if (options.topP !== undefined) {
+    config.topP = options.topP
+  }
   if (options.system) {
     config.systemInstruction = options.system
   }
@@ -80,11 +84,11 @@ export async function callGemini(options: {
     config.responseMimeType = 'application/json'
   }
   // Gemini 3.x thinking config (uses thinking_level, not legacy thinkingBudget):
-  // - JSON mode: LOW thinking (cannot disable on 3.1 Pro)
+  // - JSON mode: HIGH thinking for more thorough plan generation
   // - Text mode: MEDIUM thinking for better quality writing
   if (modelName.startsWith('gemini-3')) {
     if (options.jsonMode) {
-      config.thinkingConfig = { thinkingLevel: 'LOW' }
+      config.thinkingConfig = { thinkingLevel: 'HIGH' }
     } else {
       config.thinkingConfig = { thinkingLevel: 'MEDIUM' }
     }

@@ -13,6 +13,16 @@ Phases 1-4 terminées. Projet en production.
 
 <!-- Ajouter les nouvelles entrées en haut -->
 
+### 2026-03-09
+- Architecture MECE anti-redite pour la redaction
+  - **Contrainte MECE dans plan-architect** : chaque section a un perimetre etanche avec `key_ideas` (3-5 idees exclusives). Aucun chevauchement entre sections (Mutuellement Exclusif, Collectivement Exhaustif).
+  - **key_ideas dans ContentBlock** : nouveau champ `key_ideas?: string[]` dans l'interface ContentBlock (`types.ts`)
+  - **Contexte complet dans block-writer** : injection du plan complet (`articleOutline`) + idees cles du bloc (`blockKeyIdeas`) + texte integral section precedente (3000 chars au lieu de 800)
+  - **3 regles strictes** : TRANSITION naturelle (pas de "Voyons maintenant"), ZERO REDITE (aucun argument/exemple deja present), PAS DE CONCLUSION (pas de "En resume...")
+  - **Digest enrichi** : resume cumulatif passe de 150 → 500 chars par section
+  - **Parametres API optimises** : write_block temperature 0.8 → 0.7, topP 0.8 (nouveau), JSON thinking LOW → HIGH
+  - **Support topP** : nouveau champ `topP?: number` dans ModelConfig, passe a callGemini via router
+
 ### 2026-03-04
 - Systeme d'import WordPress + refresh contenu
   - **Import WP** : nouveau endpoint `GET /api/sites/[siteId]/wp-posts` (liste posts WP non importes) + `POST /api/sites/[siteId]/wp-import` (import batch avec parsing HTML → ContentBlock[])
