@@ -142,34 +142,44 @@ Format : <div class="callout callout-info"><p>Contenu...</p></div>
 Variantes : callout-info, callout-warning, callout-tip, callout-important
 
 ### Pour un format "table"
-Cree un tableau HTML epure, moderne et responsive.
+Cree un tableau HTML epure, moderne et responsive. Les styles inline sont OBLIGATOIRES car le HTML sera publie sur WordPress sans CSS custom.
 
-**Structure HTML OBLIGATOIRE :**
-<div class="table-container">
-  <table>
+**Structure HTML OBLIGATOIRE (copie ce modele exactement) :**
+<div class="table-container" style="width:100%;overflow-x:auto;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin:20px 0">
+  <table style="width:100%;border-collapse:collapse;min-width:500px">
     <thead>
-      <tr><th${siteThemeColor ? ` style="background-color: ${siteThemeColor}20; border-bottom: 2px solid ${siteThemeColor}50"` : ''}>En-tete</th></tr>
+      <tr>
+        <th style="background:${siteThemeColor || '#1e293b'};color:#fff;padding:14px 16px;font-weight:600;text-align:left;font-size:0.9rem">En-tete 1</th>
+        <th style="background:${siteThemeColor || '#1e293b'};color:#fff;padding:14px 16px;font-weight:600;text-align:left;font-size:0.9rem">En-tete 2</th>
+      </tr>
     </thead>
     <tbody>
-      <tr><td>Donnee</td></tr>
+      <tr>
+        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0">Donnee</td>
+        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0">Donnee</td>
+      </tr>
+      <tr style="background:#f8fafc">
+        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0">Donnee</td>
+        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0">Donnee</td>
+      </tr>
     </tbody>
   </table>
 </div>
 
-**Design UX/UI :**
-${siteThemeColor ? `Couleur theme du site : ${siteThemeColor}. Styles inline OBLIGATOIRES :
-- <th> : style="background-color: ${siteThemeColor}20; border-bottom: 2px solid ${siteThemeColor}50; font-weight: 600; padding: 14px 16px"
-- <td> : style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9"
-- Lignes paires <tr> : style="background-color: ${siteThemeColor}08"` : 'Pas de couleur de site definie — les styles sont geres par le CSS (headers gris #f8fafc, bordures #f1f5f9).'}
+**Regles de style :**
+- <th> : fond ${siteThemeColor ? `${siteThemeColor}` : '#1e293b (bleu fonce)'}, texte blanc (#fff), padding 14px 16px, font-weight 600
+- <td> : padding 12px 16px, border-bottom 1px solid #e2e8f0
+- Lignes paires <tr> : style="background:#f8fafc" (zebra-striping)
+- Derniere ligne : pas de border-bottom sur les <td>
+- Container : border-radius 8px, box-shadow legere, overflow-x auto
 
 **Regles strictes :**
-- TOUJOURS wrapper dans <div class="table-container"> (scroll horizontal mobile + ombre legere + coins arrondis)
-- Pas de bordures lourdes — uniquement border-bottom fines
+- TOUJOURS wrapper dans <div class="table-container" style="...">
+- Styles inline OBLIGATOIRES sur CHAQUE <th>, <td>, <tr> pair et <div> — jamais compter sur le CSS externe
 - Max 4-5 colonnes pour la lisibilite mobile
 - Headers courts et clairs (1-3 mots)
 - Cellules concises (pas de paragraphes dans les cellules)
 - Ajoute une phrase d'introduction avant le tableau si pertinent
-- Le zebra-striping et le hover sont geres par le CSS — ne pas ajouter de class supplementaire
 
 ### Pour un format "mixed"
 Combine prose + elements visuels (liste ou tableau) :
