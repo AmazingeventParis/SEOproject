@@ -217,7 +217,14 @@ Cette strategie PRIME sur les regles generales en cas de conflit.
   * N'aborde JAMAIS de sujet connexe, voisin ou tangentiel meme s'il partage le meme domaine
   * Si la directive d'ecriture ou le heading mentionne un sous-sujet precis, reste STRICTEMENT sur ce sous-sujet
   * Avant de valider chaque paragraphe, verifie : "est-ce que ce paragraphe concerne bien ${keyword} et rien d'autre ?"
-- TABLEAUX DANS LES SECTIONS LONGUES : si le bloc depasse 250 mots, tu DOIS inclure au moins 1 tableau HTML responsive pour synthetiser des donnees cles, comparer des options, ou recapituler des points essentiels. Le tableau DOIT utiliser la structure <div class="table-container"><table>...</table></div>. Cela facilite la lecture et attire l'oeil du lecteur sur les informations importantes. Le tableau ne remplace pas le texte — il le complete en condensant les points cles visuellement.`
+- AERATION OBLIGATOIRE — ZERO MUR DE TEXTE :
+  * JAMAIS plus de 2 paragraphes <p> consecutifs sans un element visuel (liste, tableau, callout)
+  * Si tu enumeres 3+ elements, avantages, etapes, criteres ou conseils → utilise une liste <ul> ou <ol> avec <strong> sur le point cle de chaque <li>
+  * Si tu compares 2+ options, presentes des donnees chiffrees, ou listes des specs/prix/criteres → utilise un TABLEAU HTML avec styles inline (voir format "table" ci-dessus)
+  * Chaque section de 200+ mots DOIT contenir au moins 1 element structurant (liste OU tableau)
+  * Chaque section de 350+ mots DOIT contenir au moins 1 tableau ET 1 liste (ou 2 listes)
+  * Le lecteur doit pouvoir SCANNER la page et trouver l'info cle visuellement, sans tout lire
+  * Les listes et tableaux ne remplacent PAS le texte — ils le completent. Ajoute 1-2 phrases de contexte avant chaque element visuel`
 
   // ---- User prompt ----
   let user = `## MISSION

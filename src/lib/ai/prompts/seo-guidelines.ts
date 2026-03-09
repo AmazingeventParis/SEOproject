@@ -148,10 +148,11 @@ export const SEO_WRITING_STYLE_RULES = `- Ecris dans un style naturel, fluide et
 - Alterne phrases courtes (impact) et moyennes (explication). Evite les phrases longues (>25 mots).
 - Integre des exemples concrets, des chiffres, des cas pratiques quand c'est pertinent
 - Utilise des transitions naturelles entre les paragraphes
-- Paragraphes courts (3-4 lignes max) pour une lecture facile sur ecran
+- Paragraphes courts (2-3 lignes max) pour une lecture facile sur ecran — un paragraphe de 5+ lignes est TROP LONG, decoupe-le
 - Pas de formulations generiques ou bateaux
 - Pas de repetitions excessives, pas de style monotone
 - Zero fluff : chaque phrase doit apporter de l'information ou de la valeur. Supprime tout remplissage.
+- RYTHME VISUEL : alterne prose courte → liste a puces → prose → tableau → prose. Le lecteur ne doit JAMAIS voir un bloc de texte compact de plus de 6 lignes sans respiration visuelle.
 
 Style humain et accessible :
 - Ecris comme un humain expert qui parle a un autre humain
