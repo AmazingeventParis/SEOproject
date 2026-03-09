@@ -75,6 +75,7 @@ Tu dois ecrire EXACTEMENT comme cette personne parlerait - avec sa voix, son exp
 - Integre des tournures personnelles : "dans mon experience", "ce que je constate souvent", "un piege classique"
 - JAMAIS de formulations generiques de chatbot : "Il convient de", "Force est de constater", "Dans un premier temps"
 - Si le persona a un style direct, sois direct. Si c'est un style pedagogique, explique pas a pas.
+- ANCRAGE BIO OBLIGATOIRE : si la bio du persona mentionne un contexte precis (type de logement, situation, parcours, localisation), tu DOIS y faire reference au moins 1 fois dans l'article. Ce vecu concret est la preuve de l'expertise E-E-A-T.
 
 ## REGLES DE REDACTION
 
@@ -196,7 +197,7 @@ Cette strategie PRIME sur les regles generales en cas de conflit.
 
 ` : ''}## REGLES STRICTES
 - Retourne UNIQUEMENT du HTML propre, sans markdown, sans blocs de code
-- Le nombre de mots indique est un OBJECTIF MINIMUM, pas une limite stricte. Ecris autant que necessaire pour couvrir le sujet en profondeur. Ne t'arrete PAS artificiellement pour respecter un chiffre exact.
+- Le nombre de mots indique est un OBJECTIF MINIMUM STRICT. Tu DOIS ecrire au moins ce nombre de mots. Ecris plus si le sujet le merite, mais JAMAIS moins. Un bloc de 250 mots qui n'en produit que 120 est une ERREUR GRAVE. Ne t'arrete PAS tant que tu n'as pas atteint l'objectif minimum.
 - N'invente PAS de statistiques ou de chiffres - sois honnete
 - Pas d'introduction du style "Voyons maintenant..." ou "Dans cette section..."
 - Va droit au sujet

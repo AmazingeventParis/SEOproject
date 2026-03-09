@@ -500,12 +500,14 @@ EXCEPTION SLUG : les slugs ne doivent JAMAIS contenir d'annee (un slug est intem
 6. Integre les questions PAA dans une section FAQ dediee (si pertinent selon l'intention)
 7. Assigne les nuggets pertinents aux blocs appropries
 8. Propose 3 variantes de titre H1 (question, promesse, specifique) + meta description optimisee
-9. Vise 1500-3000 mots repartis equilibrement (somme de TOUS les word_count)
+9. WORD COUNT TOTAL — VERIFIE AVANT DE REPONDRE : additionne les word_count de TOUS les blocs. Le total DOIT etre dans la fourchette de la strategie (ex: traffic = 2000-3000 mots). Si le total est inferieur au minimum, AJOUTE des blocs ou AUGMENTE les word_count existants. Un article de 1200 mots sur une intention "traffic" (minimum 2000) est une ERREUR GRAVE.
 10. Au moins un H2 doit contenir le mot-cle principal ou une variante tres proche
 11. DECOUPE H3 : si un H2 necessite plus de 400 mots, decoupe-le en H3 specifiques (2-4 H3 par H2)
 12. BLOC INTRO OBLIGATOIRE : le PREMIER element de content_blocks doit etre un bloc type "paragraph", heading null, word_count 120, contenant le mot-cle principal. Ce bloc precede le premier H2.
 13. WORD COUNT MINIMUM : chaque bloc H2 DOIT avoir word_count >= 250. Chaque H3 >= 150. JAMAIS de word_count < 120 sauf intro. Un word_count de 30, 50 ou 80 est une ERREUR — le redacteur ne peut rien ecrire de substantiel en si peu de mots.
 14. KEY IDEAS MECE : chaque bloc a un "key_ideas" (3-5 idees) qui definit son perimetre exclusif. AUCUN chevauchement entre sections.
+15. LONGUEUR DES TITRES : chaque heading H2/H3/H4 DOIT faire MAX 80 caracteres. Compte les caracteres avant de valider. Si un titre depasse 80 chars, reformule-le plus court.
+16. FAQ : le heading du bloc FAQ doit etre simplement "FAQ" (pas de variante longue). Le balisage Schema.org FAQPage est OBLIGATOIRE dans le HTML genere.
 
 Retourne UNIQUEMENT le JSON, rien d'autre.`
 

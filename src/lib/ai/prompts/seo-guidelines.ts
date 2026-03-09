@@ -11,6 +11,7 @@
  * Used by: block-writer, plan-architect, critique
  */
 export const SEO_EEAT_RULES = `- Montre l'EXPERIENCE personnelle du persona (anecdotes, cas concrets, vecu terrain)
+- UTILISE LA BIO DU PERSONA : si le persona a une backstory (maison, situation, parcours), ancre le contenu dedans. Exemple : un persona qui vit dans une maison des annees 80 doit partager des retours d'experience concrets lies a cette realite. La bio n'est pas decorative — c'est la preuve vivante de l'expertise.
 - Demontre l'EXPERTISE avec des donnees precises, des analyses approfondies
 - Renforce l'AUTORITE en citant des sources, des etudes, des references
 - Assure la FIABILITE avec des informations exactes, a jour et equilibrees
@@ -20,7 +21,8 @@ Penalites E-E-A-T :
 - Contenu generique sans valeur ajoutee
 - Absence d'exemples ou de cas concrets
 - Affirmations non etayees
-- Style impersonnel / "IA" evident`
+- Style impersonnel / "IA" evident
+- Persona present dans la bio mais JAMAIS cite ou ancre dans le contenu`
 
 /**
  * FAQ format and rules (HTML accordion + Schema.org).
@@ -42,7 +44,8 @@ Structure COMPLETE a generer :
 </div>
 
 Regles FAQ :
-- Le <h2> DOIT etre inclus dans le HTML genere (pas rendu separement)
+- Le <h2> DOIT etre inclus UNE SEULE FOIS dans le HTML genere. NE DUPLIQUE JAMAIS le titre — si tu generes <h2>FAQ</h2>, ne le repete pas
+- Le heading du bloc FAQ est "FAQ" — pas de variante longue comme "FAQ : Vos questions recurrentes sur..."
 - Reponses COURTES : 2-4 phrases maximum, directes et actionables
 - Chaque reponse donne une VRAIE SOLUTION rapide a la question posee
 - Optimise pour le featured snippet Google (reponse immediate, pas de bavardage)
@@ -53,7 +56,7 @@ Regles FAQ :
  * Used by: block-writer, critique
  */
 export const SEO_ANTI_AI_PATTERNS = `Formulations INTERDITES (style ChatGPT/IA generique) :
-- "Dans cet article nous allons..."
+- "dans cet article" (sous TOUTES ses formes : "dans cet article nous allons", "dans cet article vous decouvrirez", "cet article vous explique", "cet article explore", etc.)
 - "Il est important de noter que..."
 - "Il convient de..."
 - "Force est de constater..."
@@ -62,7 +65,8 @@ export const SEO_ANTI_AI_PATTERNS = `Formulations INTERDITES (style ChatGPT/IA g
 - "Dans cette section..."
 - "Depuis la nuit des temps..."
 - "Comme nous l'avons vu..."
-- "En conclusion..."
+- "En conclusion..." / "En resume..." / "En definitive..." / "Ainsi..." (en debut de phrase conclusive)
+- "Au fil de cet article..." / "Tout au long de cet article..."
 - Toute formulation generique ou bateau reconnaissable comme generee par IA
 
 Ponctuation et typographie INTERDITES :
