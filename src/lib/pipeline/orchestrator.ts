@@ -905,6 +905,18 @@ async function executeMedia(
 
   const updatedBlocks = [...contentBlocks]
 
+  // Guard: force generate_image on the first H2 (visual break after intro)
+  const firstH2Idx = updatedBlocks.findIndex((b) => b.type === 'h2')
+  if (firstH2Idx !== -1 && !updatedBlocks[firstH2Idx].generate_image) {
+    updatedBlocks[firstH2Idx] = { ...updatedBlocks[firstH2Idx], generate_image: true }
+    if (!updatedBlocks[firstH2Idx].image_prompt_hint) {
+      updatedBlocks[firstH2Idx] = {
+        ...updatedBlocks[firstH2Idx],
+        image_prompt_hint: `Editorial photo illustrating ${article.keyword}, professional style`,
+      }
+    }
+  }
+
   // Collect all candidate block indices
   const candidates: number[] = []
   for (let i = 0; i < updatedBlocks.length; i++) {

@@ -142,6 +142,7 @@ Chaque bloc DOIT avoir :
 ## DECISION IMAGE (GENEREUSE — MINIMUM 5 IMAGES)
 
 Les images enrichissent fortement l'article. Sois genereux :
+- **REGLE OBLIGATOIRE** : le PREMIER bloc H2 de l'article DOIT toujours avoir **generate_image: true**. Apres l'intro textuelle + la premiere section H2, le lecteur a besoin d'une respiration visuelle. Cette image est NON NEGOCIABLE.
 - **generate_image: true** sur MINIMUM 5 sections H2/H3 (plus si l'article est long). Privilegie les sections qui beneficient d'un visuel : concepts, processus, produits, avant/apres, resultats, ambiances.
 - **generate_image: false** : uniquement pour les FAQ, les tableaux purs, ou les blocs tres courts
 - Si true, fournis **image_prompt_hint** : description de la scene/concept a illustrer (en anglais, style photo editoriale)
