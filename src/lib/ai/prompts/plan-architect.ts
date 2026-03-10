@@ -139,12 +139,12 @@ Chaque bloc DOIT avoir :
 - **'mixed'** : si la section necessite du contexte narratif + un element visuel (tableau ou liste)
 - **'prose'** : pour les sections narratives, analytiques, ou explicatives
 
-## DECISION IMAGE (GENEREUSE — MINIMUM 5 IMAGES)
+## DECISION IMAGE (OBLIGATOIRE — MINIMUM 5 IMAGES, AUCUNE EXCEPTION)
 
-Les images enrichissent fortement l'article. Sois genereux :
-- **REGLE OBLIGATOIRE** : le PREMIER bloc H2 de l'article DOIT toujours avoir **generate_image: true**. Apres l'intro textuelle + la premiere section H2, le lecteur a besoin d'une respiration visuelle. Cette image est NON NEGOCIABLE.
-- **generate_image: true** sur MINIMUM 5 sections H2/H3 (plus si l'article est long). Privilegie les sections qui beneficient d'un visuel : concepts, processus, produits, avant/apres, resultats, ambiances.
-- **generate_image: false** : uniquement pour les FAQ, les tableaux purs, ou les blocs tres courts
+Les images sont essentielles pour la lisibilite et le SEO. Regles STRICTES :
+- **REGLE N°1 (NON NEGOCIABLE)** : le PREMIER bloc H2 DOIT avoir **generate_image: true**. Apres l'intro + la premiere section, le lecteur a besoin d'une respiration visuelle.
+- **REGLE N°2 (NON NEGOCIABLE)** : au moins **5 blocs H2/H3** doivent avoir **generate_image: true**. Si l'article a 6+ sections, monte a 6-7 images. Un article avec moins de 5 images est REFUSE.
+- **generate_image: false** : UNIQUEMENT pour la FAQ et les blocs de moins de 100 mots
 - Si true, fournis **image_prompt_hint** : description de la scene/concept a illustrer (en anglais, style photo editoriale)
 - Repartis les images de facon equilibree dans l'article (pas 3 images d'affilee puis plus rien)
 

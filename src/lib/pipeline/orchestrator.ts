@@ -898,9 +898,10 @@ async function executeMedia(
     if (!msg.includes('non configure') && !msg.includes('FAL_KEY')) throw error
   }
 
-  // 2. Generate images for 'image' type blocks AND H2 blocks with generate_image === true
-  //    Limite : max 6 images par article (hero incluse), reparties homogenement
-  const MAX_IMAGES = 6
+  // 2. Generate images for 'image' type blocks AND H2/H3 blocks with generate_image === true
+  //    Minimum 5 section images obligatoire, max 8 total (hero incluse)
+  const MIN_SECTION_IMAGES = 5
+  const MAX_IMAGES = 8
   const maxSectionImages = MAX_IMAGES - (heroMediaId ? 1 : 0)
 
   const updatedBlocks = [...contentBlocks]
@@ -917,16 +918,50 @@ async function executeMedia(
     }
   }
 
+  // Guard: ensure at least MIN_SECTION_IMAGES blocks have generate_image: true
+  // If AI didn't flag enough, force it on H2/H3 blocks evenly spaced
+  const currentImageCount = updatedBlocks.filter(
+    (b) => (b.generate_image === true && (b.type === 'h2' || b.type === 'h3')) || b.type === 'image'
+  ).length
+  if (currentImageCount < MIN_SECTION_IMAGES) {
+    const eligibleIndices = updatedBlocks
+      .map((b, i) => ({ b, i }))
+      .filter(({ b }) =>
+        (b.type === 'h2' || b.type === 'h3') &&
+        !b.generate_image &&
+        b.type !== 'faq' as string &&
+        !(b.content_html && b.content_html.includes('<img'))
+      )
+      .map(({ i }) => i)
+
+    const needed = MIN_SECTION_IMAGES - currentImageCount
+    // Pick evenly spaced blocks from eligible
+    const toForce = eligibleIndices.length <= needed
+      ? eligibleIndices
+      : Array.from({ length: needed }, (_, s) =>
+          eligibleIndices[Math.round(s * (eligibleIndices.length - 1) / (needed - 1))]
+        )
+
+    for (const idx of toForce) {
+      updatedBlocks[idx] = {
+        ...updatedBlocks[idx],
+        generate_image: true,
+        image_prompt_hint: updatedBlocks[idx].image_prompt_hint ||
+          `Editorial photo illustrating ${updatedBlocks[idx].heading || article.keyword}, professional style`,
+      }
+    }
+  }
+
   // Collect all candidate block indices
   const candidates: number[] = []
   for (let i = 0; i < updatedBlocks.length; i++) {
     const block = updatedBlocks[i]
     const isImageBlock = block.type === 'image' && !(block.content_html && block.content_html.includes('<img'))
-    const isH2WithImage = block.type === 'h2' && block.generate_image === true && !(block.content_html && block.content_html.includes('<img'))
+    const isH2WithImage = (block.type === 'h2' || block.type === 'h3') && block.generate_image === true && !(block.content_html && block.content_html.includes('<img'))
     if (isImageBlock || isH2WithImage) candidates.push(i)
   }
 
-  // Select up to maxSectionImages candidates, evenly spaced
+  // Select up to maxSectionImages candidates, evenly spaced (minimum MIN_SECTION_IMAGES)
   let selectedIndices: Set<number>
   if (candidates.length <= maxSectionImages) {
     selectedIndices = new Set(candidates)
