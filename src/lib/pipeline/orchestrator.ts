@@ -848,6 +848,17 @@ async function executeWriteBlock(
       }
       return calloutCount
     })(),
+    blockPosition: (() => {
+      // Determine block position in article for condensation rules
+      const totalContentBlocks = contentBlocks.filter((b: ContentBlock) => b.type !== 'image').length
+      const currentContentIndex = contentBlocks.slice(0, blockIndex).filter((b: ContentBlock) => b.type !== 'image').length
+      if (totalContentBlocks <= 2) return 'early' as const
+      const ratio = currentContentIndex / totalContentBlocks
+      if (ratio < 0.35) return 'early' as const
+      if (ratio < 0.65) return 'middle' as const
+      return 'late' as const
+    })(),
+    totalBlocks: contentBlocks.filter((b: ContentBlock) => b.type !== 'image').length,
     articleOutline,
     blockKeyIdeas: block.key_ideas || [],
   })
@@ -1526,12 +1537,17 @@ Retourne UNIQUEMENT un JSON valide :
   }
 
   // 5d. SEO Audit — sub-step D: auto-correct problematic headings
+  // Detect H2 without semantic anchor (vague/generic headings like "Les avantages", "Notre avis")
+  const vagueH2Patterns = /^(les |l'|la |le |un |une |des |nos? |mon |mes |notre |votre |du |au |ce qu|en |a )?(avantages?|inconvenients?|avis|conseil|astuces?|erreurs?|points?|conclusion|introduction|analyse|focus|details?|resume|bilan|verdict|comparatif|guide|pratique|bonus|essentiel|important)s?\s*$/i
   const headingCorrections: { before: string; after: string; blockIndex: number }[] = []
   const faultyHeadings = headingBlocks.filter((b) => {
     if (!b.heading) return false
+    // Too long
     if (b.heading.length > 80) return true
-    // Also fix missing keyword in H2 if no H2 has it
+    // Missing keyword in any H2 if no H2 has it
     if (b.type === 'h2' && !hasKeywordInH2) return true
+    // Vague/generic H2 without semantic anchor (no keyword, no TF-IDF term, no specificity)
+    if (b.type === 'h2' && vagueH2Patterns.test(b.heading.trim())) return true
     return false
   })
 
@@ -1542,7 +1558,10 @@ Retourne UNIQUEMENT un JSON valide :
         ``,
         `Regles :`,
         `- Maximum 70 caracteres par heading`,
-        `- Au moins un H2 doit contenir le mot-cle "${article.keyword}" naturellement`,
+        `- Au moins 2 H2 doivent contenir le mot-cle "${article.keyword}" ou une variante semantique tres proche`,
+        `- Chaque H2 DOIT contenir le mot-cle OU un terme semantique du domaine (JAMAIS de H2 generique sans ancrage)`,
+        `- Formules optimisees : "[Verbe d'action] + [mot-cle/variante] + [qualificateur]" ou "[Question mot-cle] + [precision]"`,
+        `- INTERDIT : "Les avantages", "Notre avis", "Conseils", "Erreurs" seuls — toujours ajouter le mot-cle ou un qualificateur specifique`,
         `- Garde le sens et l'intention du heading original`,
         `- Pas de guillemets francais, pas de tirets cadratins`,
         `- Reponds UNIQUEMENT en JSON : [{ "original": "...", "corrected": "..." }, ...]`,
@@ -1578,6 +1597,82 @@ Retourne UNIQUEMENT un JSON valide :
       }
     } catch (err) {
       console.warn('[seo-audit] Heading correction failed, skipping:', err)
+    }
+  }
+
+  // 5d-bis. Auto-condense blocks in the last third of the article if too long
+  const contentBlocksOnly = updatedBlocks.filter((b) => b.type !== 'image' && b.content_html && b.status !== 'pending')
+  const totalContentBlocksCount = contentBlocksOnly.length
+  const lastThirdStart = Math.floor(totalContentBlocksCount * 0.65)
+  let condensedCount = 0
+
+  for (let i = 0; i < updatedBlocks.length; i++) {
+    const block = updatedBlocks[i]
+    if (block.type === 'image' || block.type === 'faq' || !block.content_html || block.status === 'pending') continue
+
+    // Find position in content-only blocks
+    const contentIdx = contentBlocksOnly.indexOf(block)
+    if (contentIdx < lastThirdStart) continue
+
+    // Check if block is over-long (> 350 words in last third)
+    const wordCount = block.word_count || countWords(block.content_html)
+    if (wordCount <= 350) continue
+
+    // This block is in the last third AND too long — flag for condensation
+    condensedCount++
+  }
+
+  // If we have blocks to condense, use AI to shorten them
+  if (condensedCount > 0 && persona) {
+    try {
+      const blocksToCondense = updatedBlocks
+        .map((b, i) => ({ ...b, originalIndex: i }))
+        .filter((b) => {
+          if (b.type === 'image' || b.type === 'faq' || !b.content_html || b.status === 'pending') return false
+          const contentIdx = contentBlocksOnly.indexOf(b as ContentBlock)
+          if (contentIdx < lastThirdStart) return false
+          const wc = b.word_count || countWords(b.content_html)
+          return wc > 350
+        })
+
+      if (blocksToCondense.length > 0) {
+        const condensePrompt = `Tu es un expert en redaction SEO. Condense les blocs suivants d'un article sur "${article.keyword}".
+
+Ces blocs sont dans le DERNIER TIERS de l'article. Le lecteur a deja eu la reponse principale. Il faut aller a l'essentiel.
+
+## REGLES DE CONDENSATION
+- Reduis chaque bloc a 200-300 mots maximum
+- Garde UNIQUEMENT les informations essentielles et les points cles
+- Supprime les phrases de contexte, les rappels, les developpements secondaires
+- Prefere les listes a puces aux longs paragraphes
+- Conserve TOUS les liens internes (<a href="...">) existants
+- Conserve les tableaux et elements structures existants
+- Garde le ton du persona "${persona.name}" (${persona.role})
+- Retourne UNIQUEMENT un JSON valide : [{ "block_index": N, "new_content_html": "..." }, ...]
+
+## BLOCS A CONDENSER
+${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading || '(sans titre)'}" | ${b.word_count || countWords(b.content_html)} mots\n${b.content_html}`).join('\n\n---\n\n')}`
+
+        const condenseResponse = await routeAI('optimize_blocks', [
+          { role: 'user', content: condensePrompt },
+        ])
+
+        const condenseFixes = extractJSON<{ block_index: number; new_content_html: string }[]>(condenseResponse.content)
+        if (Array.isArray(condenseFixes)) {
+          for (const fix of condenseFixes) {
+            if (fix.block_index >= 0 && fix.block_index < updatedBlocks.length && fix.new_content_html) {
+              updatedBlocks[fix.block_index] = {
+                ...updatedBlocks[fix.block_index],
+                content_html: fix.new_content_html,
+                word_count: countWords(fix.new_content_html),
+              }
+            }
+          }
+          console.log(`[seo-audit] ${condenseFixes.length} blocs du dernier tiers condenses`)
+        }
+      }
+    } catch (err) {
+      console.warn('[seo-audit] Block condensation failed, skipping:', err)
     }
   }
 
@@ -1727,6 +1822,7 @@ Retourne UNIQUEMENT un JSON valide :
     ...(critiqueResult ? { critique: critiqueResult } : {}),
     ...(optimizationResult ? { optimization: optimizationResult } : {}),
     ...(personaConsistency ? { personaConsistency } : {}),
+    ...(condensedCount > 0 ? { condensation: { blocksCondensed: condensedCount, reason: 'Blocs du dernier tiers trop longs (>350 mots)' } } : {}),
   }
 
   // 6. Update article

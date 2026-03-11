@@ -193,6 +193,27 @@ INTERDIT : un word_count inferieur a 120 sur un bloc de contenu (sauf intro). Si
 
 TOTAL ARTICLE : respecte la fourchette indiquee dans la strategie (typiquement 1500-3000 mots). La SOMME de tous les word_count doit etre dans cette fourchette.
 
+## PYRAMIDE INVERSEE DU WORD_COUNT — CONDENSATION PROGRESSIVE (OBLIGATOIRE)
+
+Le lecteur est venu pour la REPONSE PRINCIPALE (premier H2). Plus on descend dans l'article, plus le contenu doit etre CONDENSE et aller droit au but. Le lecteur qui arrive au dernier tiers est soit convaincu (il scanne), soit parti.
+
+**Regle de condensation :**
+- **Premier tiers** (intro + 1-2 premiers H2) : word_count MAXIMUM — c'est le coeur de l'article, la reponse principale. Les blocs les plus longs vont ici.
+- **Deuxieme tiers** (H2 intermediaires) : word_count MOYEN — approfondissement, mais plus concentre. Reduis de ~20% par rapport au premier tiers.
+- **Dernier tiers** (derniers H2 avant FAQ) : word_count REDUIT — va a l'essentiel, pas de remplissage. Reduis de ~30-40% par rapport au premier tiers. Un H2 qui faisait 400 mots en premier tiers ne devrait faire que 200-280 mots ici.
+- **FAQ** : toujours courte (reponses de 2-4 phrases, jamais de longs developpements)
+
+**Exemple concret pour un article de 2500 mots (6 sections + FAQ) :**
+- Intro : 120 mots
+- H2 #1 (reponse principale) : 400-450 mots
+- H2 #2 (approfondissement) : 350-400 mots
+- H2 #3 (details complementaires) : 300-350 mots
+- H2 #4 (aspects secondaires) : 250-300 mots
+- H2 #5 (erreurs/conseils) : 200-250 mots ← plus court car dernier tiers
+- FAQ : 300-400 mots
+
+Le word_count doit DIMINUER de section en section (pas necessairement de facon lineaire, mais la tendance doit etre a la baisse). Un article ou le dernier H2 est plus long que le premier est une ERREUR DE STRUCTURE.
+
 ## CONTENU
 - Respecte la fourchette de mots indiquee dans la strategie ci-dessus
 - Section FAQ (optionnelle) avec le heading "FAQ" en type "faq". Ne l'inclus PAS si la strategie l'interdit (ex: discover). L'utilisateur pourra l'ajouter manuellement plus tard si besoin.

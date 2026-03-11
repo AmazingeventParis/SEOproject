@@ -47,6 +47,8 @@ interface BlockWriterParams {
   authorityLink?: { url: string; title: string; anchor_context: string } | null
   tableStyleIndex?: number
   calloutStyleIndex?: number
+  blockPosition?: 'early' | 'middle' | 'late'
+  totalBlocks?: number
   articleOutline?: string
   blockKeyIdeas?: string[]
 }
@@ -65,7 +67,7 @@ interface BlockWriterPrompt {
 export function buildBlockWriterPrompt(
   params: BlockWriterParams
 ): BlockWriterPrompt {
-  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleDigest, articleTitle, internalLinkTargets, siteDomain, authorityLink, tableStyleIndex, calloutStyleIndex, articleOutline, blockKeyIdeas } = params
+  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleDigest, articleTitle, internalLinkTargets, siteDomain, authorityLink, tableStyleIndex, calloutStyleIndex, blockPosition, articleOutline, blockKeyIdeas } = params
 
   // ---- System prompt ----
   const system = `Tu es un redacteur web expert en SEO, specialise dans la creation de contenu de haute qualite optimise pour le referencement naturel.
@@ -376,6 +378,24 @@ Ce lien renforce l'E-E-A-T en citant une source reconnue.`
     keywordInstruction = `- Integre le mot-cle principal "${keyword}" au moins 1 fois dans l'intro ou une reponse de la FAQ`
   } else {
     keywordInstruction = `- Utilise des variantes et synonymes du mot-cle "${keyword}". Mot-cle principal au moins 1 fois si c'est un des derniers blocs de l'article`
+  }
+
+  // Condensation instruction based on block position in article
+  if (blockPosition === 'late') {
+    user += `\n\n## CONDENSATION — DERNIER TIERS DE L'ARTICLE (CRITIQUE)
+Ce bloc est dans le DERNIER TIERS de l'article. Le lecteur a deja eu la reponse principale.
+- Sois CONCIS et DIRECT : va a l'essentiel, pas de developpements longs
+- Chaque phrase doit apporter une info NOUVELLE en peu de mots
+- Paragraphes de 1-2 lignes max. Listes a puces plutot que prose longue
+- Pas de contexte, pas de rappel, pas d'introduction de section — attaque directement le point
+- Le word_count indique est un MAXIMUM a ne pas depasser (pas un minimum)
+- Si tu peux dire la meme chose en moins de mots, FAIS-LE`
+  } else if (blockPosition === 'middle') {
+    user += `\n\n## RYTHME — MILIEU D'ARTICLE
+Ce bloc est dans la partie intermediaire de l'article. Approfondis le sujet mais reste concentre.
+- Bon equilibre entre detail et concision
+- Paragraphes courts (2-3 lignes)
+- Chaque phrase doit apporter de la valeur — zero remplissage`
   }
 
   user += `\n\n## 3 REGLES STRICTES
