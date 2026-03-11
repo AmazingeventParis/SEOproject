@@ -11,7 +11,17 @@ Phases 1-4 terminées. Projet en production.
 
 ## Progressions
 
-<!-- Ajouter les nouvelles entrées en haut -->
+### 2026-03-11
+- 5 features majeures ajoutees
+  - **Verification key_ideas** : apres ecriture, check programmatique que chaque bloc couvre ses idees cles MECE. Resultat envoye via SSE `key_ideas_check` + inclus dans `done` payload. Fichier `src/lib/pipeline/quality-checks.ts`.
+  - **Coherence persona** : nouveau sub-step dans `executeSeo` — analyse IA (Gemini Flash) de la coherence de voix sur tout l'article. Score 0-100 + drifts par bloc. Stocke dans `serp_data.seo_audit.personaConsistency`. Nouveau task AI `check_persona_consistency`.
+  - **Pipeline Autopilot** : `POST /api/articles/[id]/autopilot` — enchaine analyze → plan → auto-select titre → write-all → media → seo en SSE. Resume depuis n'importe quel statut. Bouton gradient violet dans le frontend avec barre de progression par etape.
+  - **File d'attente** : `POST /api/articles/queue` — traite N articles en parallele (concurrence 1-3). Chaque article passe par le pipeline complet. SSE progress par article.
+  - **Optimisation CTR** : `POST /api/articles/[id]/optimize-ctr` — genere 3 variantes seo_title + meta_description basees sur les donnees GSC. `POST /api/articles/[id]/apply-ctr-variant` pour appliquer + push WP optionnel. Card dans l'onglet SEO.
+- Fix deduplication nuggets (commit precedent)
+  - Tracking `usedNuggetIds` entre blocs dans write-all
+  - Seuil score fallback >= 6 (au lieu de > 0), max 2 nuggets fallback
+  - Garde-fou pertinence dans le prompt block-writer
 
 ### 2026-03-09
 - Architecture MECE anti-redite pour la redaction
