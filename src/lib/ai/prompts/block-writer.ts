@@ -12,6 +12,9 @@ import {
   SEO_INTERNAL_LINKING_RULES,
   SEO_WRITING_STYLE_RULES,
   INTENT_STRATEGIES,
+  getTableStyleForSite,
+  buildTablePromptTemplate,
+  buildTableStyleRules,
 } from './seo-guidelines'
 
 interface BlockWriterParams {
@@ -39,7 +42,7 @@ interface BlockWriterParams {
   internalLinkTargets?: { target_slug: string; target_title: string; suggested_anchor_context: string; is_money_page?: boolean }[]
   siteDomain?: string
   authorityLink?: { url: string; title: string; anchor_context: string } | null
-  siteThemeColor?: string
+  tableStyleIndex?: number
   articleOutline?: string
   blockKeyIdeas?: string[]
 }
@@ -58,7 +61,7 @@ interface BlockWriterPrompt {
 export function buildBlockWriterPrompt(
   params: BlockWriterParams
 ): BlockWriterPrompt {
-  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleDigest, articleTitle, internalLinkTargets, siteDomain, authorityLink, siteThemeColor, articleOutline, blockKeyIdeas } = params
+  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleDigest, articleTitle, internalLinkTargets, siteDomain, authorityLink, tableStyleIndex, articleOutline, blockKeyIdeas } = params
 
   // ---- System prompt ----
   const system = `Tu es un redacteur web expert en SEO, specialise dans la creation de contenu de haute qualite optimise pour le referencement naturel.
@@ -144,34 +147,16 @@ Variantes : callout-info, callout-warning, callout-tip, callout-important
 ### Pour un format "table"
 Cree un tableau HTML epure, moderne et responsive. Les styles inline sont OBLIGATOIRES car le HTML sera publie sur WordPress sans CSS custom.
 
+${(() => {
+  const tableStyle = getTableStyleForSite(siteDomain, tableStyleIndex ?? 0)
+  return `**Style de tableau a utiliser : "${tableStyle.name}"**
+
 **Structure HTML OBLIGATOIRE (copie ce modele exactement) :**
-<div class="table-container" style="width:100%;overflow-x:auto;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin:20px 0">
-  <table style="width:100%;border-collapse:collapse;min-width:500px">
-    <thead>
-      <tr>
-        <th style="background:${siteThemeColor || '#1e293b'};color:#fff;padding:14px 16px;font-weight:600;text-align:left;font-size:0.9rem">En-tete 1</th>
-        <th style="background:${siteThemeColor || '#1e293b'};color:#fff;padding:14px 16px;font-weight:600;text-align:left;font-size:0.9rem">En-tete 2</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0">Donnee</td>
-        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0">Donnee</td>
-      </tr>
-      <tr style="background:#f8fafc">
-        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0">Donnee</td>
-        <td style="padding:12px 16px;border-bottom:1px solid #e2e8f0">Donnee</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+${buildTablePromptTemplate(tableStyle)}
 
 **Regles de style :**
-- <th> : fond ${siteThemeColor ? `${siteThemeColor}` : '#1e293b (bleu fonce)'}, texte blanc (#fff), padding 14px 16px, font-weight 600
-- <td> : padding 12px 16px, border-bottom 1px solid #e2e8f0
-- Lignes paires <tr> : style="background:#f8fafc" (zebra-striping)
-- Derniere ligne : pas de border-bottom sur les <td>
-- Container : border-radius 8px, box-shadow legere, overflow-x auto
+${buildTableStyleRules(tableStyle)}`
+})()}
 
 **Regles strictes :**
 - TOUJOURS wrapper dans <div class="table-container" style="...">
@@ -220,7 +205,7 @@ Cette strategie PRIME sur les regles generales en cas de conflit.
 - AERATION OBLIGATOIRE — ZERO MUR DE TEXTE :
   * JAMAIS plus de 2 paragraphes <p> consecutifs sans un element visuel (liste, tableau, callout)
   * Si tu enumeres 3+ elements, avantages, etapes, criteres ou conseils → utilise une liste <ul> ou <ol> avec <strong> sur le point cle de chaque <li>
-  * Si tu compares 2+ options, presentes des donnees chiffrees, ou listes des specs/prix/criteres → utilise un TABLEAU HTML avec styles inline (voir format "table" ci-dessus)
+  * Si tu compares 2+ options, presentes des donnees chiffrees, ou listes des specs/prix/criteres → utilise un TABLEAU HTML avec les styles inline definis ci-dessus (voir section "format table")
   * Chaque section de 200+ mots DOIT contenir au moins 1 element structurant (liste OU tableau)
   * Chaque section de 350+ mots DOIT contenir au moins 1 tableau ET 1 liste (ou 2 listes)
   * Le lecteur doit pouvoir SCANNER la page et trouver l'info cle visuellement, sans tout lire

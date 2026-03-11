@@ -822,7 +822,20 @@ async function executeWriteBlock(
     internalLinkTargets,
     siteDomain: siteDomain || undefined,
     authorityLink: shouldInjectAuth ? selectedAuth : null,
-    siteThemeColor: article.seo_sites?.theme_color || undefined,
+    tableStyleIndex: (() => {
+      // Count how many tables exist in previously written blocks to alternate styles
+      let tableCount = 0
+      for (let i = 0; i < blockIndex; i++) {
+        const b = contentBlocks[i]
+        if (b.content_html && (b.status === 'written' || b.status === 'approved')) {
+          // Count <table occurrences in the block content
+          const matches = b.content_html.match(/<table[\s>]/g)
+          if (matches) tableCount += matches.length
+        }
+      }
+      // Also account for tables that will be in the current block (format_hint === 'table' counts as 1)
+      return tableCount
+    })(),
     articleOutline,
     blockKeyIdeas: block.key_ideas || [],
   })

@@ -163,6 +163,138 @@ Style humain et accessible :
 - Adopte un ton qui parle directement a la cible du persona`
 
 /**
+ * Table style presets per site domain.
+ * Each site has 2 styles that alternate within an article for visual variety.
+ * Style 1 = even tables (0, 2, 4...), Style 2 = odd tables (1, 3, 5...)
+ */
+export interface TableStylePreset {
+  name: string
+  thBg: string
+  thColor: string
+  thBorder?: string
+  trAltBg: string
+  tdBorder: string
+  accentColor?: string
+  containerBorder?: string
+}
+
+export const SITE_TABLE_STYLES: Record<string, [TableStylePreset, TableStylePreset]> = {
+  'smakk.fr': [
+    {
+      name: 'Impact',
+      thBg: '#00052F',
+      thColor: '#FFFFFF',
+      trAltBg: '#F0F6FC',
+      tdBorder: '#E2E8F0',
+    },
+    {
+      name: 'Epure',
+      thBg: '#F0F6FC',
+      thColor: '#00052F',
+      thBorder: '2px solid #0A6CFF',
+      trAltBg: '#FAFBFF',
+      tdBorder: '#0A6CFF',
+      accentColor: '#FB8E28',
+      containerBorder: '1px solid #0A6CFF',
+    },
+  ],
+  'mon-habitat-durable.fr': [
+    {
+      name: 'Autorite',
+      thBg: '#2D5A27',
+      thColor: '#FFFFFF',
+      trAltBg: '#E8F5E9',
+      tdBorder: '#C8E6C9',
+    },
+    {
+      name: 'Pratique',
+      thBg: '#E8F5E9',
+      thColor: '#2D5A27',
+      thBorder: '2px solid #26BD26',
+      trAltBg: '#F1F8E9',
+      tdBorder: '#26BD26',
+      accentColor: '#FCD34D',
+      containerBorder: '1px solid #26BD26',
+    },
+  ],
+}
+
+/** Default table styles for sites not in the registry */
+export const DEFAULT_TABLE_STYLES: [TableStylePreset, TableStylePreset] = [
+  {
+    name: 'Classique',
+    thBg: '#1e293b',
+    thColor: '#FFFFFF',
+    trAltBg: '#f8fafc',
+    tdBorder: '#e2e8f0',
+  },
+  {
+    name: 'Leger',
+    thBg: '#f1f5f9',
+    thColor: '#1e293b',
+    thBorder: '2px solid #3b82f6',
+    trAltBg: '#fafbff',
+    tdBorder: '#3b82f6',
+    accentColor: '#f59e0b',
+    containerBorder: '1px solid #3b82f6',
+  },
+]
+
+/**
+ * Get the table style for a given site domain and table index.
+ * Alternates between Style 1 (even index) and Style 2 (odd index).
+ */
+export function getTableStyleForSite(siteDomain: string | undefined, tableIndex: number): TableStylePreset {
+  const domain = siteDomain?.toLowerCase().replace(/^www\./, '') || ''
+  const styles = SITE_TABLE_STYLES[domain] || DEFAULT_TABLE_STYLES
+  return styles[tableIndex % 2]
+}
+
+/**
+ * Build the full table HTML template for the AI prompt based on the style preset.
+ */
+export function buildTablePromptTemplate(style: TableStylePreset): string {
+  const containerBorder = style.containerBorder ? `;border:${style.containerBorder}` : ''
+  const thBorder = style.thBorder ? `;border-bottom:${style.thBorder}` : ''
+
+  return `<div class="table-container" style="width:100%;overflow-x:auto;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin:20px 0${containerBorder}">
+  <table style="width:100%;border-collapse:collapse;min-width:500px">
+    <thead>
+      <tr>
+        <th style="background:${style.thBg};color:${style.thColor};padding:14px 16px;font-weight:600;text-align:left;font-size:0.9rem${thBorder}">En-tete 1</th>
+        <th style="background:${style.thBg};color:${style.thColor};padding:14px 16px;font-weight:600;text-align:left;font-size:0.9rem${thBorder}">En-tete 2</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:12px 16px;border-bottom:1px solid ${style.tdBorder}">Donnee</td>
+        <td style="padding:12px 16px;border-bottom:1px solid ${style.tdBorder}">Donnee</td>
+      </tr>
+      <tr style="background:${style.trAltBg}">
+        <td style="padding:12px 16px;border-bottom:1px solid ${style.tdBorder}">Donnee</td>
+        <td style="padding:12px 16px;border-bottom:1px solid ${style.tdBorder}">Donnee</td>
+      </tr>
+    </tbody>
+  </table>
+</div>`
+}
+
+/**
+ * Build the table style rules description for the AI prompt.
+ */
+export function buildTableStyleRules(style: TableStylePreset): string {
+  const thBorderRule = style.thBorder ? `, border-bottom ${style.thBorder}` : ''
+  const containerBorderRule = style.containerBorder ? `, border ${style.containerBorder}` : ''
+  const accentRule = style.accentColor ? `\n- Accent (donnees importantes, badges, chiffres cles) : color ${style.accentColor} ou background ${style.accentColor}` : ''
+
+  return `- <th> : fond ${style.thBg}, texte ${style.thColor}, padding 14px 16px, font-weight 600${thBorderRule}
+- <td> : padding 12px 16px, border-bottom 1px solid ${style.tdBorder}
+- Lignes paires <tr> : style="background:${style.trAltBg}" (zebra-striping)
+- Derniere ligne : pas de border-bottom sur les <td>
+- Container : border-radius 8px, box-shadow legere, overflow-x auto${containerBorderRule}${accentRule}`
+}
+
+/**
  * Intent-specific strategies for plan, writing, and critique.
  * Each search intent has radically different structure, style, and SEO techniques.
  * Used by: plan-architect, block-writer, critique
