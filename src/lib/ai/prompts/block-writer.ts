@@ -296,7 +296,10 @@ Les nuggets suivants doivent etre integres naturellement dans ce bloc :`
       user += `\nContenu: "${nugget.content}"`
     }
 
-    user += `\n\nIntegre chaque nugget de maniere fluide dans le texte. Le lecteur ne doit pas sentir qu'il s'agit d'un element "plaque" - cela doit couler naturellement.`
+    user += `\n\nREGLES D'INTEGRATION DES NUGGETS :
+- Integre chaque nugget de maniere fluide dans le texte. Le lecteur ne doit pas sentir qu'il s'agit d'un element "plaque".
+- GARDE-FOU PERTINENCE : si un nugget n'a AUCUN rapport direct avec le sujet "${keyword}" ou le heading de cette section, IGNORE-LE completement. Ne l'integre PAS. Un nugget hors-sujet est pire que pas de nugget du tout.
+- JAMAIS de copie mot pour mot — reformule et adapte au contexte de la section.`
   }
 
   // Inject writing style examples as few-shot references

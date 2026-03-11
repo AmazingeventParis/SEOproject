@@ -74,6 +74,8 @@ export async function POST(
     async start(controller) {
       let successCount = 0;
       let errorCount = 0;
+      // Track used nugget IDs across blocks to prevent repetition
+      const usedNuggetIds: string[] = [];
 
       for (let i = 0; i < pendingIndices.length; i++) {
         const blockIndex = pendingIndices[i];
@@ -83,10 +85,15 @@ export async function POST(
           const result: PipelineRunResult = await executeStep(
             articleId,
             "write_block",
-            { blockIndex, ...modelOverrideInput }
+            { blockIndex, usedNuggetIds, ...modelOverrideInput }
           );
           success = result.success;
-          if (success) successCount++;
+          if (success) {
+            successCount++;
+            // Collect nugget IDs used by this block to exclude from future blocks
+            const nuggetIds = (result.output?.nuggetIdsUsed as string[]) || [];
+            usedNuggetIds.push(...nuggetIds);
+          }
           else {
             errorCount++;
             console.error(`[write-all] Block ${blockIndex} failed:`, result.error || 'unknown');

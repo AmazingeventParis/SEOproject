@@ -693,11 +693,13 @@ async function executeWriteBlock(
   // Smart nugget fetching:
   // 1. Use nugget_ids assigned by the plan-architect (if any)
   // 2. Fallback: match nuggets by tag overlap with article keyword
+  // Deduplication: exclude nuggets already used in previous blocks (usedNuggetIds)
   let matchedNuggets: { id: string; content: string; tags: string[] }[] = []
+  const usedNuggetIds = new Set<string>((input?.usedNuggetIds as string[]) || [])
 
-  const planNuggetIds = block.nugget_ids || []
+  const planNuggetIds = (block.nugget_ids || []).filter(id => !usedNuggetIds.has(id))
   if (planNuggetIds.length > 0) {
-    // Priority: use nuggets assigned by the plan
+    // Priority: use nuggets assigned by the plan (excluding already used)
     const { data } = await supabase
       .from('seo_nuggets')
       .select('id, content, tags')
@@ -714,27 +716,36 @@ async function executeWriteBlock(
       .limit(50)
 
     if (allNuggets && allNuggets.length > 0) {
-      const keywordWords = article.keyword.toLowerCase().split(/\s+/)
+      const keywordWords = article.keyword.toLowerCase().split(/\s+/).filter(w => w.length > 3)
       const headingWords = (block.heading || '').toLowerCase().split(/\s+/).filter(w => w.length > 3)
       const searchWords = [...keywordWords, ...headingWords]
 
       // Score each nugget by tag + content overlap with keyword/heading
-      const scored = (allNuggets as { id: string; content: string; tags: string[] }[]).map(n => {
-        let score = 0
-        const tagStr = (n.tags || []).join(' ').toLowerCase()
-        const contentStr = n.content.toLowerCase()
-        for (const word of searchWords) {
-          if (word.length < 3) continue
-          if (tagStr.includes(word)) score += 3
-          if (contentStr.includes(word)) score += 1
-        }
-        return { ...n, score }
-      })
+      // Keyword words get higher weight (5 pts) vs heading words (2 pts)
+      const scored = (allNuggets as { id: string; content: string; tags: string[] }[])
+        .filter(n => !usedNuggetIds.has(n.id))
+        .map(n => {
+          let score = 0
+          const tagStr = (n.tags || []).join(' ').toLowerCase()
+          const contentStr = n.content.toLowerCase()
+          for (const word of keywordWords) {
+            if (word.length < 3) continue
+            if (tagStr.includes(word)) score += 5
+            if (contentStr.includes(word)) score += 2
+          }
+          for (const word of headingWords) {
+            if (word.length < 3) continue
+            if (tagStr.includes(word)) score += 2
+            if (contentStr.includes(word)) score += 1
+          }
+          return { ...n, score }
+        })
 
+      // Higher threshold (>=6) to avoid weak matches, max 2 nuggets in fallback mode
       matchedNuggets = scored
-        .filter(n => n.score > 0)
+        .filter(n => n.score >= 6)
         .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
+        .slice(0, 2)
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         .map(({ score: _s, ...n }) => n)
     }
@@ -853,6 +864,7 @@ async function executeWriteBlock(
       wordCount: countWords(aiResponse.content),
       writtenBlocks: writtenCount,
       totalBlocks: updatedBlocks.length,
+      nuggetIdsUsed: matchedNuggets.map(n => n.id),
     },
     tokensIn: aiResponse.tokensIn,
     tokensOut: aiResponse.tokensOut,
