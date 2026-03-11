@@ -4,6 +4,7 @@ import { executeStep } from "@/lib/pipeline/orchestrator";
 import { modelIdToOverride } from "@/lib/ai/router";
 import type { ContentBlock } from "@/lib/supabase/types";
 import type { PipelineRunResult } from "@/lib/pipeline/types";
+import { checkKeyIdeasCoverage } from "@/lib/pipeline/quality-checks";
 
 export const maxDuration = 300;
 
@@ -113,11 +114,45 @@ export async function POST(
         controller.enqueue(encoder.encode(`event: progress\ndata: ${progressData}\n\n`));
       }
 
+      // Verify key_ideas coverage after writing
+      const coverageResults: { blockIndex: number; heading: string | null; coverage: number; missing: string[] }[] = [];
+
+      const { data: updatedArticle } = await supabase
+        .from("seo_articles")
+        .select("content_blocks")
+        .eq("id", articleId)
+        .single();
+
+      if (updatedArticle) {
+        const blocks = (updatedArticle.content_blocks || []) as ContentBlock[];
+        for (let bi = 0; bi < blocks.length; bi++) {
+          const block = blocks[bi];
+          if (block.key_ideas && block.key_ideas.length > 0 && block.content_html) {
+            const result = checkKeyIdeasCoverage(block.content_html, block.key_ideas);
+            if (result.coverage < 100) {
+              coverageResults.push({
+                blockIndex: bi,
+                heading: block.heading || null,
+                coverage: result.coverage,
+                missing: result.missing,
+              });
+            }
+          }
+        }
+      }
+
+      // Send coverage event before done
+      if (coverageResults.length > 0) {
+        const coverageData = JSON.stringify({ blocks: coverageResults });
+        controller.enqueue(encoder.encode(`event: key_ideas_check\ndata: ${coverageData}\n\n`));
+      }
+
       // Send done event
       const doneData = JSON.stringify({
         written: successCount,
         errors: errorCount,
         totalBlocks: contentBlocks.length,
+        keyIdeasCoverage: coverageResults,
       });
       controller.enqueue(encoder.encode(`event: done\ndata: ${doneData}\n\n`));
       controller.close();

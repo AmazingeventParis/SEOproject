@@ -847,6 +847,10 @@ export default function ArticleDetailPage() {
   }> | null>(null);
   const [backlinksLoading, setBacklinksLoading] = useState(false);
   const [backlinksActionLoading, setBacklinksActionLoading] = useState<number | null>(null);
+  const [autopilotStep, setAutopilotStep] = useState<string | null>(null);
+  const [autopilotProgress, setAutopilotProgress] = useState<{ step: string; stepIndex: number; totalSteps: number } | null>(null);
+  const [ctrVariants, setCtrVariants] = useState<{ seo_title: string; meta_description: string; strategy: string }[] | null>(null);
+  const [ctrLoading, setCtrLoading] = useState(false);
 
   const fetchGscAnalysis = useCallback(async () => {
     setGscLoading(true);
@@ -1261,6 +1265,140 @@ export default function ArticleDetailPage() {
     }
   }
 
+  async function runAutopilot() {
+    if (!article) return;
+    setActionLoading("Autopilot");
+    setAutopilotStep("Demarrage...");
+    setAutopilotProgress(null);
+
+    try {
+      const bodyData: Record<string, unknown> = {};
+      if (selectedModel) bodyData.model = selectedModel;
+      bodyData.autoSelectTitle = 0; // Auto-select first title
+
+      const res = await fetch(`/api/articles/${articleId}/autopilot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bodyData),
+      });
+
+      if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => ({ error: "Erreur" }));
+        throw new Error(err.error || "Erreur autopilot");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      const STEP_LABELS: Record<string, string> = {
+        analyze: "Analyse SERP",
+        plan: "Generation du plan",
+        select_title: "Selection du titre",
+        write: "Redaction des blocs",
+        media: "Generation des images",
+        seo: "Verification SEO",
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            const eventType = line.slice(7).trim();
+            const dataLineIdx = lines.indexOf(line) + 1;
+            if (dataLineIdx < lines.length && lines[dataLineIdx].startsWith("data: ")) {
+              try {
+                const data = JSON.parse(lines[dataLineIdx].slice(6));
+                switch (eventType) {
+                  case "step_start":
+                    setAutopilotStep(STEP_LABELS[data.step] || data.step);
+                    setAutopilotProgress({
+                      step: data.step,
+                      stepIndex: data.stepIndex,
+                      totalSteps: data.totalSteps,
+                    });
+                    break;
+                  case "write_progress":
+                    setAutopilotStep(`Redaction bloc ${data.current}/${data.total}`);
+                    setWriteProgress({ current: data.current, total: data.total });
+                    break;
+                  case "step_done":
+                    break;
+                  case "step_error":
+                    toast({
+                      variant: "destructive",
+                      title: `Erreur: ${STEP_LABELS[data.step] || data.step}`,
+                      description: data.error,
+                    });
+                    break;
+                  case "done":
+                    if (data.success) {
+                      toast({ title: "Autopilot termine", description: "Article pret pour relecture." });
+                    }
+                    break;
+                }
+              } catch { /* skip malformed */ }
+            }
+          }
+        }
+      }
+
+      await Promise.all([fetchArticle(), fetchPipelineRuns()]);
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erreur Autopilot",
+        description: err instanceof Error ? err.message : "Erreur inconnue.",
+      });
+    } finally {
+      setActionLoading(null);
+      setAutopilotStep(null);
+      setAutopilotProgress(null);
+      setWriteProgress(null);
+    }
+  }
+
+  async function runOptimizeCtr() {
+    if (!article) return;
+    setCtrLoading(true);
+    try {
+      const res = await fetch(`/api/articles/${articleId}/optimize-ctr`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Erreur" }));
+        throw new Error(err.error || "Erreur CTR");
+      }
+      const data = await res.json();
+      setCtrVariants(data.variants || []);
+      toast({ title: "Variantes CTR generees", description: `${(data.variants || []).length} variantes proposees.` });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Erreur CTR", description: err instanceof Error ? err.message : "Erreur." });
+    } finally {
+      setCtrLoading(false);
+    }
+  }
+
+  async function applyCtrVariant(variant: { seo_title: string; meta_description: string }, pushToWp = false) {
+    try {
+      const res = await fetch(`/api/articles/${articleId}/apply-ctr-variant`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...variant, pushToWp }),
+      });
+      if (!res.ok) throw new Error("Erreur application");
+      toast({ title: "Variante appliquee", description: pushToWp ? "Mis a jour sur WordPress." : "SEO Title + Meta mis a jour." });
+      setCtrVariants(null);
+      await fetchArticle();
+    } catch (err) {
+      toast({ variant: "destructive", title: "Erreur", description: err instanceof Error ? err.message : "Erreur." });
+    }
+  }
+
   async function writeBlock(blockId: string) {
     const currentBlocks: ContentBlock[] = article?.content_blocks ?? [];
     const blockIndex = currentBlocks.findIndex((b) => b.id === blockId);
@@ -1553,17 +1691,34 @@ export default function ArticleDetailPage() {
               />
             )}
             {article.status === "draft" && (
-              <Button
-                onClick={() => runAnalyzeThenPlan()}
-                disabled={!!actionLoading}
-              >
-                {actionLoading === "Analyse" || actionLoading === "Generation du plan" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Search className="mr-2 h-4 w-4" />
+              <>
+                <Button
+                  onClick={() => runAnalyzeThenPlan()}
+                  disabled={!!actionLoading}
+                  variant="outline"
+                >
+                  {actionLoading === "Analyse" || actionLoading === "Generation du plan" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="mr-2 h-4 w-4" />
+                  )}
+                  {actionLoading === "Generation du plan" ? "Generation du plan..." : "Analyser et planifier"}
+                </Button>
+                {article.persona_id && (
+                  <Button
+                    onClick={runAutopilot}
+                    disabled={!!actionLoading}
+                    className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+                  >
+                    {actionLoading === "Autopilot" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-2 h-4 w-4" />
+                    )}
+                    {autopilotStep || "Autopilot"}
+                  </Button>
                 )}
-                {actionLoading === "Generation du plan" ? "Generation du plan..." : "Analyser et planifier"}
-              </Button>
+              </>
             )}
             {article.status === "analyzing" && (
               <Button
@@ -1613,10 +1768,24 @@ export default function ArticleDetailPage() {
                   {actionLoading === "Regeneration du plan" ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    <Sparkles className="mr-2 h-4 w-4" />
+                    <RefreshCw className="mr-2 h-4 w-4" />
                   )}
                   Regenerer le plan
                 </Button>
+                {article.persona_id && article.title && (
+                  <Button
+                    onClick={runAutopilot}
+                    disabled={!!actionLoading}
+                    className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+                  >
+                    {actionLoading === "Autopilot" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-2 h-4 w-4" />
+                    )}
+                    {autopilotStep || "Autopilot"}
+                  </Button>
+                )}
               </>
             )}
             {article.status === "writing" && pendingBlocks.length > 0 && (
@@ -1747,8 +1916,25 @@ export default function ArticleDetailPage() {
         {/* Pipeline progress */}
         <PipelineProgress status={article.status} showLabels />
 
+        {/* Autopilot progress bar */}
+        {autopilotProgress && (
+          <div className="space-y-2 rounded-lg border border-violet-200 bg-violet-50 p-3">
+            <div className="flex justify-between text-sm">
+              <span className="font-medium text-violet-700">Autopilot : {autopilotStep}</span>
+              <span className="text-violet-600">{autopilotProgress.stepIndex + 1}/{autopilotProgress.totalSteps} etapes</span>
+            </div>
+            <Progress value={((autopilotProgress.stepIndex + 1) / autopilotProgress.totalSteps) * 100} className="h-2" />
+            {writeProgress && (
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Blocs</span>
+                <span>{writeProgress.current}/{writeProgress.total}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Write-all progress bar */}
-        {writeProgress && (
+        {writeProgress && !autopilotProgress && (
           <div className="space-y-2">
             <div className="flex justify-between text-sm text-muted-foreground">
               <span>Redaction en cours...</span>
@@ -2592,6 +2778,7 @@ export default function ArticleDetailPage() {
               keywordDensity: { keyword: string; count: number; density: number; status: string }
               keywordInIntro: boolean
               critique?: { score: number; eeat_score: number; readability: number; seo_score: number; issues: string[]; suggestions: string[] }
+              personaConsistency?: { score: number; drifts: { blockIndex: number; heading: string; issue: string }[] }
             } | undefined
             if (!seoAudit) return null
 
@@ -2744,6 +2931,36 @@ export default function ArticleDetailPage() {
                       </ul>
                     </div>
                   )}
+
+                  {/* Persona Consistency */}
+                  {seoAudit.personaConsistency && (
+                    <div>
+                      <Separator className="my-3" />
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-medium flex items-center gap-1.5">
+                          Coherence persona
+                        </h4>
+                        <Badge variant="outline" className={scoreColor(seoAudit.personaConsistency.score)}>
+                          {seoAudit.personaConsistency.score}/100
+                        </Badge>
+                      </div>
+                      {seoAudit.personaConsistency.drifts.length > 0 ? (
+                        <ul className="space-y-1.5">
+                          {seoAudit.personaConsistency.drifts.map((drift, i) => (
+                            <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                              <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0 mt-0.5" />
+                              <span>
+                                <strong className="text-foreground">Bloc {drift.blockIndex}{drift.heading ? ` — ${drift.heading}` : ""}</strong>
+                                {" : "}{drift.issue}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-green-600">Voix du persona coherente sur tout l&apos;article.</p>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )
@@ -2880,6 +3097,77 @@ export default function ArticleDetailPage() {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* CTR Optimization — for published articles with GSC data */}
+          {(article.status === "published" || article.status === "refresh_needed") && (
+            <Card className="border-emerald-200">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-emerald-600" />
+                    Optimisation CTR
+                  </CardTitle>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={runOptimizeCtr}
+                    disabled={ctrLoading}
+                  >
+                    {ctrLoading ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    Generer des variantes
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {!ctrVariants ? (
+                  <p className="text-sm text-muted-foreground">
+                    Generez des variantes de SEO Title et Meta Description optimisees pour un meilleur taux de clic.
+                  </p>
+                ) : ctrVariants.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucune variante generee.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {ctrVariants.map((v, i) => (
+                      <div key={i} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Badge variant="outline" className="text-xs">{v.strategy}</Badge>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => applyCtrVariant(v)}
+                            >
+                              Appliquer
+                            </Button>
+                            {article.wp_post_id && (
+                              <Button
+                                size="sm"
+                                onClick={() => applyCtrVariant(v, true)}
+                              >
+                                Appliquer + WP
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">SEO Title ({v.seo_title.length} chars)</p>
+                          <p className="text-sm font-medium">{v.seo_title}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">Meta ({v.meta_description.length} chars)</p>
+                          <p className="text-sm text-muted-foreground">{v.meta_description}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>

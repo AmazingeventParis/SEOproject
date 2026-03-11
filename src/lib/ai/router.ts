@@ -114,6 +114,13 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     topP: 0.85,
     jsonMode: true,
   },
+  check_persona_consistency: {
+    provider: 'google',
+    model: 'gemini-3-flash-preview',
+    maxTokens: 2048,
+    temperature: 0.2,
+    jsonMode: true,
+  },
 }
 
 // ---- Cross-provider fallback map ----

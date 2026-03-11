@@ -19,6 +19,7 @@ export type AITask =
   | 'generate_backlink_sentences' // Generate transition sentences for reverse backlinks -> Gemini Flash
   | 'generate_table'              // Convert selected text into a responsive HTML table -> Gemini Flash
   | 'optimize_blocks'             // Auto-optimize content blocks based on critique issues -> Gemini Pro
+  | 'check_persona_consistency'   // Check persona voice consistency across blocks -> Gemini Flash
 
 export interface AIMessage {
   role: 'user' | 'assistant' | 'system'

@@ -1434,6 +1434,72 @@ async function executeSeo(
     console.warn('[seo-audit] Critique AI failed, skipping:', err)
   }
 
+  // 5c-bis. SEO Audit — Persona voice consistency check
+  let personaConsistency: { score: number; drifts: { blockIndex: number; heading: string; issue: string }[] } | null = null
+  try {
+    if (persona && persona.tone_description) {
+      const blocksForCheck = updatedBlocks
+        .filter((b) => b.content_html && b.status !== 'pending' && b.type !== 'image')
+        .map((b, i) => {
+          const plain = b.content_html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 500)
+          return `[Bloc ${i}${b.heading ? ' — ' + b.heading : ''}]\n${plain}`
+        })
+        .join('\n\n')
+
+      if (blocksForCheck.length > 200) {
+        const consistencyPrompt = `Tu es un expert en analyse de style editorial.
+
+## PERSONA DE REFERENCE
+- Nom : ${persona.name}
+- Role : ${persona.role}
+- Ton : ${persona.tone_description}
+${persona.bio ? `- Bio : ${persona.bio}` : ''}
+
+## ARTICLE A ANALYSER
+${blocksForCheck}
+
+## MISSION
+Analyse la coherence de la voix du persona a travers tous les blocs de l'article.
+
+Evalue :
+1. Le niveau de langue est-il constant ? (technique vs vulgarise)
+2. Le vocabulaire metier est-il coherent ?
+3. Y a-t-il des blocs ou le ton change brusquement (trop generique, trop academique, etc.) ?
+4. Les tournures personnelles du persona sont-elles presentes regulierement ?
+
+Retourne UNIQUEMENT un JSON valide :
+{
+  "score": 85,
+  "drifts": [
+    { "block_index": 3, "heading": "...", "issue": "Le ton devient trop academique, perd le cote pratique du persona" }
+  ]
+}
+
+- score : 0-100 (100 = parfaitement coherent)
+- drifts : liste des blocs ou la voix decroche (peut etre vide si tout est coherent)
+- Maximum 5 drifts les plus significatifs`
+
+        const consistencyResponse = await routeAI('check_persona_consistency', [
+          { role: 'user', content: consistencyPrompt },
+        ])
+
+        const parsed = extractJSON<{ score: number; drifts: { block_index: number; heading: string; issue: string }[] }>(consistencyResponse.content)
+        if (parsed && typeof parsed.score === 'number') {
+          personaConsistency = {
+            score: parsed.score,
+            drifts: (parsed.drifts || []).map(d => ({
+              blockIndex: d.block_index,
+              heading: d.heading || '',
+              issue: d.issue || '',
+            })),
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[seo-audit] Persona consistency check failed, skipping:', err)
+  }
+
   // 5d. SEO Audit — sub-step D: auto-correct problematic headings
   const headingCorrections: { before: string; after: string; blockIndex: number }[] = []
   const faultyHeadings = headingBlocks.filter((b) => {
@@ -1635,6 +1701,7 @@ async function executeSeo(
     keywordInIntro,
     ...(critiqueResult ? { critique: critiqueResult } : {}),
     ...(optimizationResult ? { optimization: optimizationResult } : {}),
+    ...(personaConsistency ? { personaConsistency } : {}),
   }
 
   // 6. Update article
@@ -1672,6 +1739,10 @@ async function executeSeo(
           scoreBefore: optimizationResult.scoreBefore,
           scoreAfter: optimizationResult.scoreAfter,
           blocksOptimized: optimizationResult.blocksOptimized,
+        } : null,
+        personaConsistency: personaConsistency ? {
+          score: personaConsistency.score,
+          driftsCount: personaConsistency.drifts.length,
         } : null,
       },
     },
