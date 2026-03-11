@@ -102,25 +102,61 @@ export const SEO_SEMANTIC_FIELD_RULES = `- Champ semantique riche : utilise des 
  * Heading hierarchy rules (H2/H3/H4 structure).
  * Used by: plan-architect, critique
  */
-export const SEO_HEADING_STRUCTURE_RULES = `Regles H2 :
+export const SEO_HEADING_STRUCTURE_RULES = `## OPTIMISATION SEMANTIQUE DES Hn — REGLES CRITIQUES
+
+### Principe fondamental
+Les titres H2/H3/H4 sont les signaux semantiques les PLUS PUISSANTS de l'article pour Google. Un bon heading = mot-cle ou variante sémantique + qualificateur concret + intention utilisateur. Google utilise les Hn pour comprendre la STRUCTURE THEMATIQUE de la page. Chaque Hn doit enrichir le signal semantique global.
+
+### Regles de formulation semantique des H2
+- **Mot-cle + qualificateur** : chaque H2 doit contenir SOIT le mot-cle principal, SOIT une variante semantique proche (synonyme, terme LSI, cooccurrence forte). JAMAIS de H2 generique sans ancrage semantique
+- **AU MOINS 2 H2** doivent contenir le mot-cle principal ou une variante TRES proche (pas juste un mot du champ semantique)
+- **Chaque H2 restant** doit contenir au minimum un terme du champ semantique ou un terme TF-IDF pertinent
 - Chaque H2 doit etre une QUESTION ou une PROMESSE claire (pas de titres vagues)
 - Chaque H2 doit etre comprehensible DE FACON ISOLEE (pense featured snippet Google)
-- Integre des mots-cles secondaires naturellement dans les H2
-- AU MOINS un H2 doit contenir le mot-cle principal ou une variante tres proche
+- Utilise des VERBES D'ACTION qui ancrent l'intention : Comparer, Choisir, Eviter, Calculer, Installer, Optimiser, Reparer...
 - 3 a 6 sections H2 par article
 - MAX 80 caracteres par titre H2/H3/H4 — si plus long, reformule
-- Utilise des VERBES D'ACTION dans les titres (Comparer, Choisir, Eviter, Optimiser...)
-- Exemples BONS : "Quel budget prevoir pour une renovation de salle de bain ?"
-- Exemples MAUVAIS : "Le budget", "Parlons argent", "Introduction"
 
-Regles H3 :
+### Technique de construction d'un H2 optimise
+1. Pars de l'INTENTION utilisateur pour cette section (que cherche-t-il ?)
+2. Integre le mot-cle principal OU un terme TF-IDF/semantique du domaine
+3. Ajoute un qualificateur concret : chiffre, annee, comparatif, question, benefice
+4. Verifie que le H2 SEUL pourrait etre un titre de featured snippet
+
+**Formules qui fonctionnent :**
+- "[Verbe d'action] + [mot-cle/variante] + [qualificateur]" → "Calculer le cout d'un poele de masse en 2026"
+- "[Question mot-cle] + [precision]" → "Quel rendement attendre d'un poele de masse a accumulation ?"
+- "[Comparatif/Superlatif] + [mot-cle] + [critere]" → "Les 5 meilleurs materiaux pour un poele de masse"
+- "[Mot-cle] + [vs/ou/face a] + [alternative]" → "Poele de masse ou poele a granules : quelle difference ?"
+- "[Comment/Pourquoi] + [mot-cle] + [objectif]" → "Comment entretenir un poele de masse pour durer 30 ans"
+
+**INTERDIT en H2 (zero signal semantique) :**
+- Titres generiques : "Le budget", "Les avantages", "Notre avis", "Conseils pratiques", "Ce qu'il faut savoir"
+- Titres narratifs : "Parlons argent", "Introduction", "Notre analyse", "Focus sur..."
+- Titres sans mot-cle NI terme semantique : "A retenir", "En pratique", "Les erreurs", "Notre verdict"
+
+**Exemples concrets :**
+- MAUVAIS : "Les avantages" → BON : "5 avantages concrets du poele de masse face au chauffage electrique"
+- MAUVAIS : "Notre avis" → BON : "Poele de masse : notre verdict apres 3 hivers d'utilisation"
+- MAUVAIS : "Le budget" → BON : "Quel budget prevoir pour installer un poele de masse en 2026 ?"
+- MAUVAIS : "Conseils pratiques" → BON : "Comment choisir l'emplacement ideal pour un poele de masse ?"
+- MAUVAIS : "Comparatif" → BON : "Poele de masse vs insert a bois : performances et prix compares"
+
+### Enrichissement semantique via donnees SERP
+- Les **termes TF-IDF** fournis indiquent les mots que Google ATTEND dans un article sur ce sujet. Integre-les dans les H2/H3 quand c'est naturel
+- Les **questions PAA** (People Also Ask) sont des formulations EXACTES que les utilisateurs tapent. Reprends-les telles quelles en H2 ou H3 quand elles correspondent a une section
+- Les **recherches associees** contiennent des variantes longue traine du mot-cle. Utilise-les dans les H3
+- Les **H2 des concurrents** montrent les angles deja couverts — couvre-les TOUS et ajoute des angles uniques
+
+### Regles H3
 - Chaque H3 = sous-aspect CONCRET du H2 parent
+- Chaque H3 doit contenir une **variante semantique** du mot-cle OU un terme TF-IDF specifique au sous-sujet
 - 1 a 3 H3 par H2 maximum
-- Les H3 doivent integrer des variantes du mot-cle
 - Ne saute JAMAIS un niveau (pas de H3 sans H2 parent)
 - Utilise des H3 pour decouper les sections H2 longues (>400 mots) en sous-parties lisibles
+- Les H3 ciblent les requetes longue traine : reprends les recherches associees et PAA specifiques
 
-Regles H4 :
+### Regles H4
 - Chaque H4 = detail precis sous un H3 parent
 - 1 a 3 H4 par H3 maximum
 - Utilise des H4 quand un H3 couvre plusieurs points distincts qui meritent un titre

@@ -123,9 +123,18 @@ L'article doit repondre a l'intention de recherche DES LE PREMIER H2. Le lecteur
 - "Historique de..."
 Ces elements peuvent apparaitre en H3 sous un H2 pertinent, mais JAMAIS en ouverture d'article.
 
-## Hn SEMANTIQUES (TITRES OPTIMISES)
+## Hn SEMANTIQUES (TITRES OPTIMISES) — SIGNAL SEO N°1
+
+Les Hn sont les balises les plus lues par Google pour comprendre le contenu. Un H2 vague ou generique = un signal perdu = une position perdue. Chaque H2/H3 est une OPPORTUNITE SEMANTIQUE.
 
 ${SEO_HEADING_STRUCTURE_RULES}
+
+### Checklist de validation OBLIGATOIRE (a verifier pour CHAQUE H2 avant de valider le plan)
+1. Le H2 contient-il le mot-cle principal OU un terme semantique/TF-IDF du domaine ? Si NON → reformule
+2. Le H2 pourrait-il etre un featured snippet Google ? Si NON → reformule en question ou promesse concrete
+3. Le H2 apporte-t-il un signal semantique DIFFERENT des autres H2 ? Si doublon semantique → fusionne ou reformule
+4. Le H2 fait-il moins de 80 caracteres ? Si NON → condense
+5. Le H2 est-il specifique (chiffre, annee, comparaison, nom precis) ? Si trop vague → ajoute un qualificateur
 
 ## DIRECTIVES D'ECRITURE PAR BLOC (OBLIGATOIRE)
 
@@ -195,11 +204,12 @@ ${SEO_FAQ_RULES}
 - Ne force pas les nuggets non pertinents
 
 ## ANALYSE CONCURRENTIELLE (si disponible)
-- Couvre TOUS les H2 communs des concurrents
-- Integre les termes TF-IDF naturellement
+- Couvre TOUS les H2 communs des concurrents — mais reformule-les pour etre MEILLEURS (plus specifiques, avec mot-cle, avec qualificateur chiffre)
+- **Termes TF-IDF dans les Hn** : les termes TF-IDF a score eleve indiquent les mots que Google associe au sujet. Integre les top 5-10 termes dans tes H2/H3 quand c'est naturel (ex: si "rendement" est un terme TF-IDF pour "poele de masse", un H2 pourrait etre "Quel rendement attendre d'un poele de masse ?")
 - Comble les lacunes de contenu (content gaps)
 - Depasse la moyenne de mots des concurrents de 20%+
 - Traite les questions incontournables dans le contenu ou la FAQ
+- **Questions PAA en H2/H3** : si une question PAA correspond a un angle de section, utilise-la directement comme H2 ou H3 (c'est ce que les utilisateurs tapent reellement)
 
 ## MAILLAGE INTERNE STRATEGIQUE
 
@@ -494,21 +504,22 @@ EXCEPTION SLUG : les slugs ne doivent JAMAIS contenir d'annee (un slug est intem
 
   user += `\n\n## INSTRUCTIONS FINALES
 1. PYRAMIDE INVERSEE : le premier H2 repond DIRECTEMENT a l'intention de recherche
-2. Hn SEMANTIQUES : chaque H2 est une question ou promesse claire, comprehensible isolement
+2. **Hn SEMANTIQUES (CRITIQUE)** : CHAQUE H2 DOIT contenir le mot-cle principal, un synonyme ou un terme TF-IDF/semantique du domaine. Un H2 sans ancrage semantique (ex: "Les avantages", "Notre avis", "Conseils") est une ERREUR GRAVE. Relis chaque H2 et verifie qu'il envoie un signal semantique a Google. Utilise les formules : [Verbe] + [mot-cle/variante] + [qualificateur], ou [Question mot-cle] + [precision]
 3. WRITING DIRECTIVES : chaque bloc a une directive d'ecriture specifique et un format_hint
-4. IMAGES : minimum 5 images reparties equilibrement dans l'article (toutes les H2 sauf FAQ/tableaux purs).
+4. IMAGES : minimum 5 images reparties equilibrement dans l'article (toutes les H2 sauf FAQ/tableaux purs)
 5. Analyse les SERP pour surpasser les contenus existants en profondeur et en valeur
-6. Integre les questions PAA dans une section FAQ dediee (si pertinent selon l'intention)
+6. QUESTIONS PAA EN H2/H3 : si une question PAA correspond a un angle de l'article, utilise-la telle quelle ou reformulee comme H2 ou H3. Integre les restantes dans la FAQ
 7. Assigne les nuggets pertinents aux blocs appropries
 8. Propose 3 variantes de titre H1 (question, promesse, specifique) + meta description optimisee
 9. WORD COUNT TOTAL — VERIFIE AVANT DE REPONDRE : additionne les word_count de TOUS les blocs. Le total DOIT etre dans la fourchette de la strategie (ex: traffic = 2000-3000 mots). Si le total est inferieur au minimum, AJOUTE des blocs ou AUGMENTE les word_count existants. Un article de 1200 mots sur une intention "traffic" (minimum 2000) est une ERREUR GRAVE.
-10. Au moins un H2 doit contenir le mot-cle principal ou une variante tres proche
-11. DECOUPE H3 : si un H2 necessite plus de 400 mots, decoupe-le en H3 specifiques (2-4 H3 par H2)
+10. Au moins 2 H2 doivent contenir le mot-cle principal ou une variante tres proche
+11. DECOUPE H3 : si un H2 necessite plus de 400 mots, decoupe-le en H3 specifiques (2-4 H3 par H2). Les H3 ciblent les variantes longue traine et recherches associees
 12. BLOC INTRO OBLIGATOIRE : le PREMIER element de content_blocks doit etre un bloc type "paragraph", heading null, word_count 120, contenant le mot-cle principal. Ce bloc precede le premier H2.
 13. WORD COUNT MINIMUM : chaque bloc H2 DOIT avoir word_count >= 250. Chaque H3 >= 150. JAMAIS de word_count < 120 sauf intro. Un word_count de 30, 50 ou 80 est une ERREUR — le redacteur ne peut rien ecrire de substantiel en si peu de mots.
 14. KEY IDEAS MECE : chaque bloc a un "key_ideas" (3-5 idees) qui definit son perimetre exclusif. AUCUN chevauchement entre sections.
 15. LONGUEUR DES TITRES : chaque heading H2/H3/H4 DOIT faire MAX 80 caracteres. Compte les caracteres avant de valider. Si un titre depasse 80 chars, reformule-le plus court.
 16. FAQ : le heading du bloc FAQ doit etre simplement "FAQ" (pas de variante longue). Le balisage Schema.org FAQPage est OBLIGATOIRE dans le HTML genere.
+17. **TERMES TF-IDF EN Hn** : si des termes TF-IDF sont fournis, au moins 3-5 de ces termes doivent apparaitre dans les H2/H3 de l'article (integres naturellement, pas forces). Ils enrichissent le signal semantique pour Google.
 
 Retourne UNIQUEMENT le JSON, rien d'autre.`
 
