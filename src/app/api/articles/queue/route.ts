@@ -21,7 +21,11 @@ function sendSSE(
   event: string,
   data: Record<string, unknown>
 ) {
-  controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+  try {
+    controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+  } catch {
+    // Client disconnected — pipeline continues silently
+  }
 }
 
 /**
@@ -260,7 +264,7 @@ export async function POST(_request: NextRequest) {
         succeeded,
         failed,
       });
-      controller.close();
+      try { controller.close(); } catch { /* Already closed */ }
     },
   });
 

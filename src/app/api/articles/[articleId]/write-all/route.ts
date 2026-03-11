@@ -104,14 +104,16 @@ export async function POST(
           console.error(`[write-all] Block ${blockIndex} exception:`, err instanceof Error ? err.message : err);
         }
 
-        // Send progress event
-        const progressData = JSON.stringify({
-          current: i + 1,
-          total: pendingIndices.length,
-          blockIndex,
-          success,
-        });
-        controller.enqueue(encoder.encode(`event: progress\ndata: ${progressData}\n\n`));
+        // Send progress event (resilient to client disconnect)
+        try {
+          const progressData = JSON.stringify({
+            current: i + 1,
+            total: pendingIndices.length,
+            blockIndex,
+            success,
+          });
+          controller.enqueue(encoder.encode(`event: progress\ndata: ${progressData}\n\n`));
+        } catch { /* Client disconnected — pipeline continues */ }
       }
 
       // Verify key_ideas coverage after writing
@@ -141,21 +143,23 @@ export async function POST(
         }
       }
 
-      // Send coverage event before done
-      if (coverageResults.length > 0) {
-        const coverageData = JSON.stringify({ blocks: coverageResults });
-        controller.enqueue(encoder.encode(`event: key_ideas_check\ndata: ${coverageData}\n\n`));
-      }
+      // Send coverage event before done (resilient to client disconnect)
+      try {
+        if (coverageResults.length > 0) {
+          const coverageData = JSON.stringify({ blocks: coverageResults });
+          controller.enqueue(encoder.encode(`event: key_ideas_check\ndata: ${coverageData}\n\n`));
+        }
 
-      // Send done event
-      const doneData = JSON.stringify({
-        written: successCount,
-        errors: errorCount,
-        totalBlocks: contentBlocks.length,
-        keyIdeasCoverage: coverageResults,
-      });
-      controller.enqueue(encoder.encode(`event: done\ndata: ${doneData}\n\n`));
-      controller.close();
+        // Send done event
+        const doneData = JSON.stringify({
+          written: successCount,
+          errors: errorCount,
+          totalBlocks: contentBlocks.length,
+          keyIdeasCoverage: coverageResults,
+        });
+        controller.enqueue(encoder.encode(`event: done\ndata: ${doneData}\n\n`));
+      } catch { /* Client disconnected */ }
+      try { controller.close(); } catch { /* Already closed */ }
     },
   });
 
