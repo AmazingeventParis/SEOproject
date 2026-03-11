@@ -4,7 +4,7 @@ import type { PipelineStep, PipelineContext, PipelineRunResult } from './types'
 
 // Article with joined relations from Supabase query
 type ArticleWithRelations = Article & {
-  seo_personas: { name: string; role: string; tone_description: string | null; bio: string | null; writing_style_examples: Record<string, unknown>[] } | null
+  seo_personas: { name: string; role: string; tone_description: string | null; bio: string | null; avatar_reference_url: string | null; writing_style_examples: Record<string, unknown>[] } | null
   seo_sites: { name: string; domain: string; niche: string | null; theme_color: string | null; money_page_url: string | null; money_page_description: string | null } | null
 }
 import { validateTransition, getNextStatus } from './state-machine'
@@ -130,7 +130,7 @@ export async function executeStep(
   // Fetch article with persona and site
   const { data: article, error: fetchError } = await supabase
     .from('seo_articles')
-    .select('*, seo_personas!seo_articles_persona_id_fkey(name, role, tone_description, bio, writing_style_examples), seo_sites!seo_articles_site_id_fkey(name, domain, niche, theme_color, money_page_url, money_page_description)')
+    .select('*, seo_personas!seo_articles_persona_id_fkey(name, role, tone_description, bio, avatar_reference_url, writing_style_examples), seo_sites!seo_articles_site_id_fkey(name, domain, niche, theme_color, money_page_url, money_page_description)')
     .eq('id', articleId)
     .single()
 
@@ -429,7 +429,7 @@ async function executePlan(
     .map(p => ({ keyword: p.title, title: p.title, slug: p.slug }))
   const siteArticles = [...dbArticles, ...wpOnlyPosts]
 
-  const persona = article.seo_personas as { name: string; role: string; tone_description: string | null; bio: string | null; writing_style_examples: Record<string, unknown>[] } | null
+  const persona = article.seo_personas as { name: string; role: string; tone_description: string | null; bio: string | null; avatar_reference_url: string | null; writing_style_examples: Record<string, unknown>[] } | null
   const serpDataRaw = article.serp_data as {
     serp?: { organic: { title: string; snippet: string }[]; peopleAlsoAsk: { question: string }[] }
     competitorContent?: { avgWordCount: number; commonHeadings: string[]; tfidfKeywords: { term: string; tfidf: number; df: number }[] }
@@ -446,7 +446,7 @@ async function executePlan(
   const prompt = buildPlanArchitectPrompt({
     keyword: article.keyword,
     searchIntent: article.search_intent,
-    persona: persona || { name: 'Expert', role: 'Redacteur', tone_description: null, bio: null, writing_style_examples: [] },
+    persona: persona || { name: 'Expert', role: 'Redacteur', tone_description: null, bio: null, avatar_reference_url: null, writing_style_examples: [] },
     serpData: serpDataRaw?.serp as Parameters<typeof buildPlanArchitectPrompt>[0]['serpData'],
     nuggets: (nuggets || []).map((n: { id: string; content: string; tags: string[]; source_type?: string }) => ({ id: n.id, content: n.content, tags: n.tags, source_type: n.source_type })),
     existingSiloArticles: siteArticles,
@@ -751,7 +751,7 @@ async function executeWriteBlock(
     }
   }
 
-  const persona = article.seo_personas as { name: string; role: string; tone_description: string | null; bio: string | null; writing_style_examples: Record<string, unknown>[] } | null
+  const persona = article.seo_personas as { name: string; role: string; tone_description: string | null; bio: string | null; avatar_reference_url: string | null; writing_style_examples: Record<string, unknown>[] } | null
   const previousHeadings = contentBlocks
     .slice(0, blockIndex)
     .filter((b: ContentBlock) => b.heading)
@@ -806,7 +806,7 @@ async function executeWriteBlock(
   const prompt = buildBlockWriterPrompt({
     keyword: article.keyword,
     searchIntent: article.search_intent,
-    persona: persona || { name: 'Expert', role: 'Redacteur', tone_description: null, bio: null, writing_style_examples: [] },
+    persona: persona || { name: 'Expert', role: 'Redacteur', tone_description: null, bio: null, avatar_reference_url: null, writing_style_examples: [] },
     block: {
       type: block.type,
       heading: block.heading ?? null,
@@ -835,6 +835,18 @@ async function executeWriteBlock(
       }
       // Also account for tables that will be in the current block (format_hint === 'table' counts as 1)
       return tableCount
+    })(),
+    calloutStyleIndex: (() => {
+      // Count how many expert callouts exist in previously written blocks to alternate styles
+      let calloutCount = 0
+      for (let i = 0; i < blockIndex; i++) {
+        const b = contentBlocks[i]
+        if (b.content_html && (b.status === 'written' || b.status === 'approved')) {
+          const matches = b.content_html.match(/class="expert-callout"/g)
+          if (matches) calloutCount += matches.length
+        }
+      }
+      return calloutCount
     })(),
     articleOutline,
     blockKeyIdeas: block.key_ideas || [],

@@ -15,6 +15,8 @@ import {
   getTableStyleForSite,
   buildTablePromptTemplate,
   buildTableStyleRules,
+  getCalloutStyleForSite,
+  buildCalloutPromptTemplate,
 } from './seo-guidelines'
 
 interface BlockWriterParams {
@@ -25,6 +27,7 @@ interface BlockWriterParams {
     role: string
     tone_description: string | null
     bio: string | null
+    avatar_reference_url: string | null
     writing_style_examples: Record<string, unknown>[]
   }
   block: {
@@ -43,6 +46,7 @@ interface BlockWriterParams {
   siteDomain?: string
   authorityLink?: { url: string; title: string; anchor_context: string } | null
   tableStyleIndex?: number
+  calloutStyleIndex?: number
   articleOutline?: string
   blockKeyIdeas?: string[]
 }
@@ -61,7 +65,7 @@ interface BlockWriterPrompt {
 export function buildBlockWriterPrompt(
   params: BlockWriterParams
 ): BlockWriterPrompt {
-  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleDigest, articleTitle, internalLinkTargets, siteDomain, authorityLink, tableStyleIndex, articleOutline, blockKeyIdeas } = params
+  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleDigest, articleTitle, internalLinkTargets, siteDomain, authorityLink, tableStyleIndex, calloutStyleIndex, articleOutline, blockKeyIdeas } = params
 
   // ---- System prompt ----
   const system = `Tu es un redacteur web expert en SEO, specialise dans la creation de contenu de haute qualite optimise pour le referencement naturel.
@@ -140,9 +144,30 @@ ${SEO_FAQ_RULES}
 - Le H2 DOIT etre inclus dans le HTML genere (ex: <h2>Questions frequentes</h2> ou <h2>FAQ</h2>)
 
 ### Pour un bloc de type "callout"
-Ecris un encadre informatif ou d'alerte en HTML.
+Ecris un encadre informatif, d'alerte ou d'avis expert en HTML.
+
+**Encadres simples (info, warning) :**
 Format : <div class="callout callout-info"><p>Contenu...</p></div>
 Variantes : callout-info, callout-warning, callout-tip, callout-important
+
+**Encadres expert avec photo auteur ("Mon Avis", "Mes Astuces", "Conseil d'expert") :**
+Utilise ce format des que le contenu est un AVIS PERSONNEL, une ASTUCE du persona, ou un CONSEIL D'EXPERT.
+Les styles inline sont OBLIGATOIRES (publication WordPress sans CSS custom).
+
+${(() => {
+  const calloutStyle = getCalloutStyleForSite(siteDomain, calloutStyleIndex ?? 0)
+  return `**Style d'encart a utiliser : "${calloutStyle.name}"**
+
+**Structure HTML OBLIGATOIRE (copie ce modele exactement) :**
+${buildCalloutPromptTemplate(calloutStyle, persona.name, persona.role, persona.avatar_reference_url)}
+
+**Regles des encarts expert :**
+- Le TITRE varie selon le contexte : "Mon avis", "L'astuce de ${persona.name}", "Mon conseil", "Ce que je recommande", "A retenir"
+- Contenu COURT : 2-4 phrases max, avis TRANCHE ou astuce ACTIONABLE
+- Le nom et role du persona sont affiches automatiquement — ne les repete pas dans le texte
+- Styles inline OBLIGATOIRES sur CHAQUE element (div, img, p, strong)
+- L'encart expert est ideal pour : avis personnel, retour d'experience, astuce pratique, mise en garde basee sur l'experience`
+})()}
 
 ### Pour un format "table"
 Cree un tableau HTML epure, moderne et responsive. Les styles inline sont OBLIGATOIRES car le HTML sera publie sur WordPress sans CSS custom.

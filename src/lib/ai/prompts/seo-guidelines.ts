@@ -295,6 +295,120 @@ export function buildTableStyleRules(style: TableStylePreset): string {
 }
 
 /**
+ * Callout/encart style presets per site domain.
+ * Used for "Mon Avis", "Mes Astuces", expert tips with author photo.
+ * Each site has 2 styles that alternate (like tables).
+ */
+export interface CalloutStylePreset {
+  name: string
+  borderColor: string
+  bgColor: string
+  accentColor: string
+  titleColor: string
+  iconBg: string
+  iconBorderColor?: string
+}
+
+export const SITE_CALLOUT_STYLES: Record<string, [CalloutStylePreset, CalloutStylePreset]> = {
+  'smakk.fr': [
+    {
+      name: 'Avis Expert',
+      borderColor: '#0A6CFF',
+      bgColor: '#F0F6FC',
+      accentColor: '#00052F',
+      titleColor: '#00052F',
+      iconBg: '#00052F',
+    },
+    {
+      name: 'Astuce Pro',
+      borderColor: '#FB8E28',
+      bgColor: '#FFF8F0',
+      accentColor: '#FB8E28',
+      titleColor: '#00052F',
+      iconBg: '#FFFFFF',
+      iconBorderColor: '#FB8E28',
+    },
+  ],
+  'mon-habitat-durable.fr': [
+    {
+      name: 'Avis Expert',
+      borderColor: '#2D5A27',
+      bgColor: '#E8F5E9',
+      accentColor: '#2D5A27',
+      titleColor: '#2D5A27',
+      iconBg: '#2D5A27',
+    },
+    {
+      name: 'Astuce Pro',
+      borderColor: '#26BD26',
+      bgColor: '#F1F8E9',
+      accentColor: '#26BD26',
+      titleColor: '#2D5A27',
+      iconBg: '#FFFFFF',
+      iconBorderColor: '#26BD26',
+    },
+  ],
+}
+
+export const DEFAULT_CALLOUT_STYLES: [CalloutStylePreset, CalloutStylePreset] = [
+  {
+    name: 'Avis Expert',
+    borderColor: '#3b82f6',
+    bgColor: '#eff6ff',
+    accentColor: '#1e40af',
+    titleColor: '#1e293b',
+    iconBg: '#1e293b',
+  },
+  {
+    name: 'Astuce Pro',
+    borderColor: '#f59e0b',
+    bgColor: '#fffbeb',
+    accentColor: '#f59e0b',
+    titleColor: '#1e293b',
+    iconBg: '#FFFFFF',
+    iconBorderColor: '#f59e0b',
+  },
+]
+
+/**
+ * Get the callout style for a given site domain and callout index.
+ */
+export function getCalloutStyleForSite(siteDomain: string | undefined, calloutIndex: number): CalloutStylePreset {
+  const domain = siteDomain?.toLowerCase().replace(/^www\./, '') || ''
+  const styles = SITE_CALLOUT_STYLES[domain] || DEFAULT_CALLOUT_STYLES
+  return styles[calloutIndex % 2]
+}
+
+/**
+ * Build the full callout HTML template for the AI prompt.
+ */
+export function buildCalloutPromptTemplate(
+  style: CalloutStylePreset,
+  personaName: string,
+  personaRole: string,
+  avatarUrl: string | null,
+): string {
+  const avatarBorder = style.iconBorderColor ? `border:2px solid ${style.iconBorderColor}` : `border:2px solid ${style.borderColor}`
+  const avatarBg = style.iconBg
+  const avatarHtml = avatarUrl
+    ? `<img src="${avatarUrl}" alt="${personaName}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;${avatarBorder}" />`
+    : `<div style="width:52px;height:52px;border-radius:50%;background:${avatarBg};${avatarBorder};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.2rem;color:${style.accentColor}">${personaName.charAt(0).toUpperCase()}</div>`
+
+  return `<div class="expert-callout" style="display:flex;gap:16px;align-items:flex-start;padding:20px 24px;background:${style.bgColor};border-left:4px solid ${style.borderColor};border-radius:8px;margin:24px 0;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+  <div style="flex-shrink:0;padding-top:2px">
+    ${avatarHtml}
+  </div>
+  <div style="flex:1;min-width:0">
+    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
+      <strong style="font-size:1rem;color:${style.titleColor}">TITRE DE L'ENCART</strong>
+    </div>
+    <p style="font-size:0.92rem;color:${style.accentColor};margin:0 0 4px 0;font-weight:600">${personaName} - ${personaRole}</p>
+    <p style="margin:0;line-height:1.6;color:#374151">Le contenu de l'encart ici. 2-4 phrases maximum, avis tranche ou astuce actionable.</p>
+  </div>
+</div>`
+}
+
+/**
  * Intent-specific strategies for plan, writing, and critique.
  * Each search intent has radically different structure, style, and SEO techniques.
  * Used by: plan-architect, block-writer, critique
