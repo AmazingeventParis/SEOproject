@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Download, FileText, Loader2, Plus, Search } from "lucide-react";
+import { Download, FileText, Layers, Loader2, Plus, Search } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -104,12 +104,20 @@ export default function ArticlesPage() {
             Pipeline de production de contenu SEO.
           </p>
         </div>
-        <Link href="/dashboard/articles/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Nouvel article
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/dashboard/articles/batch">
+            <Button variant="outline">
+              <Layers className="mr-2 h-4 w-4" />
+              Production en lot
+            </Button>
+          </Link>
+          <Link href="/dashboard/articles/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Nouvel article
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
