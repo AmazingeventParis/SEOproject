@@ -126,4 +126,15 @@ export interface RevampCandidate {
   daysSincePublished: number | null
   revampScore: number // Higher = more urgent to revamp
   pageBuilder: PageBuilder
+  topKeywords: {
+    query: string
+    clicks: number
+    impressions: number
+    ctr: number
+    position: number
+  }[]
+  bestKeyword: string | null
+  searchIntent: string | null
+  strengths: string[]
+  weaknesses: string[]
 }
