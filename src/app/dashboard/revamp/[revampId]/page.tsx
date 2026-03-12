@@ -104,6 +104,8 @@ export default function RevampDetailPage() {
       const res = await fetch(`/api/revamp/${revampId}/approve`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      // Update status locally immediately so the button switches
+      setRevamp(prev => prev ? { ...prev, status: "approved" } : prev);
       await fetchRevamp();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -115,6 +117,7 @@ export default function RevampDetailPage() {
   const handleGenerate = async () => {
     setActionLoading("generate");
     setError(null);
+    setRevamp(prev => prev ? { ...prev, status: "generating" } : prev);
     try {
       const res = await fetch(`/api/revamp/${revampId}/generate`, { method: "POST" });
       const data = await res.json();
@@ -122,6 +125,7 @@ export default function RevampDetailPage() {
       await fetchRevamp();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      await fetchRevamp(); // Refresh to get real status on error
     } finally {
       setActionLoading(null);
     }
@@ -130,6 +134,7 @@ export default function RevampDetailPage() {
   const handlePush = async () => {
     setActionLoading("push");
     setError(null);
+    setRevamp(prev => prev ? { ...prev, status: "pushing" } : prev);
     try {
       const res = await fetch(`/api/revamp/${revampId}/push`, { method: "POST" });
       const data = await res.json();
@@ -137,6 +142,7 @@ export default function RevampDetailPage() {
       await fetchRevamp();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      await fetchRevamp();
     } finally {
       setActionLoading(null);
     }
@@ -185,8 +191,24 @@ export default function RevampDetailPage() {
           </div>
         </div>
 
-        {/* Actions */}
+        {/* Status + Actions */}
         <div className="flex items-center gap-2">
+          <Badge variant={
+            revamp.status === "completed" ? "default" :
+            revamp.status === "generated" ? "default" :
+            revamp.status === "failed" ? "destructive" :
+            revamp.status === "generating" || revamp.status === "pushing" ? "secondary" :
+            "outline"
+          }>
+            {revamp.status === "analyzed" ? "Analyse terminee" :
+             revamp.status === "approved" ? "Approuve" :
+             revamp.status === "generating" ? "Generation en cours..." :
+             revamp.status === "generated" ? "Contenu pret" :
+             revamp.status === "pushing" ? "Publication en cours..." :
+             revamp.status === "completed" ? "Publie" :
+             revamp.status === "failed" ? "Erreur" :
+             revamp.status}
+          </Badge>
           {revamp.status === "analyzed" && (
             <Button onClick={handleApprove} disabled={!!actionLoading}>
               {actionLoading === "approve" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
@@ -204,6 +226,9 @@ export default function RevampDetailPage() {
               {actionLoading === "push" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
               Pusher sur WordPress
             </Button>
+          )}
+          {(revamp.status === "generating" || revamp.status === "pushing") && (
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           )}
         </div>
       </div>
