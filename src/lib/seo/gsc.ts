@@ -133,19 +133,17 @@ function arrayBufferToBase64url(buffer: ArrayBuffer): string {
 
 async function importPrivateKey(pem: string): Promise<CryptoKey> {
   const pemContents = pem
-    .replace(/-----BEGIN (RSA )?PRIVATE KEY-----/, '')
-    .replace(/-----END (RSA )?PRIVATE KEY-----/, '')
-    .replace(/\s/g, '')
+    .replace(/-----BEGIN (RSA )?PRIVATE KEY-----/g, '')
+    .replace(/-----END (RSA )?PRIVATE KEY-----/g, '')
+    .replace(/[\s"]/g, '')
 
-  const binaryStr = atob(pemContents)
-  const bytes = new Uint8Array(binaryStr.length)
-  for (let i = 0; i < binaryStr.length; i++) {
-    bytes[i] = binaryStr.charCodeAt(i)
-  }
+  // Use Buffer.from (Node.js) which is more tolerant than atob
+  const buf = Buffer.from(pemContents, 'base64')
+  const bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
 
   return crypto.subtle.importKey(
     'pkcs8',
-    bytes.buffer,
+    bytes,
     { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
     false,
     ['sign']
