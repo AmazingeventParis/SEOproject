@@ -111,7 +111,13 @@ overallScore = score de 0 a 100 de l'etat actuel de l'article (100 = excellent, 
   ])
 
   try {
-    const parsed = JSON.parse(response.content)
+    // Extract JSON from potential markdown code block wrappers
+    let jsonStr = response.content.trim()
+    const codeBlockMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1].trim()
+    }
+    const parsed = JSON.parse(jsonStr)
 
     return {
       overallScore: Number(parsed.overallScore) || 0,
@@ -147,7 +153,9 @@ overallScore = score de 0 a 100 de l'etat actuel de l'article (100 = excellent, 
       suggestedTitle: parsed.suggestedTitle ? String(parsed.suggestedTitle) : null,
       suggestedMetaDescription: parsed.suggestedMetaDescription ? String(parsed.suggestedMetaDescription) : null,
     }
-  } catch {
+  } catch (err) {
+    console.error('[revamp-auditor] JSON parse error:', err)
+    console.error('[revamp-auditor] Raw response (first 500 chars):', response.content.slice(0, 500))
     throw new Error('Echec du parsing de l\'audit IA. Reponse invalide.')
   }
 }

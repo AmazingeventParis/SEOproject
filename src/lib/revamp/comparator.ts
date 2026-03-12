@@ -115,7 +115,12 @@ Reponds en JSON strict :
   ])
 
   try {
-    const parsed = JSON.parse(response.content)
+    let jsonStr = response.content.trim()
+    const codeBlockMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1].trim()
+    }
+    const parsed = JSON.parse(jsonStr)
     return {
       competitors: (parsed.competitors || []).map((c: Record<string, unknown>) => ({
         url: String(c.url || ''),
