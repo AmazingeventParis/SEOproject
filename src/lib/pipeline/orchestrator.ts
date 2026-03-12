@@ -1939,6 +1939,69 @@ function applyThStyles(tableHtml: string, thStyle: string): string {
   return tableHtml.replace(/<th(?:\s[^>]*)?>/g, `<th ${thStyle}>`)
 }
 
+/**
+ * Strip Elementor wrapper divs from assembled HTML.
+ * Kept blocks from imported WP articles may contain Elementor markup like:
+ *   <div class="elementor-element ..."><div class="elementor-widget-container">...content...</div></div>
+ * These wrappers break layout when Elementor edit mode is disabled.
+ */
+function stripElementorFromHtml(html: string): string {
+  let cleaned = html
+
+  // 1. Replace Elementor button widgets with clean styled CTA buttons
+  cleaned = cleaned.replace(
+    /<div[^>]*class="[^"]*elementor-widget-button[^"]*"[^>]*>[\s\S]*?<a[^>]*href="([^"]*)"[^>]*>[\s\S]*?<span class="elementor-button-text">([\s\S]*?)<\/span>[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/gi,
+    (_m: string, url: string, text: string) =>
+      `<div style="text-align:center;margin:30px 0"><a href="${url}" style="display:inline-block;padding:14px 32px;background-color:#335cd8;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;font-size:1.05rem">${text.trim()}</a></div>`
+  )
+
+  // 2. Remove Elementor divider widgets
+  cleaned = cleaned.replace(
+    /<div[^>]*class="[^"]*elementor-widget-divider[^"]*"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/gi, ''
+  )
+
+  // 3. Remove opening Elementor wrapper divs
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*elementor-(?:element|widget-wrap|section-wrap|container)[^"]*"[^>]*>\s*/gi, '')
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*elementor-widget-container[^"]*"[^>]*>\s*/gi, '')
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*e-con-inner[^"]*"[^>]*>\s*/gi, '')
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*e-con[^"]*"[^>]*>\s*/gi, '')
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*elementor[^"]*"[^>]*>/gi, '')
+
+  // 4. Remove Elementor data attributes
+  cleaned = cleaned.replace(/\s*data-(?:id|element_type|e-type|widget_type|settings)="[^"]*"/gi, '')
+
+  // 5. Remove empty divs
+  cleaned = cleaned.replace(/<div[^>]*>\s*<\/div>\s*/g, '')
+
+  // 6. Balance div tags — remove orphan </div> with no matching opening tag
+  let output = ''
+  let i = 0
+  let divStack = 0
+  while (i < cleaned.length) {
+    if (cleaned.slice(i, i + 4) === '<div') {
+      const end = cleaned.indexOf('>', i)
+      if (end !== -1) {
+        output += cleaned.slice(i, end + 1)
+        divStack++
+        i = end + 1
+        continue
+      }
+    }
+    if (cleaned.slice(i, i + 6) === '</div>') {
+      if (divStack > 0) {
+        output += '</div>'
+        divStack--
+      }
+      i += 6
+      continue
+    }
+    output += cleaned[i]
+    i++
+  }
+
+  return output.replace(/\n{3,}/g, '\n\n').replace(/\t+/g, '').trim()
+}
+
 // ---- Publish step ----
 
 async function executePublish(
@@ -1977,6 +2040,18 @@ async function executePublish(
 
   // Apply table styles for WordPress (inline + CSS block)
   let fullHtml = htmlParts.join('\n\n')
+
+  // Strip Elementor wrapper markup from kept blocks (imported WP articles retain old markup)
+  if (fullHtml.includes('elementor')) {
+    fullHtml = stripElementorFromHtml(fullHtml)
+  }
+
+  // Remove any stale Gutenberg spacer blocks — they render full-width on some themes
+  fullHtml = fullHtml
+    .replace(/<!--\s*wp:spacer[\s\S]*?<!--\s*\/wp:spacer\s*-->/gi, '')
+    .replace(/<div[^>]*class="wp-block-spacer"[^>]*><\/div>/gi, '')
+    .replace(/<div style="height:\d+px"[^>]*aria-hidden="true"[^>]*><\/div>/gi, '')
+
   if (fullHtml.includes('<table')) {
     fullHtml = WP_TABLE_CSS + '\n' + inlineTableStyles(fullHtml, site?.theme_color || null)
   }
