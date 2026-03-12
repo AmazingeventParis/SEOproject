@@ -222,10 +222,16 @@ export default function RevampDetailPage() {
             </Button>
           )}
           {revamp.status === "generated" && (
-            <Button onClick={handlePush} disabled={!!actionLoading}>
-              {actionLoading === "push" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-              Pusher sur WordPress
-            </Button>
+            <>
+              <Button variant="outline" onClick={handleGenerate} disabled={!!actionLoading}>
+                {actionLoading === "generate" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Regenerer
+              </Button>
+              <Button onClick={handlePush} disabled={!!actionLoading}>
+                {actionLoading === "push" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                Pusher sur WordPress
+              </Button>
+            </>
           )}
           {(revamp.status === "generating" || revamp.status === "pushing") && (
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

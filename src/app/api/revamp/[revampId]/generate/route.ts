@@ -34,7 +34,7 @@ export async function POST(
     )
   }
 
-  if (revamp.status !== 'approved' && revamp.status !== 'failed') {
+  if (revamp.status !== 'approved' && revamp.status !== 'failed' && revamp.status !== 'generated') {
     return new Response(
       JSON.stringify({ error: `Impossible de generer: statut actuel "${revamp.status}"` }),
       { status: 422, headers: { 'Content-Type': 'application/json' } }
