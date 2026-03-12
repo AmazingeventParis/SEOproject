@@ -269,13 +269,23 @@ export async function pushToWordPress(
       meta._yoast_wpseo_metadesc = audit.suggestedMetaDescription
       meta.rank_math_description = audit.suggestedMetaDescription
     }
+
+    // For Elementor posts: disable Elementor so WP uses the standard content field
+    // This converts the page from Elementor to classic/Gutenberg editor
+    const pageBuilder = revamp.page_builder as string
+    if (pageBuilder === 'elementor') {
+      meta._elementor_edit_mode = ''        // Disable Elementor edit mode
+      meta._elementor_data = '[]'           // Clear Elementor widget data
+      meta._elementor_page_settings = '[]'  // Clear page settings
+    }
+
     if (Object.keys(meta).length > 0) {
       updatePayload.meta = meta
     }
 
     await updatePost(revamp.site_id, revamp.wp_post_id, updatePayload)
 
-    // Update status
+    // Update revamp status
     await supabase
       .from('seo_revamps')
       .update({
@@ -283,6 +293,19 @@ export async function pushToWordPress(
         updated_at: new Date().toISOString(),
       })
       .eq('id', revampId)
+
+    // Also update the linked article to 'published' so CTR optimization etc. are available
+    if (revamp.article_id) {
+      await supabase
+        .from('seo_articles')
+        .update({
+          status: 'published',
+          content_html: contentHtml,
+          seo_title: audit?.suggestedTitle || undefined,
+          meta_description: audit?.suggestedMetaDescription || undefined,
+        })
+        .eq('id', revamp.article_id)
+    }
 
     return { success: true }
   } catch (err) {
