@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { getServerClient } from '@/lib/supabase/client'
 import type { SearchIntent } from '@/lib/supabase/types'
+import type { RevampLinkSuggestions } from '@/lib/revamp/types'
 
 interface RouteContext {
   params: { revampId: string }
@@ -22,7 +23,7 @@ export async function POST(
   // Verify revamp exists and is in the right status
   const { data: revamp, error } = await supabase
     .from('seo_revamps')
-    .select('id, status, site_id, original_keyword, original_title, article_id, audit, new_blocks, wp_post_id, gsc_data, preserved_links')
+    .select('id, status, site_id, original_keyword, original_title, article_id, audit, new_blocks, wp_post_id, gsc_data, preserved_links, link_suggestions')
     .eq('id', revampId)
     .single()
 
@@ -71,9 +72,22 @@ export async function POST(
     }
   }
 
-  // Build internal link targets from preserved links
+  // Build internal link targets from preserved links + user-selected suggestions
   const preservedLinks = (revamp.preserved_links || []) as { url: string; anchor: string; isInternal: boolean }[]
   const internalLinks = preservedLinks.filter(l => l.isInternal)
+
+  // Merge selected internal links from link_suggestions
+  const linkSuggestions = revamp.link_suggestions as RevampLinkSuggestions | null
+  if (linkSuggestions?.internal) {
+    const selectedInternal = linkSuggestions.internal.filter(l => l.selected)
+    const existingUrls = new Set(internalLinks.map(l => l.url))
+    for (const link of selectedInternal) {
+      if (!existingUrls.has(link.wp_url)) {
+        internalLinks.push({ url: link.wp_url, anchor: link.anchor_text, isInternal: true })
+        existingUrls.add(link.wp_url)
+      }
+    }
+  }
 
   // Enrich blocks with internal_link_targets for the writer
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,6 +119,9 @@ export async function POST(
     return block
   })
 
+  // Build selected authority link for the article (used by block-writer)
+  const selectedAuthorityLink = linkSuggestions?.selectedAuthority || null
+
   // If no article_id exists, create a full article for the pipeline
   let articleId = revamp.article_id
   if (!articleId) {
@@ -120,6 +137,7 @@ export async function POST(
         content_blocks: enrichedBlocks,
         persona_id: personaId,
         year_tag: new Date().getFullYear(),
+        selected_authority_link: selectedAuthorityLink,
       })
       .select('id')
       .single()
@@ -141,6 +159,7 @@ export async function POST(
         content_blocks: enrichedBlocks,
         persona_id: personaId,
         year_tag: new Date().getFullYear(),
+        selected_authority_link: selectedAuthorityLink,
       })
       .eq('id', articleId)
   }

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   CheckCircle2,
   RefreshCw,
@@ -20,6 +21,9 @@ import {
   Eye,
   MousePointer,
   TrendingUp,
+  Search,
+  Globe,
+  Link2,
 } from "lucide-react";
 
 interface RevampDetail {
@@ -59,6 +63,12 @@ interface RevampDetail {
   original_blocks: { heading?: string; type: string; word_count: number; content_html: string }[];
   new_blocks: { heading?: string; type: string; word_count: number; status: string; content_html: string }[] | null;
   preserved_links: { url: string; anchor: string; isInternal: boolean }[];
+  link_suggestions: {
+    authority: { url: string; title: string; domain: string; snippet: string; rationale: string; is_valid: boolean; selected: boolean }[];
+    internal: { article_id: string | null; wp_url: string; title: string; keyword: string; anchor_text: string; selected: boolean }[];
+    selectedAuthority: { url: string; title: string; anchor_context: string } | null;
+    customAuthorityUrl?: string;
+  } | null;
   error: string | null;
   created_at: string;
 }
@@ -72,6 +82,10 @@ export default function RevampDetailPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [customAuthorityUrl, setCustomAuthorityUrl] = useState("");
+  const [customAuthorityTitle, setCustomAuthorityTitle] = useState("");
+  const [customAuthorityAnchor, setCustomAuthorityAnchor] = useState("");
+  const [showCustomAuthority, setShowCustomAuthority] = useState(false);
 
   const fetchRevamp = useCallback(async () => {
     try {
@@ -128,6 +142,103 @@ export default function RevampDetailPage() {
       await fetchRevamp(); // Refresh to get real status on error
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const handleSuggestLinks = async () => {
+    setActionLoading("suggest-links");
+    setError(null);
+    try {
+      const res = await fetch(`/api/revamp/${revampId}/suggest-links`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      await fetchRevamp();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSelectAuthority = async (index: number) => {
+    setActionLoading("select-links");
+    try {
+      const res = await fetch(`/api/revamp/${revampId}/select-links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authorityIndex: index }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      if (data.linkSuggestions && revamp) {
+        setRevamp({ ...revamp, link_suggestions: data.linkSuggestions });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCustomAuthority = async () => {
+    if (!customAuthorityUrl) return;
+    setActionLoading("select-links");
+    try {
+      const res = await fetch(`/api/revamp/${revampId}/select-links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customAuthority: {
+            url: customAuthorityUrl,
+            title: customAuthorityTitle || customAuthorityUrl,
+            anchor_context: customAuthorityAnchor || customAuthorityTitle || "Voir la source",
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      if (data.linkSuggestions && revamp) {
+        setRevamp({ ...revamp, link_suggestions: data.linkSuggestions });
+      }
+      setShowCustomAuthority(false);
+      setCustomAuthorityUrl("");
+      setCustomAuthorityTitle("");
+      setCustomAuthorityAnchor("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleToggleInternal = async (index: number) => {
+    if (!revamp?.link_suggestions) return;
+    const currentSelected = revamp.link_suggestions.internal.map((l, i) =>
+      i === index ? !l.selected : l.selected
+    );
+    const selectedIndices = currentSelected
+      .map((sel, i) => (sel ? i : -1))
+      .filter(i => i >= 0);
+
+    // Optimistic update
+    const updatedSuggestions = {
+      ...revamp.link_suggestions,
+      internal: revamp.link_suggestions.internal.map((l, i) => ({
+        ...l,
+        selected: i === index ? !l.selected : l.selected,
+      })),
+    };
+    setRevamp({ ...revamp, link_suggestions: updatedSuggestions });
+
+    try {
+      await fetch(`/api/revamp/${revampId}/select-links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedInternalIndices: selectedIndices }),
+      });
+    } catch {
+      // Revert on error
+      await fetchRevamp();
     }
   };
 
@@ -491,6 +602,211 @@ export default function RevampDetailPage() {
               ))}
             </div>
           </CardContent>
+        </Card>
+      )}
+
+      {/* Link Suggestions */}
+      {(revamp.status === "analyzed" || revamp.status === "approved" || revamp.status === "failed") && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Link2 className="h-5 w-5" />
+                Suggestions de liens
+              </CardTitle>
+              {!revamp.link_suggestions && (
+                <Button
+                  onClick={handleSuggestLinks}
+                  disabled={!!actionLoading}
+                  size="sm"
+                >
+                  {actionLoading === "suggest-links" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="mr-2 h-4 w-4" />
+                  )}
+                  Rechercher des liens
+                </Button>
+              )}
+              {revamp.link_suggestions && (
+                <Button
+                  onClick={handleSuggestLinks}
+                  disabled={!!actionLoading}
+                  variant="outline"
+                  size="sm"
+                >
+                  {actionLoading === "suggest-links" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Rafraichir
+                </Button>
+              )}
+            </div>
+            <CardDescription>
+              Liens d&apos;autorite externes (E-E-A-T) et maillage interne
+            </CardDescription>
+          </CardHeader>
+          {revamp.link_suggestions && (
+            <CardContent className="space-y-6">
+              {/* Authority Links */}
+              <div>
+                <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                  <Globe className="h-4 w-4 text-blue-500" />
+                  Liens d&apos;autorite externes ({revamp.link_suggestions.authority.length})
+                </h4>
+                {revamp.link_suggestions.authority.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucun lien d&apos;autorite trouve</p>
+                ) : (
+                  <div className="space-y-2">
+                    {revamp.link_suggestions.authority.map((link, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          link.selected ? "border-blue-500 bg-blue-50 dark:bg-blue-950" : "hover:bg-muted/50"
+                        }`}
+                        onClick={() => handleSelectAuthority(link.selected ? -1 : i)}
+                      >
+                        <input
+                          type="radio"
+                          name="authority-link"
+                          checked={link.selected}
+                          onChange={() => handleSelectAuthority(link.selected ? -1 : i)}
+                          className="mt-1 shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium truncate">{link.title}</span>
+                            <Badge variant="outline" className="text-xs shrink-0">{link.domain}</Badge>
+                            {link.is_valid && <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">{link.rationale}</p>
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-500 hover:underline mt-1 inline-flex items-center gap-1"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            {link.url.slice(0, 60)}... <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Custom authority link */}
+                {revamp.link_suggestions.selectedAuthority && revamp.link_suggestions.customAuthorityUrl && (
+                  <div className="mt-2 p-3 rounded-lg border border-green-500 bg-green-50 dark:bg-green-950">
+                    <div className="flex items-center gap-2 text-sm">
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      <span className="font-medium">Lien personnalise selectionne :</span>
+                      <a href={revamp.link_suggestions.selectedAuthority.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate">
+                        {revamp.link_suggestions.selectedAuthority.url}
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-3">
+                  {!showCustomAuthority ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowCustomAuthority(true)}
+                    >
+                      <Plus className="mr-2 h-3 w-3" />
+                      Proposer un lien personnalise
+                    </Button>
+                  ) : (
+                    <div className="space-y-2 p-3 rounded-lg border bg-muted/30">
+                      <p className="text-sm font-medium">Lien d&apos;autorite personnalise</p>
+                      <Input
+                        placeholder="URL (ex: https://fr.wikipedia.org/...)"
+                        value={customAuthorityUrl}
+                        onChange={e => setCustomAuthorityUrl(e.target.value)}
+                      />
+                      <Input
+                        placeholder="Titre de la source"
+                        value={customAuthorityTitle}
+                        onChange={e => setCustomAuthorityTitle(e.target.value)}
+                      />
+                      <Input
+                        placeholder="Texte d'ancrage suggere"
+                        value={customAuthorityAnchor}
+                        onChange={e => setCustomAuthorityAnchor(e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={handleCustomAuthority}
+                          disabled={!customAuthorityUrl || !!actionLoading}
+                        >
+                          {actionLoading === "select-links" ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                          )}
+                          Valider
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowCustomAuthority(false)}
+                        >
+                          Annuler
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Internal Links */}
+              <div>
+                <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                  <LinkIcon className="h-4 w-4 text-green-500" />
+                  Maillage interne ({revamp.link_suggestions.internal.filter(l => l.selected).length}/{revamp.link_suggestions.internal.length})
+                </h4>
+                {revamp.link_suggestions.internal.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucun article interne pertinent trouve</p>
+                ) : (
+                  <div className="space-y-1">
+                    {revamp.link_suggestions.internal.map((link, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-center gap-3 p-2 rounded border cursor-pointer transition-colors ${
+                          link.selected ? "border-green-500 bg-green-50 dark:bg-green-950" : "hover:bg-muted/50"
+                        }`}
+                        onClick={() => handleToggleInternal(i)}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={link.selected}
+                          onChange={() => handleToggleInternal(i)}
+                          className="shrink-0"
+                        />
+                        <span className="text-sm flex-1 truncate" title={link.title}>
+                          {link.title}
+                        </span>
+                        <a
+                          href={link.wp_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-muted-foreground hover:text-blue-500 shrink-0"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          )}
         </Card>
       )}
 

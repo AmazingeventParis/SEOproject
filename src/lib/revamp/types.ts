@@ -88,6 +88,38 @@ export interface RevampAudit {
   suggestedMetaDescription: string | null
 }
 
+// ---- Link suggestion types for revamp ----
+
+export interface RevampAuthorityLinkSuggestion {
+  url: string
+  title: string
+  domain: string
+  snippet: string
+  rationale: string
+  is_valid: boolean
+  selected: boolean
+}
+
+export interface RevampInternalLinkSuggestion {
+  article_id: string | null  // null for WP-only posts
+  wp_url: string
+  title: string
+  keyword: string
+  anchor_text: string
+  selected: boolean
+}
+
+export interface RevampLinkSuggestions {
+  authority: RevampAuthorityLinkSuggestion[]
+  internal: RevampInternalLinkSuggestion[]
+  selectedAuthority: {
+    url: string
+    title: string
+    anchor_context: string
+  } | null
+  customAuthorityUrl?: string // user-provided custom URL
+}
+
 export interface RevampProject {
   id: string
   site_id: string
@@ -106,6 +138,7 @@ export interface RevampProject {
   new_content_html: string | null
   preserved_links: { url: string; anchor: string; isInternal: boolean }[]
   preserved_ctas: string[]
+  link_suggestions: RevampLinkSuggestions | null
   error: string | null
   created_at: string
   updated_at: string

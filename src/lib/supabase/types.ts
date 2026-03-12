@@ -606,6 +606,7 @@ export type Database = {
           new_content_html: string | null
           preserved_links: Record<string, unknown>[]
           preserved_ctas: string[]
+          link_suggestions: Record<string, unknown> | null
           error: string | null
           created_at: string
           updated_at: string
@@ -628,6 +629,7 @@ export type Database = {
           new_content_html?: string | null
           preserved_links?: Record<string, unknown>[]
           preserved_ctas?: string[]
+          link_suggestions?: Record<string, unknown> | null
           error?: string | null
           created_at?: string
           updated_at?: string
@@ -650,6 +652,7 @@ export type Database = {
           new_content_html?: string | null
           preserved_links?: Record<string, unknown>[]
           preserved_ctas?: string[]
+          link_suggestions?: Record<string, unknown> | null
           error?: string | null
           created_at?: string
           updated_at?: string

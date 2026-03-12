@@ -17,6 +17,7 @@ ALTER TABLE seo_nuggets ADD CONSTRAINT seo_nuggets_source_type_check
   CHECK (source_type IN ('vocal','tweet','note','url','observation','youtube'));
 ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS hero_image_url text DEFAULT NULL;
 ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS blog_path text DEFAULT NULL;
+ALTER TABLE seo_revamps ADD COLUMN IF NOT EXISTS link_suggestions jsonb DEFAULT NULL;
 `;
 
 // POST /api/migrate — Run pending schema migrations (dev only)
