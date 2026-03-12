@@ -252,18 +252,25 @@ export async function pushToWordPress(
       content: contentHtml,
     }
 
-    // Update title if audit suggests one
+    // Update title (H1) if audit suggests one
     const audit = revamp.audit as RevampAudit | null
     if (audit?.suggestedTitle) {
       updatePayload.title = audit.suggestedTitle
     }
 
-    // Update meta description via Yoast/RankMath
+    // Update SEO meta via Yoast/RankMath (title + description)
+    // NEVER touch the slug
+    const meta: Record<string, string> = {}
+    if (audit?.suggestedTitle) {
+      meta._yoast_wpseo_title = audit.suggestedTitle
+      meta.rank_math_title = audit.suggestedTitle
+    }
     if (audit?.suggestedMetaDescription) {
-      updatePayload.meta = {
-        _yoast_wpseo_metadesc: audit.suggestedMetaDescription,
-        rank_math_description: audit.suggestedMetaDescription,
-      }
+      meta._yoast_wpseo_metadesc = audit.suggestedMetaDescription
+      meta.rank_math_description = audit.suggestedMetaDescription
+    }
+    if (Object.keys(meta).length > 0) {
+      updatePayload.meta = meta
     }
 
     await updatePost(revamp.site_id, revamp.wp_post_id, updatePayload)
