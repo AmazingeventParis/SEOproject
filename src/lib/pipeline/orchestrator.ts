@@ -2030,7 +2030,7 @@ async function executePublish(
     // Tag assignment is optional
   }
 
-  // 5. Build SEO meta for Yoast/Rank Math
+  // 5. Build SEO meta for Yoast/Rank Math + Elementor cleanup
   const seoMeta: Record<string, unknown> = {}
   if (article.seo_title) {
     seoMeta._yoast_wpseo_title = article.seo_title
@@ -2043,6 +2043,13 @@ async function executePublish(
   if (article.keyword) {
     seoMeta._yoast_wpseo_focuskw = article.keyword
     seoMeta.rank_math_focus_keyword = article.keyword
+  }
+  // Disable Elementor edit mode on existing posts so WP renders post_content
+  // instead of _elementor_data (which may contain old/stale Elementor content)
+  if (article.wp_post_id) {
+    seoMeta._elementor_edit_mode = ''
+    seoMeta._elementor_data = '[]'
+    seoMeta._wp_page_template = 'default'
   }
   const hasSeoMeta = Object.keys(seoMeta).length > 0
 
