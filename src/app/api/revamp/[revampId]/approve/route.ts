@@ -33,7 +33,9 @@ export async function POST(
     )
   }
 
-  if (revamp.status !== 'analyzed') {
+  // Allow re-approve from analyzed, approved, generated, completed, or failed
+  const allowedForApprove = ['analyzed', 'approved', 'generated', 'completed', 'failed']
+  if (!allowedForApprove.includes(revamp.status)) {
     return new Response(
       JSON.stringify({ error: `Impossible d'approuver: statut actuel "${revamp.status}"` }),
       { status: 422, headers: { 'Content-Type': 'application/json' } }
@@ -86,10 +88,17 @@ export async function POST(
       if (blockLinks.length > 0) {
         return {
           ...block,
-          internal_link_targets: blockLinks.map(l => ({
-            url: l.url,
-            anchorText: l.anchor,
-          })),
+          internal_link_targets: blockLinks.map(l => {
+            // Extract slug from URL for compatibility with block-writer format
+            let slug = ''
+            try { slug = new URL(l.url).pathname.replace(/^\/|\/$/g, '') } catch { slug = l.url }
+            return {
+              target_slug: slug,
+              target_title: l.anchor,
+              suggested_anchor_context: l.anchor,
+              url: l.url, // Also keep full URL for direct use
+            }
+          }),
         }
       }
     }

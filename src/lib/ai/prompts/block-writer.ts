@@ -340,7 +340,13 @@ Voici des extraits authentiques. Imite ce style, ce vocabulaire, cette structure
   if (internalLinkTargets && internalLinkTargets.length > 0) {
     user += `\n\n## LIENS INTERNES (optionnels — a placer UNIQUEMENT si naturel)`
     for (const link of internalLinkTargets) {
-      const fullUrl = siteDomain ? `https://${siteDomain}/${link.target_slug.replace(/^\//, '')}` : `/${link.target_slug}`
+      // Support both formats: {target_slug} (standard pipeline) and {url} (revamp pipeline)
+      const rawUrl = (link as Record<string, unknown>).url as string | undefined
+      const fullUrl = rawUrl
+        ? rawUrl
+        : siteDomain
+          ? `https://${siteDomain}/${(link.target_slug || '').replace(/^\//, '')}`
+          : `/${link.target_slug || ''}`
       user += `\n- URL : ${fullUrl}`
       if (link.is_money_page) {
         user += ` (page prioritaire)`
