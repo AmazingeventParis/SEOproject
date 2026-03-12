@@ -262,6 +262,9 @@ export async function pushToWordPress(
   // These wrappers break layout when Elementor edit mode is disabled
   contentHtml = stripElementorWrappers(contentHtml)
 
+  // Ensure 50px spacing before each H2/H3/H4 for visual aeration
+  contentHtml = ensureHeadingSpacing(contentHtml)
+
   // Fix expert callout avatars: replace letter fallback with persona image
   if (contentHtml.includes('expert-callout')) {
     const personaId = revamp.article_id
@@ -446,6 +449,28 @@ function stripElementorWrappers(html: string): string {
   }
 
   return output.replace(/\n{3,}/g, '\n\n').trim()
+}
+
+/**
+ * Ensure 50px spacing before each H2/H3/H4 tag for visual aeration.
+ * Skips the very first heading in the document.
+ * Avoids double-spacing if a spacer div already precedes the heading.
+ */
+function ensureHeadingSpacing(html: string): string {
+  const spacer = '<div style="margin-top:50px" aria-hidden="true"></div>\n'
+  let isFirst = true
+  return html.replace(/<h([2-6])([\s>])/gi, (match, level, after) => {
+    if (isFirst) {
+      isFirst = false
+      return match
+    }
+    return spacer + `<h${level}${after}`
+  })
+  // Remove double spacers (in case one was already present)
+  .replace(new RegExp(
+    '<div style="margin-top:50px"[^>]*></div>\\s*' +
+    '<div style="margin-top:50px"[^>]*></div>', 'gi'
+  ), '<div style="margin-top:50px" aria-hidden="true"></div>')
 }
 
 /**
