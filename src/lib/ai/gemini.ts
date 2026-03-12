@@ -108,7 +108,26 @@ export async function callGemini(options: {
     config,
   })
   const result = await chat.sendMessage({ message: lastMessage.content })
-  const text = result.text ?? ''
+  // result.text is a getter that can THROW if the response has no candidates
+  // (e.g. safety filter block, empty response). Use defensive extraction.
+  let text = ''
+  try {
+    text = result.text ?? ''
+  } catch {
+    // Fallback: extract text from candidates manually
+    const parts = result.candidates?.[0]?.content?.parts
+    if (parts) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      text = (parts as any[])
+        .filter(p => typeof p.text === 'string' && !p.thought)
+        .map(p => p.text as string)
+        .join('')
+    }
+    if (!text) {
+      const finishReason = result.candidates?.[0]?.finishReason || 'UNKNOWN'
+      throw new Error(`Gemini n'a retourne aucun texte (finishReason: ${finishReason}, model: ${modelName})`)
+    }
+  }
   const usage = result.usageMetadata
 
   return {

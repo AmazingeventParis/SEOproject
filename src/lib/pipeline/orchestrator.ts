@@ -866,6 +866,11 @@ async function executeWriteBlock(
     ? await routeAIWithOverrides('write_block', [{ role: 'user', content: prompt.user }], prompt.system, modelOverride)
     : await routeAI('write_block', [{ role: 'user', content: prompt.user }], prompt.system)
 
+  // Guard: ensure AI returned content
+  if (!aiResponse.content) {
+    throw new Error(`L'IA n'a retourne aucun contenu pour le bloc ${blockIndex} (modele: ${aiResponse.model || 'inconnu'})`)
+  }
+
   // Post-process: fix expert callout avatars — AI often generates letter fallback instead of <img>
   let processedHtml = aiResponse.content
   if (processedHtml.includes('expert-callout') && persona?.avatar_reference_url) {
