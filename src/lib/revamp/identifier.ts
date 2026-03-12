@@ -44,16 +44,6 @@ export async function identifyCandidates(
     }),
   ])
 
-  console.log(`[revamp-identifier] GSC pages: ${gscPages.length}, WP posts: ${wpPosts.length}`)
-  if (gscPages.length > 0) {
-    console.log(`[revamp-identifier] Sample GSC URL: ${gscPages[0].keys[0]}`)
-    console.log(`[revamp-identifier] Sample GSC normalized: ${normalizeUrl(gscPages[0].keys[0])}`)
-  }
-  if (wpPosts.length > 0) {
-    console.log(`[revamp-identifier] Sample WP URL: ${wpPosts[0].link}`)
-    console.log(`[revamp-identifier] Sample WP normalized: ${normalizeUrl(wpPosts[0].link)}`)
-  }
-
   // Build a lookup from NORMALIZED page URL to GSC metrics
   const gscByUrl = new Map<string, GSCRow>()
   for (const row of gscPages) {
@@ -75,8 +65,6 @@ export async function identifyCandidates(
       postsWithGsc.push({ link: post.link, normalizedLink: normalized })
     }
   }
-  console.log(`[revamp-identifier] GSC matches: ${postsWithGsc.length}/${wpPosts.length} posts matched`)
-
   // Fetch queries for up to 30 pages in parallel (batches of 5)
   const pagesToQuery = postsWithGsc.slice(0, 30)
   for (let i = 0; i < pagesToQuery.length; i += 5) {

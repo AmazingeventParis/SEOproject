@@ -86,7 +86,6 @@ async function getAccessToken(): Promise<string> {
   // We need to match the actual backslash character followed by 'n'
   const literalBackslashN = String.fromCharCode(92) + 'n' // backslash + n
   const cleanedKey = privateKey.split(literalBackslashN).join('\n')
-  console.log('[gsc] Key cleaning: original length', privateKey.length, '→ cleaned length', cleanedKey.length, ', lines:', cleanedKey.split('\n').length)
   const key = await importPrivateKey(cleanedKey)
   const signature = await sign(key, signInput)
   const jwt = `${signInput}.${signature}`
