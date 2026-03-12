@@ -463,3 +463,75 @@ export async function findOrCreateTags(
 
   return tagIds
 }
+
+/**
+ * Update Yoast SEO meta for a post.
+ * Tries multiple approaches:
+ * 1. Yoast REST API (wp-json/yoast/v1/)
+ * 2. Direct post meta update via wp-json/wp/v2/posts/{id} with meta field
+ * NEVER touches the slug.
+ */
+export async function updateYoastMeta(
+  siteId: string,
+  postId: number,
+  seoMeta: { title?: string; description?: string }
+): Promise<void> {
+  const creds = await getWPCredentials(siteId)
+
+  // Approach 1: Try Yoast's own REST API endpoint
+  // Yoast Premium exposes /wp-json/yoast/v1/meta/post/{id}
+  try {
+    const yoastPayload: Record<string, string> = {}
+    if (seoMeta.title) yoastPayload.yoast_wpseo_title = seoMeta.title
+    if (seoMeta.description) yoastPayload.yoast_wpseo_metadesc = seoMeta.description
+
+    const yoastRes = await fetch(
+      `${creds.wpUrl}/wp-json/yoast/v1/meta/post/${postId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: buildAuthHeader(creds),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(yoastPayload),
+        signal: AbortSignal.timeout(10000),
+      }
+    )
+
+    if (yoastRes.ok) {
+      console.log('[wp-client] Yoast meta updated via Yoast REST API')
+      return
+    }
+  } catch {
+    // Yoast REST API not available, try next approach
+  }
+
+  // Approach 2: Try updating via the standard WP post endpoint with yoast_meta wrapper
+  // Some Yoast versions support this format
+  try {
+    const postPayload: Record<string, unknown> = {
+      meta: {} as Record<string, string>,
+    }
+    const metaObj = postPayload.meta as Record<string, string>
+    if (seoMeta.title) metaObj._yoast_wpseo_title = seoMeta.title
+    if (seoMeta.description) metaObj._yoast_wpseo_metadesc = seoMeta.description
+
+    // Also try Rank Math fields as fallback
+    if (seoMeta.title) metaObj.rank_math_title = seoMeta.title
+    if (seoMeta.description) metaObj.rank_math_description = seoMeta.description
+
+    await fetch(`${apiBase(creds)}/posts/${postId}`, {
+      method: 'POST',
+      headers: {
+        Authorization: buildAuthHeader(creds),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(postPayload),
+      signal: AbortSignal.timeout(10000),
+    })
+    // Don't check response - this is best-effort
+    console.log('[wp-client] Yoast meta update attempted via standard WP REST API')
+  } catch {
+    // Best effort - non-critical
+  }
+}

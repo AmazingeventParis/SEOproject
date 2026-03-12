@@ -250,6 +250,7 @@ export async function pushToWordPress(
     // Build update payload
     const updatePayload: Record<string, unknown> = {
       content: contentHtml,
+      status: 'publish', // Ensure post stays published (Elementor clearing can revert to draft)
     }
 
     // Update title (H1) if audit suggests one
@@ -284,6 +285,21 @@ export async function pushToWordPress(
     }
 
     await updatePost(revamp.site_id, revamp.wp_post_id, updatePayload)
+
+    // Try updating Yoast SEO meta via Yoast's own REST API (fallback for sites where
+    // _yoast_wpseo_title is not registered with show_in_rest)
+    if (audit?.suggestedTitle || audit?.suggestedMetaDescription) {
+      try {
+        const { updateYoastMeta } = await import('@/lib/wordpress/client')
+        await updateYoastMeta(revamp.site_id, revamp.wp_post_id, {
+          title: audit?.suggestedTitle || undefined,
+          description: audit?.suggestedMetaDescription || undefined,
+        })
+      } catch (yoastErr) {
+        // Non-critical: log but don't fail the push
+        console.warn('[revamp-push] Yoast meta update failed (non-critical):', yoastErr)
+      }
+    }
 
     // Update revamp status
     await supabase
