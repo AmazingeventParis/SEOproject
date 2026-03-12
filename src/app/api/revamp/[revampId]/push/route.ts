@@ -31,7 +31,7 @@ export async function POST(
     )
   }
 
-  if (revamp.status !== 'generated') {
+  if (revamp.status !== 'generated' && revamp.status !== 'completed') {
     return new Response(
       JSON.stringify({ error: `Impossible de pusher: statut actuel "${revamp.status}"` }),
       { status: 422, headers: { 'Content-Type': 'application/json' } }

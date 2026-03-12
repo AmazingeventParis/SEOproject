@@ -233,6 +233,12 @@ export default function RevampDetailPage() {
               </Button>
             </>
           )}
+          {revamp.status === "completed" && (
+            <Button variant="outline" onClick={handlePush} disabled={!!actionLoading}>
+              {actionLoading === "push" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+              Re-pusher sur WordPress
+            </Button>
+          )}
           {(revamp.status === "generating" || revamp.status === "pushing") && (
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           )}
