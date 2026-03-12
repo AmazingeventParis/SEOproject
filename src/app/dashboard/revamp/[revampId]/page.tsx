@@ -75,29 +75,16 @@ export default function RevampDetailPage() {
 
   const fetchRevamp = useCallback(async () => {
     try {
-      const res = await fetch(`/api/revamp?siteId=all`);
+      const res = await fetch(`/api/revamp/${revampId}`);
+      if (!res.ok) {
+        setError("Revamp non trouve");
+        return;
+      }
       const data = await res.json();
-      // Find our revamp in the list (we need a dedicated endpoint, but for now filter)
-      // Actually, let's use a dedicated fetch
-      // Since we don't have a GET /api/revamp/[id], get all and filter
-      const allRevamps = data.revamps || [];
-      const found = allRevamps.find((r: RevampDetail) => r.id === revampId);
-      if (found) {
-        setRevamp(found);
+      if (data.revamp) {
+        setRevamp(data.revamp);
       } else {
-        // Try fetching from all sites
-        const sitesRes = await fetch("/api/sites");
-        const sitesData = await sitesRes.json();
-        const allSites = sitesData.sites || sitesData || [];
-        for (const site of allSites) {
-          const siteRes = await fetch(`/api/revamp?siteId=${site.id}`);
-          const siteData = await siteRes.json();
-          const siteRevamp = (siteData.revamps || []).find((r: RevampDetail) => r.id === revampId);
-          if (siteRevamp) {
-            setRevamp(siteRevamp);
-            break;
-          }
-        }
+        setError("Revamp non trouve");
       }
     } catch {
       setError("Erreur lors du chargement du revamp");
