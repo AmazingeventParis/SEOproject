@@ -6,7 +6,7 @@
 import { getServerClient } from '@/lib/supabase/client'
 import { executeStep } from '@/lib/pipeline/orchestrator'
 import type { ContentBlock } from '@/lib/supabase/types'
-import type { RevampAudit, RevampProject } from './types'
+import type { RevampAudit } from './types'
 import type { PipelineRunResult } from '@/lib/pipeline/types'
 
 /**

@@ -718,7 +718,6 @@ async function executeWriteBlock(
     if (allNuggets && allNuggets.length > 0) {
       const keywordWords = article.keyword.toLowerCase().split(/\s+/).filter(w => w.length > 3)
       const headingWords = (block.heading || '').toLowerCase().split(/\s+/).filter(w => w.length > 3)
-      const searchWords = [...keywordWords, ...headingWords]
 
       // Score each nugget by tag + content overlap with keyword/heading
       // Keyword words get higher weight (5 pts) vs heading words (2 pts)

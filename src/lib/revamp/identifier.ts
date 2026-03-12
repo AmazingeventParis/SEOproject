@@ -167,11 +167,7 @@ export async function analyzePost(
   const wordCount = originalBlocks.reduce((sum, b) => sum + b.word_count, 0)
 
   // Fetch GSC data for this specific page
-  const [pageQueries, opportunityKws] = await Promise.all([
-    getQueriesForPage(gscProperty, post.link, 90).catch(() => [] as GSCRow[]),
-    // We don't have findOpportunityKeywords per page, so compute from queries
-    Promise.resolve([]),
-  ])
+  const pageQueries = await getQueriesForPage(gscProperty, post.link, 90).catch(() => [] as GSCRow[])
 
   // Build GSC data
   const totalClicks = pageQueries.reduce((sum, q) => sum + q.clicks, 0)
