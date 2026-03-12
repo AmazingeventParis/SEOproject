@@ -170,12 +170,28 @@ export async function generateRevampContent(
     .eq('id', revamp.article_id)
     .single()
 
+  const finalBlocks = (updatedArticle?.content_blocks || newBlocks) as ContentBlock[]
+
+  // Assemble HTML from blocks if content_html is missing
+  let finalHtml = updatedArticle?.content_html || null
+  if (!finalHtml && finalBlocks.length > 0) {
+    finalHtml = finalBlocks
+      .filter(b => b.status === 'written' && b.content_html)
+      .map(b => {
+        const heading = b.heading
+          ? `<${b.type === 'h3' ? 'h3' : b.type === 'h4' ? 'h4' : 'h2'}>${b.heading}</${b.type === 'h3' ? 'h3' : b.type === 'h4' ? 'h4' : 'h2'}>\n`
+          : ''
+        return heading + b.content_html
+      })
+      .join('\n\n')
+  }
+
   // Update revamp with new blocks
   await supabase
     .from('seo_revamps')
     .update({
-      new_blocks: updatedArticle?.content_blocks || newBlocks,
-      new_content_html: updatedArticle?.content_html || null,
+      new_blocks: finalBlocks,
+      new_content_html: finalHtml,
       status: errors === 0 ? 'generated' : (written > 0 ? 'generated' : 'failed'),
       error: errors > 0 ? `${errors} bloc(s) en erreur` : null,
       updated_at: new Date().toISOString(),
@@ -204,8 +220,27 @@ export async function pushToWordPress(
     return { success: false, error: 'Revamp non trouve' }
   }
 
-  if (!revamp.new_content_html) {
-    return { success: false, error: 'Aucun contenu genere' }
+  // Assemble HTML from blocks if not already done
+  let contentHtml = revamp.new_content_html as string | null
+  if (!contentHtml) {
+    const blocks = (revamp.new_blocks || []) as ContentBlock[]
+    const writtenBlocks = blocks.filter(b => b.status === 'written' && b.content_html)
+    if (writtenBlocks.length === 0) {
+      return { success: false, error: 'Aucun contenu genere' }
+    }
+    contentHtml = writtenBlocks
+      .map(b => {
+        const tag = b.type === 'h3' ? 'h3' : b.type === 'h4' ? 'h4' : 'h2'
+        const heading = b.heading ? `<${tag}>${b.heading}</${tag}>\n` : ''
+        return heading + b.content_html
+      })
+      .join('\n\n')
+
+    // Save assembled HTML
+    await supabase
+      .from('seo_revamps')
+      .update({ new_content_html: contentHtml })
+      .eq('id', revampId)
   }
 
   // Import WordPress client
@@ -214,7 +249,7 @@ export async function pushToWordPress(
   try {
     // Build update payload
     const updatePayload: Record<string, unknown> = {
-      content: revamp.new_content_html,
+      content: contentHtml,
     }
 
     // Update title if audit suggests one
