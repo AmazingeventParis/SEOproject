@@ -282,6 +282,44 @@ export async function pushToWordPress(
     }
   }
 
+  // Update dateModified in JSON-LD for Google freshness signals
+  if (revamp.article_id) {
+    const { data: articleData } = await supabase
+      .from('seo_articles')
+      .select('json_ld')
+      .eq('id', revamp.article_id)
+      .single()
+
+    const jsonLd = articleData?.json_ld as Record<string, unknown> | null
+    if (jsonLd) {
+      const now = new Date().toISOString()
+      if (Array.isArray(jsonLd['@graph'])) {
+        for (const item of jsonLd['@graph'] as Record<string, unknown>[]) {
+          if (item['@type'] === 'Article') item.dateModified = now
+        }
+      } else if (jsonLd['@type'] === 'Article') {
+        jsonLd.dateModified = now
+      }
+
+      // Save updated JSON-LD back to the article
+      await supabase
+        .from('seo_articles')
+        .update({ json_ld: jsonLd })
+        .eq('id', revamp.article_id)
+
+      // Inject JSON-LD into content HTML (replace existing or append)
+      const jsonLdScript = `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`
+      if (contentHtml.includes('application/ld+json')) {
+        contentHtml = contentHtml.replace(
+          /<script type="application\/ld\+json">[\s\S]*?<\/script>/i,
+          jsonLdScript
+        )
+      } else {
+        contentHtml += '\n' + jsonLdScript
+      }
+    }
+  }
+
   // Import WordPress client
   const { updatePost } = await import('@/lib/wordpress/client')
 
