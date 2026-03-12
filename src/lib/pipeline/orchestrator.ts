@@ -866,14 +866,24 @@ async function executeWriteBlock(
     ? await routeAIWithOverrides('write_block', [{ role: 'user', content: prompt.user }], prompt.system, modelOverride)
     : await routeAI('write_block', [{ role: 'user', content: prompt.user }], prompt.system)
 
+  // Post-process: fix expert callout avatars — AI often generates letter fallback instead of <img>
+  let processedHtml = aiResponse.content
+  if (processedHtml.includes('expert-callout') && persona?.avatar_reference_url) {
+    // Replace letter-circle fallback with actual persona avatar image
+    processedHtml = processedHtml.replace(
+      /<div\s+style="[^"]*width:52px;height:52px;border-radius:50%[^"]*display:flex;align-items:center;justify-content:center[^"]*">[A-Z]<\/div>/g,
+      `<img src="${persona.avatar_reference_url}" alt="${persona.name}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid currentColor" />`
+    )
+  }
+
   // Update the specific block
   const updatedBlocks = [...contentBlocks]
   updatedBlocks[blockIndex] = {
     ...block,
-    content_html: aiResponse.content,
+    content_html: processedHtml,
     status: 'written' as const,
     model_used: aiResponse.model,
-    word_count: countWords(aiResponse.content),
+    word_count: countWords(processedHtml),
   }
 
   // Calculate total word count

@@ -258,6 +258,27 @@ export async function pushToWordPress(
     .replace(/<!--\s*wp:spacer[\s\S]*?<!--\s*\/wp:spacer\s*-->/gi, '<div style="margin-top:50px" aria-hidden="true"></div>')
     .replace(/<div[^>]*class="wp-block-spacer"[^>]*><\/div>/gi, '')
 
+  // Strip Elementor widget wrapper divs from content (kept blocks may contain old Elementor markup)
+  // These wrappers break layout when Elementor edit mode is disabled
+  contentHtml = stripElementorWrappers(contentHtml)
+
+  // Fix expert callout avatars: replace letter fallback with persona image
+  if (contentHtml.includes('expert-callout')) {
+    const personaId = revamp.article_id
+      ? (await supabase.from('seo_articles').select('persona_id').eq('id', revamp.article_id).single()).data?.persona_id
+      : null
+    if (personaId) {
+      const { data: persona } = await supabase
+        .from('seo_personas')
+        .select('name, avatar_reference_url')
+        .eq('id', personaId)
+        .single()
+      if (persona?.avatar_reference_url) {
+        contentHtml = fixCalloutAvatars(contentHtml, persona.avatar_reference_url, persona.name)
+      }
+    }
+  }
+
   // Import WordPress client
   const { updatePost } = await import('@/lib/wordpress/client')
 
@@ -361,4 +382,80 @@ export async function pushToWordPress(
 
     return { success: false, error: message }
   }
+}
+
+/**
+ * Strip Elementor widget wrapper divs from HTML content.
+ * Kept blocks from the original post may contain Elementor markup like:
+ *   <div class="elementor-element ..."><div class="elementor-widget-container">...actual content...</div></div>
+ * These wrappers break layout when Elementor edit mode is disabled.
+ */
+function stripElementorWrappers(html: string): string {
+  let cleaned = html
+
+  // 1. Remove entire Elementor CTA/button blocks (e-con-inner with button wrappers)
+  cleaned = cleaned.replace(/<div[^>]*class="e-con-inner"[^>]*>[\s\S]*?<\/span>\s*<\/a>\s*<\/div>\s*<\/div>\s*<\/div>/gi, '')
+
+  // 2. Remove opening elementor-element/widget/section divs (with all attributes)
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*elementor-(?:element|widget-wrap|section-wrap|container)[^"]*"[^>]*>\s*/gi, '')
+
+  // 3. Remove opening elementor-widget-container divs
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*elementor-widget-container[^"]*"[^>]*>\s*/gi, '')
+
+  // 4. Remove any remaining divs with elementor classes
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*elementor[^"]*"[^>]*>/gi, '')
+
+  // 5. Remove Elementor data attributes from any remaining elements
+  cleaned = cleaned.replace(/\s*data-(?:id|element_type|e-type|widget_type|settings)="[^"]*"/gi, '')
+
+  // 6. Remove empty divs
+  cleaned = cleaned.replace(/<div[^>]*>\s*<\/div>\s*/g, '')
+
+  // 7. Balance div tags — remove orphan </div> that have no matching opening tag
+  // Parse sequentially tracking div depth
+  const chars = cleaned
+  let output = ''
+  let i = 0
+  let divStack = 0
+
+  while (i < chars.length) {
+    // Check for opening div
+    if (chars.slice(i, i + 4) === '<div') {
+      const end = chars.indexOf('>', i)
+      if (end !== -1) {
+        output += chars.slice(i, end + 1)
+        divStack++
+        i = end + 1
+        continue
+      }
+    }
+
+    // Check for closing div
+    if (chars.slice(i, i + 6) === '</div>') {
+      if (divStack > 0) {
+        output += '</div>'
+        divStack--
+      }
+      // Skip orphan closing div
+      i += 6
+      continue
+    }
+
+    output += chars[i]
+    i++
+  }
+
+  return output.replace(/\n{3,}/g, '\n\n').trim()
+}
+
+/**
+ * Fix expert callout avatars: replace letter-circle fallback with actual persona image.
+ * AI often generates the letter fallback even when given the <img> template.
+ */
+function fixCalloutAvatars(html: string, avatarUrl: string, personaName: string): string {
+  // Match the letter-circle div pattern (52x52px circle with single letter)
+  return html.replace(
+    /<div\s+style="[^"]*width:52px;height:52px;border-radius:50%[^"]*display:flex;align-items:center;justify-content:center[^"]*">[A-ZÀ-Ú]<\/div>/gi,
+    `<img src="${avatarUrl}" alt="${personaName}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid #0A6CFF" />`
+  )
 }
