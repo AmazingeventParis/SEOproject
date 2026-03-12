@@ -2056,7 +2056,7 @@ async function executePublish(
       title: article.title || article.keyword,
       content: fullHtml,
       slug: article.slug || undefined,
-      status: 'draft',
+      status: 'publish',
       excerpt,
       featured_media: heroMediaId,
       categories: categoryIds,
@@ -2066,12 +2066,12 @@ async function executePublish(
     wpPostId = wpPost.id
     wpUrl = wpPost.link
   } else {
-    // Create new post as draft
+    // Create new post — publish directly
     const result = await createPost(article.site_id, {
       title: article.title || article.keyword,
       content: fullHtml,
       slug: article.slug || article.keyword.toLowerCase().replace(/\s+/g, '-'),
-      status: 'draft',
+      status: 'publish',
       excerpt,
       featured_media: heroMediaId,
       categories: categoryIds,
@@ -2101,7 +2101,7 @@ async function executePublish(
       wpPostId,
       wpUrl,
       htmlLength: fullHtml.length,
-      status: 'draft',
+      status: 'publish',
       excerpt: excerpt.slice(0, 100) + '...',
       category: site?.niche || null,
       seoMeta: hasSeoMeta ? Object.keys(seoMeta) : [],
