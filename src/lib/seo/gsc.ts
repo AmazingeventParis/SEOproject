@@ -82,7 +82,9 @@ async function getAccessToken(): Promise<string> {
   const signInput = `${encodedHeader}.${encodedClaim}`
 
   // Sign with the private key using Web Crypto API
-  const key = await importPrivateKey(privateKey.replace(/\\n/g, '\n'))
+  // Handle both literal \n (from env vars) and real newlines
+  const cleanedKey = privateKey.split('\\n').join('\n')
+  const key = await importPrivateKey(cleanedKey)
   const signature = await sign(key, signInput)
   const jwt = `${signInput}.${signature}`
 
