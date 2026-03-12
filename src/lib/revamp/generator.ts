@@ -175,15 +175,18 @@ export async function generateRevampContent(
   // Assemble HTML from blocks if content_html is missing
   let finalHtml = updatedArticle?.content_html || null
   if (!finalHtml && finalBlocks.length > 0) {
-    finalHtml = finalBlocks
-      .filter(b => b.status === 'written' && b.content_html)
-      .map(b => {
-        const heading = b.heading
-          ? `<${b.type === 'h3' ? 'h3' : b.type === 'h4' ? 'h4' : 'h2'}>${b.heading}</${b.type === 'h3' ? 'h3' : b.type === 'h4' ? 'h4' : 'h2'}>\n`
-          : ''
-        return heading + b.content_html
-      })
-      .join('\n\n')
+    const parts: string[] = []
+    let first = true
+    for (const b of finalBlocks.filter(bl => bl.status === 'written' && bl.content_html)) {
+      const tag = b.type === 'h3' ? 'h3' : b.type === 'h4' ? 'h4' : 'h2'
+      if (b.heading && !first) {
+        parts.push('<div style="margin-top:50px" aria-hidden="true"></div>')
+      }
+      const heading = b.heading ? `<${tag}>${b.heading}</${tag}>\n` : ''
+      parts.push(heading + b.content_html)
+      first = false
+    }
+    finalHtml = parts.join('\n\n')
   }
 
   // Update revamp with new blocks
@@ -228,13 +231,19 @@ export async function pushToWordPress(
     if (writtenBlocks.length === 0) {
       return { success: false, error: 'Aucun contenu genere' }
     }
-    contentHtml = writtenBlocks
-      .map(b => {
-        const tag = b.type === 'h3' ? 'h3' : b.type === 'h4' ? 'h4' : 'h2'
-        const heading = b.heading ? `<${tag}>${b.heading}</${tag}>\n` : ''
-        return heading + b.content_html
-      })
-      .join('\n\n')
+    const htmlParts: string[] = []
+    let isFirst = true
+    for (const b of writtenBlocks) {
+      const tag = b.type === 'h3' ? 'h3' : b.type === 'h4' ? 'h4' : 'h2'
+      // Add spacing before heading sections (not before the first block)
+      if (b.heading && !isFirst) {
+        htmlParts.push('<div style="margin-top:50px" aria-hidden="true"></div>')
+      }
+      const heading = b.heading ? `<${tag}>${b.heading}</${tag}>\n` : ''
+      htmlParts.push(heading + b.content_html)
+      isFirst = false
+    }
+    contentHtml = htmlParts.join('\n\n')
 
     // Save assembled HTML
     await supabase
@@ -242,6 +251,12 @@ export async function pushToWordPress(
       .update({ new_content_html: contentHtml })
       .eq('id', revampId)
   }
+
+  // Clean up any Gutenberg spacer blocks — they render full-width on Elementor themes
+  // Replace with simple CSS margin divs
+  contentHtml = contentHtml
+    .replace(/<!--\s*wp:spacer[\s\S]*?<!--\s*\/wp:spacer\s*-->/gi, '<div style="margin-top:50px" aria-hidden="true"></div>')
+    .replace(/<div[^>]*class="wp-block-spacer"[^>]*><\/div>/gi, '')
 
   // Import WordPress client
   const { updatePost } = await import('@/lib/wordpress/client')
@@ -278,6 +293,14 @@ export async function pushToWordPress(
       meta._elementor_edit_mode = ''        // Disable Elementor edit mode
       meta._elementor_data = '[]'           // Clear Elementor widget data
       meta._elementor_page_settings = '[]'  // Clear page settings
+      meta._wp_page_template = 'default'    // Reset to default blog template (not full-width/canvas)
+    }
+
+    // Always ensure the page template is the default blog template
+    // Elementor often sets templates like elementor_header_footer or elementor_canvas
+    // which display content full-width without the blog sidebar/container
+    if (!meta._wp_page_template) {
+      meta._wp_page_template = 'default'
     }
 
     if (Object.keys(meta).length > 0) {

@@ -1929,8 +1929,10 @@ async function executePublish(
   const contentBlocks = (article.content_blocks || []) as ContentBlock[]
   const site = article.seo_sites
 
-  // 1. Assemble full HTML from content blocks with Gutenberg spacers between sections
-  const GUTENBERG_SPACER = `<!-- wp:spacer {"height":"50px"} -->\n<div style="height:50px" aria-hidden="true" class="wp-block-spacer"></div>\n<!-- /wp:spacer -->`
+  // 1. Assemble full HTML from content blocks with spacing between sections
+  // Use simple CSS margin instead of Gutenberg spacer blocks — spacer blocks render
+  // full-width on Elementor themes and break the blog layout
+  const SECTION_SPACER = '<div style="margin-top:50px" aria-hidden="true"></div>'
 
   const htmlParts: string[] = []
   let isFirstBlock = true
@@ -1940,7 +1942,7 @@ async function executePublish(
       const tag = block.type
       // Add spacer before each heading section (not before the very first block)
       if (!isFirstBlock) {
-        htmlParts.push(GUTENBERG_SPACER)
+        htmlParts.push(SECTION_SPACER)
       }
       htmlParts.push(`<${tag}>${block.heading}</${tag}>`)
     }
