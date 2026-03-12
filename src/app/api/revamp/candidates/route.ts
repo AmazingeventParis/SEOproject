@@ -45,8 +45,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const candidates = await identifyCandidates(parsed.data.siteId, site.gsc_property)
+    const withGsc = candidates.filter(c => c.gscMetrics !== null).length
     return new Response(
-      JSON.stringify({ candidates }),
+      JSON.stringify({ candidates, debug: { total: candidates.length, withGsc, gscProperty: site.gsc_property } }),
       { headers: { 'Content-Type': 'application/json' } }
     )
   } catch (err) {

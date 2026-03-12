@@ -18,6 +18,7 @@ function normalizeUrl(url: string): string {
   return url
     .toLowerCase()
     .replace(/^http:/, 'https:')
+    .replace(/\/\/www\./, '//')
     .replace(/\/+$/, '')
     .replace(/\?.*$/, '')
 }
@@ -37,8 +38,21 @@ export async function identifyCandidates(
   // Fetch WP posts and GSC top pages in parallel
   const [wpPosts, gscPages] = await Promise.all([
     getAllPublishedPosts(siteId),
-    getTopPages(gscProperty, 500, days).catch(() => [] as GSCRow[]),
+    getTopPages(gscProperty, 500, days).catch((err) => {
+      console.error('[revamp-identifier] GSC getTopPages error:', err)
+      return [] as GSCRow[]
+    }),
   ])
+
+  console.log(`[revamp-identifier] GSC pages: ${gscPages.length}, WP posts: ${wpPosts.length}`)
+  if (gscPages.length > 0) {
+    console.log(`[revamp-identifier] Sample GSC URL: ${gscPages[0].keys[0]}`)
+    console.log(`[revamp-identifier] Sample GSC normalized: ${normalizeUrl(gscPages[0].keys[0])}`)
+  }
+  if (wpPosts.length > 0) {
+    console.log(`[revamp-identifier] Sample WP URL: ${wpPosts[0].link}`)
+    console.log(`[revamp-identifier] Sample WP normalized: ${normalizeUrl(wpPosts[0].link)}`)
+  }
 
   // Build a lookup from NORMALIZED page URL to GSC metrics
   const gscByUrl = new Map<string, GSCRow>()
@@ -61,6 +75,7 @@ export async function identifyCandidates(
       postsWithGsc.push({ link: post.link, normalizedLink: normalized })
     }
   }
+  console.log(`[revamp-identifier] GSC matches: ${postsWithGsc.length}/${wpPosts.length} posts matched`)
 
   // Fetch queries for up to 30 pages in parallel (batches of 5)
   const pagesToQuery = postsWithGsc.slice(0, 30)
