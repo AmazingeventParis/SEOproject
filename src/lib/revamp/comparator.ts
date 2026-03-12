@@ -4,6 +4,7 @@
 // ============================================================
 
 import { routeAI } from '@/lib/ai/router'
+import { getSerperApiKey } from '@/lib/seo/serper'
 import type { ContentBlock } from '@/lib/supabase/types'
 import type { RevampSERPComparison, RevampGSCData } from './types'
 
@@ -17,8 +18,7 @@ interface SerperResult {
  * Fetch top 5 SERP results for a keyword using Serper.dev.
  */
 async function fetchSERPResults(keyword: string): Promise<SerperResult[]> {
-  const apiKey = process.env.SERPER_API_KEY
-  if (!apiKey) throw new Error('SERPER_API_KEY non configure')
+  const apiKey = await getSerperApiKey()
 
   const res = await fetch('https://google.serper.dev/search', {
     method: 'POST',

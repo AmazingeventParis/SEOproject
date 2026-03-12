@@ -45,7 +45,7 @@ export interface KnowledgeGraph {
  * Resolve the Serper API key.
  * Priority: SERPER_API_KEY env var > seo_config table row with key "serper"
  */
-async function getSerperApiKey(): Promise<string> {
+export async function getSerperApiKey(): Promise<string> {
   // 1. Try environment variable first
   const envKey = process.env.SERPER_API_KEY
   if (envKey) return envKey
