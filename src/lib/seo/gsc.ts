@@ -82,8 +82,11 @@ async function getAccessToken(): Promise<string> {
   const signInput = `${encodedHeader}.${encodedClaim}`
 
   // Sign with the private key using Web Crypto API
-  // Handle both literal \n (from env vars) and real newlines
-  const cleanedKey = privateKey.split('\\n').join('\n')
+  // Handle literal \n (2-char sequence backslash+n from env vars like Coolify)
+  // We need to match the actual backslash character followed by 'n'
+  const literalBackslashN = String.fromCharCode(92) + 'n' // backslash + n
+  const cleanedKey = privateKey.split(literalBackslashN).join('\n')
+  console.log('[gsc] Key cleaning: original length', privateKey.length, '→ cleaned length', cleanedKey.length, ', lines:', cleanedKey.split('\n').length)
   const key = await importPrivateKey(cleanedKey)
   const signature = await sign(key, signInput)
   const jwt = `${signInput}.${signature}`
