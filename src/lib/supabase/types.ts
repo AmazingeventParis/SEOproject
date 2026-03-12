@@ -587,6 +587,91 @@ export type Database = {
         ]
       }
 
+      seo_revamps: {
+        Row: {
+          id: string
+          site_id: string
+          article_id: string | null
+          wp_post_id: number
+          wp_url: string
+          original_title: string
+          original_keyword: string
+          page_builder: 'gutenberg' | 'elementor' | 'unknown'
+          status: 'pending' | 'analyzing' | 'analyzed' | 'approved' | 'generating' | 'generated' | 'pushing' | 'completed' | 'failed'
+          gsc_data: Record<string, unknown> | null
+          serp_comparison: Record<string, unknown> | null
+          audit: Record<string, unknown> | null
+          original_blocks: ContentBlock[]
+          new_blocks: ContentBlock[] | null
+          new_content_html: string | null
+          preserved_links: Record<string, unknown>[]
+          preserved_ctas: string[]
+          error: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          site_id: string
+          article_id?: string | null
+          wp_post_id: number
+          wp_url?: string
+          original_title?: string
+          original_keyword?: string
+          page_builder?: 'gutenberg' | 'elementor' | 'unknown'
+          status?: 'pending' | 'analyzing' | 'analyzed' | 'approved' | 'generating' | 'generated' | 'pushing' | 'completed' | 'failed'
+          gsc_data?: Record<string, unknown> | null
+          serp_comparison?: Record<string, unknown> | null
+          audit?: Record<string, unknown> | null
+          original_blocks?: ContentBlock[]
+          new_blocks?: ContentBlock[] | null
+          new_content_html?: string | null
+          preserved_links?: Record<string, unknown>[]
+          preserved_ctas?: string[]
+          error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          site_id?: string
+          article_id?: string | null
+          wp_post_id?: number
+          wp_url?: string
+          original_title?: string
+          original_keyword?: string
+          page_builder?: 'gutenberg' | 'elementor' | 'unknown'
+          status?: 'pending' | 'analyzing' | 'analyzed' | 'approved' | 'generating' | 'generated' | 'pushing' | 'completed' | 'failed'
+          gsc_data?: Record<string, unknown> | null
+          serp_comparison?: Record<string, unknown> | null
+          audit?: Record<string, unknown> | null
+          original_blocks?: ContentBlock[]
+          new_blocks?: ContentBlock[] | null
+          new_content_html?: string | null
+          preserved_links?: Record<string, unknown>[]
+          preserved_ctas?: string[]
+          error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'seo_revamps_site_id_fkey'
+            columns: ['site_id']
+            isOneToOne: false
+            referencedRelation: 'seo_sites'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'seo_revamps_article_id_fkey'
+            columns: ['article_id']
+            isOneToOne: false
+            referencedRelation: 'seo_articles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+
       seo_config: {
         Row: {
           key: string

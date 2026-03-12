@@ -15,6 +15,7 @@ import {
   PenTool,
   Compass,
   BarChart3,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,7 @@ const navSections: NavSection[] = [
       { label: "Articles", href: "/dashboard/articles", icon: FileText },
       { label: "Nuggets", href: "/dashboard/nuggets", icon: Gem },
       { label: "Discover", href: "/dashboard/discover", icon: Compass },
+      { label: "Revamp", href: "/dashboard/revamp", icon: RefreshCw },
     ],
   },
   {
