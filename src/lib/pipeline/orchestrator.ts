@@ -233,10 +233,14 @@ export async function executeStep(
   } catch (error) {
     const duration = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+    if (errorStack) {
+      console.error(`[orchestrator] ${step} error stack:`, errorStack)
+    }
 
     await supabase
       .from('seo_pipeline_runs')
-      .update({ status: 'error', error: errorMessage, duration_ms: duration })
+      .update({ status: 'error', error: errorStack ? `${errorMessage}\n${errorStack}` : errorMessage, duration_ms: duration })
       .eq('id', run.id)
 
     return { success: false, runId: run.id, error: errorMessage, durationMs: duration }
