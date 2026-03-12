@@ -996,7 +996,7 @@ async function executeMedia(
         (b.type === 'h2' || b.type === 'h3') &&
         !b.generate_image &&
         b.type !== 'faq' as string &&
-        !(b.content_html && b.content_html.includes('<img'))
+        !hasContentImage(b.content_html || '')
       )
       .map(({ i }) => i)
 
@@ -1019,11 +1019,19 @@ async function executeMedia(
   }
 
   // Collect all candidate block indices
+  // Helper: check if block has a real content image (not just an avatar in expert callout)
+  function hasContentImage(html: string): boolean {
+    if (!html) return false
+    // Remove all avatar <img> tags (persona callout images with border-radius:50%)
+    const withoutAvatars = html.replace(/<img[^>]*border-radius:\s*50%[^>]*>/gi, '')
+    return withoutAvatars.includes('<img')
+  }
+
   const candidates: number[] = []
   for (let i = 0; i < updatedBlocks.length; i++) {
     const block = updatedBlocks[i]
-    const isImageBlock = block.type === 'image' && !(block.content_html && block.content_html.includes('<img'))
-    const isH2WithImage = (block.type === 'h2' || block.type === 'h3') && block.generate_image === true && !(block.content_html && block.content_html.includes('<img'))
+    const isImageBlock = block.type === 'image' && !hasContentImage(block.content_html || '')
+    const isH2WithImage = (block.type === 'h2' || block.type === 'h3') && block.generate_image === true && !hasContentImage(block.content_html || '')
     if (isImageBlock || isH2WithImage) candidates.push(i)
   }
 
@@ -1053,7 +1061,7 @@ async function executeMedia(
   for (let s = 0; s < selectedList.length; s++) {
     const i = selectedList[s]
     const block = updatedBlocks[i]
-    const isImageBlock = block.type === 'image' && !(block.content_html && block.content_html.includes('<img'))
+    const isImageBlock = block.type === 'image' && !hasContentImage(block.content_html || '')
 
     // Gather section context
     let sectionContent = block.content_html || ''
