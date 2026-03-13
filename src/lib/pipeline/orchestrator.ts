@@ -1974,6 +1974,85 @@ const WP_TABLE_CSS = `<style>
 </style>`
 
 /**
+ * Convert raw HTML to Gutenberg block comments so each element is editable in WP editor.
+ * Splits content into: paragraphs, lists, tables, figures, blockquotes, custom HTML.
+ */
+function convertHtmlToGutenbergBlocks(html: string): string {
+  if (!html.trim()) return ''
+
+  // If already contains Gutenberg block comments, return as-is
+  if (html.includes('<!-- wp:')) return html
+
+  const blocks: string[] = []
+
+  // Split HTML into top-level elements
+  // We parse by matching top-level tags: <p>, <ul>, <ol>, <figure>, <table>, <div>, <blockquote>, <details>
+  const elementRegex = /(<(?:p|ul|ol|figure|table|div|blockquote|details|section|h[1-6])\b[\s\S]*?(?:<\/(?:p|ul|ol|figure|table|div|blockquote|details|section|h[1-6])>|\/>))/gi
+
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = elementRegex.exec(html)) !== null) {
+    // Capture any text between elements (rare but possible)
+    if (match.index > lastIndex) {
+      const between = html.slice(lastIndex, match.index).trim()
+      if (between) {
+        blocks.push(`<!-- wp:html -->\n${between}\n<!-- /wp:html -->`)
+      }
+    }
+
+    const el = match[1]
+    const tagMatch = el.match(/^<(\w+)/)
+    const tag = tagMatch?.[1]?.toLowerCase() || ''
+
+    switch (tag) {
+      case 'p':
+        blocks.push(`<!-- wp:paragraph -->\n${el}\n<!-- /wp:paragraph -->`)
+        break
+      case 'ul':
+        blocks.push(`<!-- wp:list -->\n${el}\n<!-- /wp:list -->`)
+        break
+      case 'ol':
+        blocks.push(`<!-- wp:list {"ordered":true} -->\n${el}\n<!-- /wp:list -->`)
+        break
+      case 'figure':
+        blocks.push(`<!-- wp:image -->\n${el}\n<!-- /wp:image -->`)
+        break
+      case 'blockquote':
+        blocks.push(`<!-- wp:quote -->\n${el}\n<!-- /wp:quote -->`)
+        break
+      case 'h2':
+        blocks.push(`<!-- wp:heading -->\n${el}\n<!-- /wp:heading -->`)
+        break
+      case 'h3':
+        blocks.push(`<!-- wp:heading {"level":3} -->\n${el}\n<!-- /wp:heading -->`)
+        break
+      case 'h4':
+        blocks.push(`<!-- wp:heading {"level":4} -->\n${el}\n<!-- /wp:heading -->`)
+        break
+      case 'table':
+      case 'div':
+      case 'details':
+      case 'section':
+      default:
+        // Tables, callouts, FAQ, and complex HTML → wp:html block (fully editable)
+        blocks.push(`<!-- wp:html -->\n${el}\n<!-- /wp:html -->`)
+        break
+    }
+
+    lastIndex = match.index + match[0].length
+  }
+
+  // Remaining content after last match
+  const remaining = html.slice(lastIndex).trim()
+  if (remaining) {
+    blocks.push(`<!-- wp:html -->\n${remaining}\n<!-- /wp:html -->`)
+  }
+
+  return blocks.join('\n\n')
+}
+
+/**
  * Replace .table-container / bare <table> with inline-styled wrapper for WordPress.
  * Uses theme_color from the site config for header background if available.
  */
@@ -2079,54 +2158,60 @@ async function executePublish(
   const contentBlocks = (article.content_blocks || []) as ContentBlock[]
   const site = article.seo_sites
 
-  // 1. Assemble full HTML from content blocks with spacing between sections
-  // Use simple CSS margin instead of Gutenberg spacer blocks — spacer blocks render
-  // full-width on Elementor themes and break the blog layout
-  const SECTION_SPACER = '<div style="margin-top:50px" aria-hidden="true"></div>'
+  // 1. Assemble full HTML as Gutenberg blocks for WordPress
+  //    Each content block becomes editable individually in the WP editor
+  const gutenbergParts: string[] = []
+  let needsCss = ''
 
-  const htmlParts: string[] = []
   let isFirstBlock = true
   for (const block of contentBlocks) {
     if (!block.content_html) continue
-    if (block.heading && (block.type === 'h2' || block.type === 'h3' || block.type === 'h4')) {
-      const tag = block.type
-      // Add spacer before each heading section (not before the very first block)
-      if (!isFirstBlock) {
-        htmlParts.push(SECTION_SPACER)
-      }
-      htmlParts.push(`<${tag}>${block.heading}</${tag}>`)
+
+    // Add spacer before each heading section (not before the very first block)
+    if (block.heading && (block.type === 'h2' || block.type === 'h3' || block.type === 'h4') && !isFirstBlock) {
+      gutenbergParts.push(`<!-- wp:spacer {"height":"50px"} -->\n<div style="height:50px" aria-hidden="true" class="wp-block-spacer"></div>\n<!-- /wp:spacer -->`)
     }
-    htmlParts.push(block.content_html)
+
+    // Render heading as Gutenberg heading block
+    if (block.heading && (block.type === 'h2' || block.type === 'h3' || block.type === 'h4')) {
+      const level = block.type === 'h2' ? 2 : block.type === 'h3' ? 3 : 4
+      gutenbergParts.push(`<!-- wp:heading {"level":${level}} -->\n<${block.type}>${block.heading}</${block.type}>\n<!-- /wp:heading -->`)
+    }
+
+    // Convert block content_html to Gutenberg blocks
+    let blockHtml = block.content_html
+
+    // Apply table inline styles if needed
+    if (blockHtml.includes('<table')) {
+      blockHtml = inlineTableStyles(blockHtml, site?.theme_color || null)
+      needsCss += WP_TABLE_CSS + '\n'
+    }
+
+    // Track FAQ CSS need
+    if (blockHtml.includes('faq-section') || blockHtml.includes('faq-item')) {
+      needsCss += WP_FAQ_CSS + '\n'
+    }
+
+    gutenbergParts.push(convertHtmlToGutenbergBlocks(blockHtml))
     isFirstBlock = false
   }
 
-  // Inject JSON-LD script tag at the end
+  // Inject JSON-LD as custom HTML block at the end
   const jsonLd = article.json_ld as Record<string, unknown> | null
   if (jsonLd) {
-    htmlParts.push(`<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`)
+    gutenbergParts.push(`<!-- wp:html -->\n<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>\n<!-- /wp:html -->`)
   }
 
-  // Apply table styles for WordPress (inline + CSS block)
-  let fullHtml = htmlParts.join('\n\n')
+  // Prepend CSS blocks if needed (deduplicate)
+  const uniqueCss = Array.from(new Set(needsCss.split('\n').filter(l => l.trim()))).join('\n')
+  let fullHtml = gutenbergParts.join('\n\n')
+  if (uniqueCss) {
+    fullHtml = `<!-- wp:html -->\n${uniqueCss}\n<!-- /wp:html -->\n\n` + fullHtml
+  }
 
   // Strip Elementor wrapper markup from kept blocks (imported WP articles retain old markup)
   if (fullHtml.includes('elementor')) {
     fullHtml = stripElementorFromHtml(fullHtml)
-  }
-
-  // Remove any stale Gutenberg spacer blocks — they render full-width on some themes
-  fullHtml = fullHtml
-    .replace(/<!--\s*wp:spacer[\s\S]*?<!--\s*\/wp:spacer\s*-->/gi, '')
-    .replace(/<div[^>]*class="wp-block-spacer"[^>]*><\/div>/gi, '')
-    .replace(/<div style="height:\d+px"[^>]*aria-hidden="true"[^>]*><\/div>/gi, '')
-
-  if (fullHtml.includes('<table')) {
-    fullHtml = WP_TABLE_CSS + '\n' + inlineTableStyles(fullHtml, site?.theme_color || null)
-  }
-
-  // Inject FAQ accordion CSS for WordPress
-  if (fullHtml.includes('faq-section') || fullHtml.includes('faq-item')) {
-    fullHtml = WP_FAQ_CSS + '\n' + fullHtml
   }
 
   // 2. Extract intro as excerpt (first paragraph block without heading)
