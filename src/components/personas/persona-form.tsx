@@ -5,18 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
 import type { Persona, Site } from "@/lib/supabase/types";
 
 export interface PersonaFormData {
-  site_id: string;
+  site_ids: string[];
   name: string;
   role: string;
   tone_description: string;
@@ -25,8 +19,12 @@ export interface PersonaFormData {
   writing_style_examples: string;
 }
 
+interface PersonaWithSites extends Persona {
+  seo_persona_sites?: { site_id: string; seo_sites: { id: string; name: string; domain: string } | null }[];
+}
+
 interface PersonaFormProps {
-  persona?: Persona | null;
+  persona?: PersonaWithSites | null;
   onSubmit: (data: PersonaFormData) => Promise<void>;
   loading?: boolean;
 }
@@ -35,7 +33,11 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
   const [sites, setSites] = useState<Site[]>([]);
   const [sitesLoading, setSitesLoading] = useState(true);
 
-  const [siteId, setSiteId] = useState(persona?.site_id ?? "");
+  // Extract site_ids from pivot data, fall back to legacy site_id
+  const initialSiteIds = persona?.seo_persona_sites?.map((ps) => ps.site_id) ??
+    (persona?.site_id ? [persona.site_id] : []);
+
+  const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>(initialSiteIds);
   const [name, setName] = useState(persona?.name ?? "");
   const [role, setRole] = useState(persona?.role ?? "");
   const [toneDescription, setToneDescription] = useState(
@@ -57,7 +59,7 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Load sites for the select dropdown
+  // Load sites
   useEffect(() => {
     async function loadSites() {
       try {
@@ -67,7 +69,7 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
           setSites(data);
         }
       } catch {
-        // Silently fail - the select will just be empty
+        // silent
       } finally {
         setSitesLoading(false);
       }
@@ -78,7 +80,9 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
   // Update form fields when persona prop changes (edit mode)
   useEffect(() => {
     if (persona) {
-      setSiteId(persona.site_id);
+      const siteIds = persona.seo_persona_sites?.map((ps) => ps.site_id) ??
+        (persona.site_id ? [persona.site_id] : []);
+      setSelectedSiteIds(siteIds);
       setName(persona.name);
       setRole(persona.role);
       setToneDescription(persona.tone_description ?? "");
@@ -97,10 +101,18 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
     }
   }, [persona]);
 
+  function toggleSite(siteId: string) {
+    setSelectedSiteIds((prev) =>
+      prev.includes(siteId)
+        ? prev.filter((id) => id !== siteId)
+        : [...prev, siteId]
+    );
+  }
+
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
 
-    if (!siteId) newErrors.site_id = "Le site est requis";
+    if (selectedSiteIds.length === 0) newErrors.site_ids = "Au moins un site est requis";
     if (!name.trim()) newErrors.name = "Le nom est requis";
     if (!role.trim()) newErrors.role = "Le role est requis";
     if (
@@ -119,7 +131,7 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
     if (!validate()) return;
 
     await onSubmit({
-      site_id: siteId,
+      site_ids: selectedSiteIds,
       name: name.trim(),
       role: role.trim(),
       tone_description: toneDescription.trim(),
@@ -131,10 +143,10 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Site */}
+      {/* Sites (multi-select checkboxes) */}
       <div className="space-y-2">
-        <Label htmlFor="site_id">
-          Site <span className="text-destructive">*</span>
+        <Label>
+          Sites <span className="text-destructive">*</span>
         </Label>
         {sitesLoading ? (
           <div className="flex h-9 items-center gap-2 text-sm text-muted-foreground">
@@ -142,21 +154,28 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
             Chargement des sites...
           </div>
         ) : (
-          <Select value={siteId} onValueChange={setSiteId}>
-            <SelectTrigger id="site_id">
-              <SelectValue placeholder="Selectionner un site" />
-            </SelectTrigger>
-            <SelectContent>
-              {sites.map((site) => (
-                <SelectItem key={site.id} value={site.id}>
-                  {site.name} ({site.domain})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="space-y-2 rounded-md border p-3">
+            {sites.map((site) => (
+              <label
+                key={site.id}
+                className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded px-1 py-0.5"
+              >
+                <Checkbox
+                  checked={selectedSiteIds.includes(site.id)}
+                  onCheckedChange={() => toggleSite(site.id)}
+                />
+                <span className="text-sm">
+                  {site.name} <span className="text-muted-foreground">({site.domain})</span>
+                </span>
+              </label>
+            ))}
+            {sites.length === 0 && (
+              <p className="text-sm text-muted-foreground">Aucun site disponible</p>
+            )}
+          </div>
         )}
-        {errors.site_id && (
-          <p className="text-sm text-destructive">{errors.site_id}</p>
+        {errors.site_ids && (
+          <p className="text-sm text-destructive">{errors.site_ids}</p>
         )}
       </div>
 
@@ -220,7 +239,7 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
       <div className="space-y-2">
         <Label htmlFor="writing_style_examples">Exemples de style d&apos;ecriture</Label>
         <p className="text-xs text-muted-foreground">
-          Collez des extraits de textes ecrits par ce persona. Separez chaque extrait par &quot;---&quot; sur une ligne seule. Ces exemples servent de reference stylistique pour l&apos;IA.
+          Collez des extraits de textes ecrits par ce persona. Separez chaque extrait par &quot;---&quot; sur une ligne seule.
         </p>
         <Textarea
           id="writing_style_examples"

@@ -34,8 +34,9 @@ const SEARCH_INTENT_OPTIONS: { value: SearchIntent; label: string }[] = [
   { value: "informational", label: "Informationnel" },
 ];
 
-interface PersonaWithSite extends Persona {
-  seo_sites: { name: string; domain: string } | null;
+interface PersonaWithSites extends Persona {
+  seo_persona_sites?: { site_id: string; seo_sites: { id: string; name: string; domain: string } | null }[];
+  seo_sites?: { name: string; domain: string } | null;
 }
 
 export default function NewArticlePage() {
@@ -43,7 +44,7 @@ export default function NewArticlePage() {
   const { toast } = useToast();
 
   const [sites, setSites] = useState<Site[]>([]);
-  const [personas, setPersonas] = useState<PersonaWithSite[]>([]);
+  const [personas, setPersonas] = useState<PersonaWithSites[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   // Form state
@@ -85,9 +86,14 @@ export default function NewArticlePage() {
     fetchPersonas();
   }, [fetchSites, fetchPersonas]);
 
-  // Filter personas by selected site
+  // Filter personas by selected site (via pivot table data or legacy site_id)
   const filteredPersonas = siteId
-    ? personas.filter((p) => p.site_id === siteId)
+    ? personas.filter((p) => {
+        if (p.seo_persona_sites && p.seo_persona_sites.length > 0) {
+          return p.seo_persona_sites.some((ps) => ps.site_id === siteId);
+        }
+        return p.site_id === siteId;
+      })
     : [];
 
   // Reset persona and money page when site changes

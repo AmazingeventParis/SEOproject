@@ -12,10 +12,14 @@ import { PersonaForm, type PersonaFormData } from "./persona-form";
 import { useToast } from "@/hooks/use-toast";
 import type { Persona } from "@/lib/supabase/types";
 
+interface PersonaWithSites extends Persona {
+  seo_persona_sites?: { site_id: string; seo_sites: { id: string; name: string; domain: string } | null }[];
+}
+
 interface PersonaDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  persona?: Persona | null;
+  persona?: PersonaWithSites | null;
   onSuccess: () => void;
 }
 
@@ -38,29 +42,15 @@ export function PersonaDialog({
       const method = isEdit ? "PATCH" : "POST";
 
       const body: Record<string, unknown> = {
-        site_id: formData.site_id,
+        site_ids: formData.site_ids,
         name: formData.name,
         role: formData.role,
       };
 
       // Only send optional fields if they have values
-      if (formData.tone_description) {
-        body.tone_description = formData.tone_description;
-      } else {
-        body.tone_description = null;
-      }
-
-      if (formData.bio) {
-        body.bio = formData.bio;
-      } else {
-        body.bio = null;
-      }
-
-      if (formData.avatar_reference_url) {
-        body.avatar_reference_url = formData.avatar_reference_url;
-      } else {
-        body.avatar_reference_url = null;
-      }
+      body.tone_description = formData.tone_description || null;
+      body.bio = formData.bio || null;
+      body.avatar_reference_url = formData.avatar_reference_url || null;
 
       // Parse writing style examples from text (separated by ---) into JSON array
       if (formData.writing_style_examples) {
@@ -107,7 +97,7 @@ export function PersonaDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEdit ? "Modifier le persona" : "Nouveau persona"}

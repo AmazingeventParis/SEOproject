@@ -30,9 +30,11 @@ import { PersonaDialog } from "@/components/personas/persona-dialog";
 import { useToast } from "@/hooks/use-toast";
 import type { Persona } from "@/lib/supabase/types";
 
-// Persona with joined site info from the API
-interface PersonaWithSite extends Persona {
-  seo_sites: { name: string; domain: string } | null;
+// Persona with joined site info from the API (multi-site via pivot)
+interface PersonaWithSites extends Persona {
+  seo_persona_sites?: { site_id: string; seo_sites: { id: string; name: string; domain: string } | null }[];
+  // Legacy single site (backward compat)
+  seo_sites?: { name: string; domain: string } | null;
 }
 
 // Deterministic color for avatar based on name
@@ -74,7 +76,7 @@ function getInitials(name: string): string {
 }
 
 export default function PersonasPage() {
-  const [personas, setPersonas] = useState<PersonaWithSite[]>([]);
+  const [personas, setPersonas] = useState<PersonaWithSites[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null);
@@ -213,11 +215,21 @@ export default function PersonasPage() {
                   <CardDescription className="mt-0.5 text-sm">
                     {persona.role}
                   </CardDescription>
-                  {persona.seo_sites && (
+                  {persona.seo_persona_sites && persona.seo_persona_sites.length > 0 ? (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {persona.seo_persona_sites.map((ps) => (
+                        ps.seo_sites && (
+                          <Badge key={ps.site_id} variant="secondary" className="text-xs">
+                            {ps.seo_sites.name}
+                          </Badge>
+                        )
+                      ))}
+                    </div>
+                  ) : persona.seo_sites ? (
                     <Badge variant="secondary" className="mt-2 text-xs">
                       {persona.seo_sites.name}
                     </Badge>
-                  )}
+                  ) : null}
                 </div>
 
                 {/* Actions dropdown */}

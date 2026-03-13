@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getServerClient } from "@/lib/supabase/client";
 
 const updatePersonaSchema = z.object({
-  site_id: z.string().uuid("site_id doit etre un UUID valide").optional(),
+  site_ids: z.array(z.string().uuid()).min(1).optional(),
   name: z.string().min(1, "Le nom est requis").optional(),
   role: z.string().min(1, "Le role est requis").optional(),
   tone_description: z.string().nullable().optional(),
@@ -16,7 +16,7 @@ interface RouteParams {
   params: { personaId: string };
 }
 
-// GET /api/personas/[personaId] - Get a single persona
+// GET /api/personas/[personaId] - Get a single persona with sites
 export async function GET(
   _request: NextRequest,
   { params }: RouteParams
@@ -26,7 +26,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("seo_personas")
-    .select("*, seo_sites!seo_personas_site_id_fkey(name, domain)")
+    .select("*, seo_persona_sites(site_id, seo_sites(id, name, domain))")
     .eq("id", personaId)
     .single();
 
@@ -72,23 +72,63 @@ export async function PATCH(
     );
   }
 
-  const { data, error } = await supabase
+  const { site_ids, ...personaData } = parsed.data;
+
+  // Update persona fields
+  const updateData: Record<string, unknown> = {
+    ...personaData,
+    updated_at: new Date().toISOString(),
+  };
+  // Keep site_id in sync (backward compat) — use first site
+  if (site_ids && site_ids.length > 0) {
+    updateData.site_id = site_ids[0];
+  }
+
+  const { error: updateError } = await supabase
     .from("seo_personas")
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ ...parsed.data, updated_at: new Date().toISOString() } as any)
-    .eq("id", personaId)
-    .select("*, seo_sites!seo_personas_site_id_fkey(name, domain)")
-    .single();
+    .update(updateData as any)
+    .eq("id", personaId);
 
-  if (error) {
-    if (error.code === "PGRST116") {
+  if (updateError) {
+    if (updateError.code === "PGRST116") {
       return NextResponse.json(
         { error: "Persona non trouve" },
         { status: 404 }
       );
     }
     return NextResponse.json(
-      { error: error.message },
+      { error: updateError.message },
+      { status: 500 }
+    );
+  }
+
+  // Update pivot table if site_ids provided
+  if (site_ids) {
+    // Delete existing associations
+    await supabase
+      .from("seo_persona_sites")
+      .delete()
+      .eq("persona_id", personaId);
+
+    // Insert new associations
+    const pivotEntries = site_ids.map((sid) => ({
+      persona_id: personaId,
+      site_id: sid,
+    }));
+    await supabase.from("seo_persona_sites").insert(pivotEntries);
+  }
+
+  // Re-fetch with sites
+  const { data, error: fetchError } = await supabase
+    .from("seo_personas")
+    .select("*, seo_persona_sites(site_id, seo_sites(id, name, domain))")
+    .eq("id", personaId)
+    .single();
+
+  if (fetchError) {
+    return NextResponse.json(
+      { error: fetchError.message },
       { status: 500 }
     );
   }
@@ -104,6 +144,7 @@ export async function DELETE(
   const supabase = getServerClient();
   const { personaId } = params;
 
+  // Pivot entries are auto-deleted via ON DELETE CASCADE
   const { error } = await supabase
     .from("seo_personas")
     .delete()

@@ -83,13 +83,12 @@ export function WpImportDialog({
       setTotalAvailable(postsData.total || 0);
       setAlreadyImported(postsData.alreadyImported || 0);
 
-      // Fetch personas and silos for this site
-      const [personasRes, silosRes] = await Promise.all([
+      // Fetch personas (via pivot table) and silos for this site
+      const [personaPivotRes, silosRes] = await Promise.all([
         supabase
-          .from("seo_personas")
-          .select("*")
-          .eq("site_id", siteId)
-          .order("name"),
+          .from("seo_persona_sites")
+          .select("persona_id, seo_personas(*)")
+          .eq("site_id", siteId),
         supabase
           .from("seo_silos")
           .select("*")
@@ -97,7 +96,9 @@ export function WpImportDialog({
           .order("name"),
       ]);
 
-      setPersonas(personasRes.data || []);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pivotPersonas = (personaPivotRes.data || []).map((row: any) => row.seo_personas).filter(Boolean);
+      setPersonas(pivotPersonas);
       setSilos(silosRes.data || []);
       setStep("select");
     } catch (err) {

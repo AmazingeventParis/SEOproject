@@ -155,7 +155,7 @@ export type Database = {
       seo_personas: {
         Row: {
           id: string
-          site_id: string
+          site_id: string | null
           name: string
           role: string
           tone_description: string | null
@@ -167,7 +167,7 @@ export type Database = {
         }
         Insert: {
           id?: string
-          site_id: string
+          site_id?: string | null
           name: string
           role: string
           tone_description?: string | null
@@ -179,7 +179,7 @@ export type Database = {
         }
         Update: {
           id?: string
-          site_id?: string
+          site_id?: string | null
           name?: string
           role?: string
           tone_description?: string | null
@@ -192,6 +192,40 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: 'seo_personas_site_id_fkey'
+            columns: ['site_id']
+            isOneToOne: false
+            referencedRelation: 'seo_sites'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+
+      seo_persona_sites: {
+        Row: {
+          persona_id: string
+          site_id: string
+          created_at: string
+        }
+        Insert: {
+          persona_id: string
+          site_id: string
+          created_at?: string
+        }
+        Update: {
+          persona_id?: string
+          site_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'seo_persona_sites_persona_id_fkey'
+            columns: ['persona_id']
+            isOneToOne: false
+            referencedRelation: 'seo_personas'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'seo_persona_sites_site_id_fkey'
             columns: ['site_id']
             isOneToOne: false
             referencedRelation: 'seo_sites'
