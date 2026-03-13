@@ -1520,11 +1520,17 @@ export default function ArticleDetailPage() {
   }
 
   // Save manual edit of a block's content_html
+  // Fetches fresh state from DB to avoid race condition with concurrent write-all
   async function saveBlockEdit(blockId: string, newHtml: string) {
     setSavingBlock(blockId);
     try {
-      const currentBlocks: ContentBlock[] = article?.content_blocks ?? [];
-      const updatedBlocks = currentBlocks.map((b) =>
+      // Fetch fresh article state to avoid overwriting blocks written by pipeline
+      const freshRes = await fetch(`/api/articles/${articleId}`);
+      if (!freshRes.ok) throw new Error("Impossible de recuperer l'article");
+      const freshArticle = await freshRes.json();
+      const freshBlocks: ContentBlock[] = freshArticle?.content_blocks ?? [];
+
+      const updatedBlocks = freshBlocks.map((b) =>
         b.id === blockId ? { ...b, content_html: newHtml } : b
       );
       const res = await fetch(`/api/articles/${articleId}`, {
@@ -1571,7 +1577,10 @@ export default function ArticleDetailPage() {
   // Add or remove FAQ block from the plan
   async function toggleFaqBlock() {
     if (!article) return;
-    const currentBlocks: ContentBlock[] = article.content_blocks ?? [];
+    // Fetch fresh state to avoid race condition
+    const freshRes = await fetch(`/api/articles/${articleId}`);
+    const freshArticle = freshRes.ok ? await freshRes.json() : article;
+    const currentBlocks: ContentBlock[] = freshArticle.content_blocks ?? [];
     const hasFaq = currentBlocks.some((b) => b.type === "faq");
 
     let updatedBlocks: ContentBlock[];
