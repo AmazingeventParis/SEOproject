@@ -16,7 +16,7 @@ import { routeAI, routeAIWithOverrides, modelIdToOverride } from '@/lib/ai/route
 import type { ModelConfig } from '@/lib/ai/types'
 import { buildPlanArchitectPrompt } from '@/lib/ai/prompts/plan-architect'
 import { buildBlockWriterPrompt } from '@/lib/ai/prompts/block-writer'
-import { generateImage, buildImagePrompt, generateHeroImage } from '@/lib/media/fal-ai'
+import { generateImage, buildImagePrompt, generateHeroImage, ContentPolicyError } from '@/lib/media/fal-ai'
 import { optimizeForWeb } from '@/lib/media/sharp-processor'
 import { generateSeoFilename, generateAltText, generateImageTitle } from '@/lib/media/seo-rename'
 import { generateArticleSchema, generateFAQSchema, generateBreadcrumbSchema, generateHowToSchema, generateReviewSchema, assembleJsonLd } from '@/lib/seo/json-ld'
@@ -959,6 +959,20 @@ async function executeMedia(
       .update({ hero_image_url: wpMedia.url })
       .eq('id', article.id)
   } catch (error) {
+    // Content policy error (copyright) → skip ALL image generation, keep existing images
+    if (error instanceof ContentPolicyError) {
+      console.warn(`[media] ${error.message} — skip image generation, conserve images existantes`)
+      return {
+        success: true,
+        runId: '',
+        output: {
+          skipped: true,
+          reason: error.message,
+          heroMediaId: null,
+          sectionImages: 0,
+        }
+      }
+    }
     // Hero image generation is optional - continue with blocks
     const msg = error instanceof Error ? error.message : String(error)
     if (!msg.includes('non configure') && !msg.includes('FAL_KEY')) throw error
@@ -1093,6 +1107,7 @@ async function executeMedia(
   }
 
   // Run all image generations in parallel (fal.ai + optimize + WP upload)
+  // If any image hits content policy (copyright), skip ALL remaining and return success
   const imageResults = await Promise.allSettled(
     imageTasks.map(async (task) => {
       const imageResult = await generateImage(task.prompt, { aspectRatio: "16:9" })
@@ -1112,6 +1127,30 @@ async function executeMedia(
       return { ...task, wpMedia, altText, imgTitle, optimized }
     })
   )
+
+  // Check if any image hit content policy — if so, skip all and return success with warning
+  const contentPolicyHit = imageResults.find(
+    r => r.status === 'rejected' && r.reason instanceof ContentPolicyError
+  )
+  if (contentPolicyHit) {
+    const reason = (contentPolicyHit as PromiseRejectedResult).reason as ContentPolicyError
+    console.warn(`[media] ${reason.message} — skip section images, conserve images existantes`)
+    // Still save blocks and transition status
+    await supabase
+      .from('seo_articles')
+      .update({ content_blocks: updatedBlocks })
+      .eq('id', article.id)
+    return {
+      success: true,
+      runId: '',
+      output: {
+        skipped: true,
+        reason: reason.message,
+        heroMediaId: heroMediaId || null,
+        sectionImages: 0,
+      }
+    }
+  }
 
   // Apply successful results to blocks
   for (const result of imageResults) {

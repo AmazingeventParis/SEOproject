@@ -37,32 +37,17 @@ interface Flux2ProOutput {
   images: { url: string; width: number; height: number; content_type?: string }[];
 }
 
-// ---- Copyright sanitization for image prompts ----
-// Removes trademarked character/brand names that trigger 422 from image APIs
-const COPYRIGHT_REPLACEMENTS: [RegExp, string][] = [
-  // Cartoon/animation characters
-  [/\bBluey\b/gi, "a cute blue cartoon dog"],
-  [/\bBingo\b/gi, "a playful red cartoon dog"],
-  [/\bPat['']?Patrouille\b/gi, "cartoon rescue puppies"],
-  [/\bPaw Patrol\b/gi, "cartoon rescue puppies"],
-  [/\bPeppa Pig\b/gi, "a cheerful cartoon piglet"],
-  [/\bSpiderman\b|Spider-Man\b/gi, "a superhero in red and blue"],
-  [/\bPokemon\b|Pokémon\b/gi, "colorful cartoon creatures"],
-  [/\bMario\b/gi, "a classic video game character"],
-  [/\bDisney\b/gi, "animated"],
-  [/\bMarvel\b/gi, "superhero"],
-  [/\bPixar\b/gi, "animated"],
-  // Add more as needed
-];
-
-function sanitizePromptForCopyright(prompt: string): string {
-  let sanitized = prompt;
-  for (const [pattern, replacement] of COPYRIGHT_REPLACEMENTS) {
-    sanitized = sanitized.replace(pattern, replacement);
+// ---- Content policy error detection ----
+export class ContentPolicyError extends Error {
+  constructor(keyword: string) {
+    super(`Image bloquee par la politique de contenu (mot-cle protege : "${keyword}"). Les images existantes sont conservees.`);
+    this.name = 'ContentPolicyError';
   }
-  // Also add a generic directive
-  sanitized += " Do not include any copyrighted characters, logos, or branded elements.";
-  return sanitized;
+}
+
+function isContentPolicyError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return msg.includes('Unprocessable') || msg.includes('422') || msg.includes('content policy');
 }
 
 // ---- Anti-text & realism directives (appended to every prompt) ----
@@ -97,50 +82,41 @@ export async function generateImage(
 
   await ensureFalKey();
 
-  // Try original prompt first, then sanitized fallback on 422 (copyright/content policy)
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const currentPrompt = attempt === 0 ? fullPrompt : sanitizePromptForCopyright(fullPrompt);
-    if (attempt === 1) {
-      console.log(`[fal-ai] Retrying with sanitized prompt (copyright fallback)`);
+  try {
+    const result = await fal.subscribe("fal-ai/flux-2-pro", {
+      input: {
+        prompt: fullPrompt,
+        image_size: imageSize,
+        output_format: "jpeg" as const,
+        safety_tolerance: "5" as const,
+      },
+    });
+
+    const data = result.data as Flux2ProOutput;
+    const image = data.images[0];
+
+    if (!image?.url) {
+      throw new Error("Aucune image retournee par le modele");
     }
 
-    try {
-      const result = await fal.subscribe("fal-ai/flux-2-pro", {
-        input: {
-          prompt: currentPrompt,
-          image_size: imageSize,
-          output_format: "jpeg" as const,
-          safety_tolerance: "5" as const,
-        },
-      });
-
-      const data = result.data as Flux2ProOutput;
-      const image = data.images[0];
-
-      if (!image?.url) {
-        throw new Error("Aucune image retournee par le modele");
-      }
-
-      return {
-        url: image.url,
-        width: image.width ?? (options?.width || 1200),
-        height: image.height ?? (options?.height || 675),
-      };
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      // On 422 (Unprocessable Entity / content policy), try sanitized prompt
-      if (attempt === 0 && (msg.includes('Unprocessable') || msg.includes('422') || msg.includes('content policy'))) {
-        continue;
-      }
-      if (error instanceof Error) {
-        throw new Error(
-          `Erreur lors de la generation d'image : ${error.message}`
-        );
-      }
-      throw new Error("Erreur inconnue lors de la generation d'image");
+    return {
+      url: image.url,
+      width: image.width ?? (options?.width || 1200),
+      height: image.height ?? (options?.height || 675),
+    };
+  } catch (error) {
+    // On 422 (content policy / copyright), throw specific error so pipeline can skip gracefully
+    if (isContentPolicyError(error)) {
+      const keywordMatch = prompt.match(/about "([^"]+)"/);
+      throw new ContentPolicyError(keywordMatch?.[1] || 'inconnu');
     }
+    if (error instanceof Error) {
+      throw new Error(
+        `Erreur lors de la generation d'image : ${error.message}`
+      );
+    }
+    throw new Error("Erreur inconnue lors de la generation d'image");
   }
-  throw new Error("Erreur lors de la generation d'image apres 2 tentatives");
 }
 
 // ---- Intelligent prompt builder ----
