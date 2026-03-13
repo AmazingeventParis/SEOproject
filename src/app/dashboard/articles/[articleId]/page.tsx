@@ -1543,6 +1543,19 @@ export default function ArticleDetailPage() {
       setEditingHtml("");
       toast({ title: "Bloc mis a jour", description: "Le contenu a ete sauvegarde." });
       await fetchArticle();
+
+      // Auto-continue writing remaining blocks after saving an edit
+      const remainingPending = updatedBlocks.filter(
+        (b) => b.id !== blockId && b.status === "pending"
+      );
+      if (remainingPending.length > 0) {
+        toast({
+          title: "Redaction automatique",
+          description: `Lancement de la redaction des ${remainingPending.length} bloc(s) restants...`,
+        });
+        // Small delay to let state settle before launching write-all
+        setTimeout(() => runWriteAll(), 500);
+      }
     } catch {
       toast({ variant: "destructive", title: "Erreur", description: "Impossible de sauvegarder." });
     } finally {
