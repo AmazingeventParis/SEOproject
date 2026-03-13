@@ -1902,6 +1902,27 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
  * CSS bloc injecte une seule fois dans le HTML publie.
  * Gere le zebra-striping, hover et responsive (impossible en inline pur).
  */
+const WP_FAQ_CSS = `<style>
+.faq-section{display:flex;flex-direction:column;gap:12px;max-width:800px;margin:0 auto}
+.faq-item{border-radius:12px;border:1px solid #e2e8f0;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.04);overflow:hidden;transition:box-shadow .3s ease,border-color .3s ease}
+.faq-item:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);border-color:#cbd5e1}
+.faq-item[open]{box-shadow:0 6px 24px rgba(0,0,0,.1);border-color:#6366f1;border-left:3px solid #6366f1}
+.faq-item summary{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.15rem 1.4rem;font-weight:600;font-size:1rem;line-height:1.5;cursor:pointer;list-style:none;background:#fff;color:#1e293b;transition:background .2s ease,color .2s ease;user-select:none}
+.faq-item summary:hover{background:linear-gradient(135deg,#f8fafc,#f1f5f9);color:#0f172a}
+.faq-item[open] summary{background:linear-gradient(135deg,#eef2ff,#e0e7ff);color:#3730a3}
+.faq-item summary::-webkit-details-marker{display:none}
+.faq-item summary::marker{display:none;content:''}
+.faq-item summary::after{content:'';display:flex;align-items:center;justify-content:center;width:28px;height:28px;min-width:28px;border-radius:50%;background:#f1f5f9;border:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:center;transition:transform .35s cubic-bezier(.34,1.56,.64,1),background-color .2s ease;flex-shrink:0}
+.faq-item summary:hover::after{background-color:#e2e8f0}
+.faq-item[open] summary::after{transform:rotate(180deg);background-color:#c7d2fe;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234338ca' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")}
+.faq-answer{display:grid;grid-template-rows:0fr;transition:grid-template-rows .35s cubic-bezier(.4,0,.2,1),opacity .25s ease;opacity:0}
+.faq-item[open] .faq-answer{grid-template-rows:1fr;opacity:1;border-top:1px solid #e2e8f0}
+.faq-answer>div{overflow:hidden}
+.faq-answer>div>p,.faq-answer>div>div>p{padding:1rem 1.4rem 1.25rem;font-size:.95rem;line-height:1.8;color:#475569;margin:0}
+.faq-answer>div>p+p,.faq-answer>div>div>p+p{padding-top:0;margin-top:-.25rem}
+@media(max-width:640px){.faq-section{gap:8px}.faq-item{border-radius:8px}.faq-item summary{padding:.9rem 1rem;font-size:.925rem}.faq-item summary::after{width:24px;height:24px;min-width:24px}.faq-answer>div>p,.faq-answer>div>div>p{padding:.8rem 1rem 1rem;font-size:.9rem}}
+</style>`
+
 const WP_TABLE_CSS = `<style>
 .seo-table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;margin:20px 0;border-radius:8px;box-shadow:0 4px 15px rgba(0,0,0,.05)}
 .seo-table-wrap table{width:100%;border-collapse:collapse;min-width:600px;font-size:.95rem;line-height:1.5}
@@ -2062,6 +2083,11 @@ async function executePublish(
 
   if (fullHtml.includes('<table')) {
     fullHtml = WP_TABLE_CSS + '\n' + inlineTableStyles(fullHtml, site?.theme_color || null)
+  }
+
+  // Inject FAQ accordion CSS for WordPress
+  if (fullHtml.includes('faq-section') || fullHtml.includes('faq-item')) {
+    fullHtml = WP_FAQ_CSS + '\n' + fullHtml
   }
 
   // 2. Extract intro as excerpt (first paragraph block without heading)
