@@ -1548,13 +1548,17 @@ export default function ArticleDetailPage() {
       const remainingPending = updatedBlocks.filter(
         (b) => b.id !== blockId && b.status === "pending"
       );
-      if (remainingPending.length > 0) {
+      console.log(`[saveBlockEdit] ${remainingPending.length} blocs pending restants apres sauvegarde`);
+      if (remainingPending.length > 0 && !actionLoading) {
         toast({
-          title: "Redaction automatique",
-          description: `Lancement de la redaction des ${remainingPending.length} bloc(s) restants...`,
+          title: "Redaction automatique lancee",
+          description: `Ecriture de ${remainingPending.length} bloc(s) restants en cours...`,
         });
-        // Small delay to let state settle before launching write-all
-        setTimeout(() => runWriteAll(), 500);
+        // Use setTimeout to let React state settle, then launch write-all
+        setTimeout(() => {
+          console.log("[saveBlockEdit] Lancement auto de runWriteAll()");
+          runWriteAll();
+        }, 800);
       }
     } catch {
       toast({ variant: "destructive", title: "Erreur", description: "Impossible de sauvegarder." });
