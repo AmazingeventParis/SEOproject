@@ -2202,11 +2202,20 @@ async function executePublish(
     gutenbergParts.push(`<!-- wp:html -->\n<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>\n<!-- /wp:html -->`)
   }
 
-  // Prepend CSS blocks if needed (deduplicate)
-  const uniqueCss = Array.from(new Set(needsCss.split('\n').filter(l => l.trim()))).join('\n')
+  // Prepend CSS as a single merged <style> block (deduplicate whole blocks, not lines)
   let fullHtml = gutenbergParts.join('\n\n')
-  if (uniqueCss) {
-    fullHtml = `<!-- wp:html -->\n${uniqueCss}\n<!-- /wp:html -->\n\n` + fullHtml
+  if (needsCss) {
+    // Extract all CSS rules from <style> blocks and merge into one
+    const allRules: string[] = []
+    const styleRegex = /<style>([\s\S]*?)<\/style>/gi
+    let styleMatch: RegExpExecArray | null
+    while ((styleMatch = styleRegex.exec(needsCss)) !== null) {
+      allRules.push(styleMatch[1].trim())
+    }
+    if (allRules.length > 0) {
+      const mergedCss = `<style>\n${allRules.join('\n')}\n</style>`
+      fullHtml = `<!-- wp:html -->\n${mergedCss}\n<!-- /wp:html -->\n\n` + fullHtml
+    }
   }
 
   // Strip Elementor wrapper markup from kept blocks (imported WP articles retain old markup)
