@@ -114,7 +114,7 @@ async function extractNuggetsFromVideo(videoUrl: string): Promise<{ content: str
       { text: EXTRACT_PROMPT },
     ],
     config: {
-      maxOutputTokens: 4096,
+      maxOutputTokens: 8192,
       temperature: 0.3,
       safetySettings: SAFETY_SETTINGS,
     },
@@ -146,8 +146,34 @@ function extractJsonFromText(text: string): string {
     if (depth === 0) return cleaned.slice(start, i + 1);
   }
 
-  // Fallback: return from first { to end
-  return cleaned.slice(start);
+  // JSON was truncated (maxOutputTokens reached) — attempt repair
+  let truncated = cleaned.slice(start);
+
+  // If we're inside a string value, close it
+  // Count unescaped quotes to determine if we're inside a string
+  let inString = false;
+  for (let i = 0; i < truncated.length; i++) {
+    if (truncated[i] === '\\') { i++; continue; }
+    if (truncated[i] === '"') inString = !inString;
+  }
+  if (inString) truncated += '"';
+
+  // Close any open objects/arrays by removing the last incomplete entry
+  // and closing brackets
+  // Find the last complete nugget entry (last '}' that closes a nugget object)
+  const lastCompleteObj = truncated.lastIndexOf("}");
+  if (lastCompleteObj > 0) {
+    // Take up to and including the last complete object
+    let repaired = truncated.slice(0, lastCompleteObj + 1);
+    // Remove trailing comma if present
+    repaired = repaired.replace(/,\s*$/, "");
+    // Close the nuggets array and root object
+    repaired += "\n]\n}";
+    return repaired;
+  }
+
+  // Last resort: return what we have and let JSON.parse fail with a clearer error
+  return truncated;
 }
 
 function parseNuggetsFromAIResponse(content: string): { content: string; tags: string[] }[] {
