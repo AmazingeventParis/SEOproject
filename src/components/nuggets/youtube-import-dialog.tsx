@@ -94,20 +94,32 @@ export function YoutubeImportDialog({
         payload.transcript = manualTranscript.trim();
       }
 
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120_000); // 2 min timeout
+
       const res = await fetch("/api/nuggets/youtube-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
 
-      const data = await res.json();
       if (!res.ok) {
+        let errMsg = `Erreur serveur (${res.status})`;
+        try {
+          const data = await res.json();
+          if (data.error) errMsg = data.error;
+        } catch {
+          // response not JSON
+        }
         setShowManualTranscript(true);
-        setError(data.error || "Erreur inconnue");
+        setError(errMsg);
         setStep("input");
         return;
       }
 
+      const data = await res.json();
       setVideoId(data.video_id);
       setNuggets(
         data.nuggets.map((n: { content: string; tags: string[] }) => ({
@@ -116,8 +128,13 @@ export function YoutubeImportDialog({
         }))
       );
       setStep("preview");
-    } catch {
-      setError("Erreur reseau. Verifiez votre connexion.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("abort")) {
+        setError("Timeout : l'extraction a pris trop de temps (>2 min). Essayez avec une transcription manuelle.");
+      } else {
+        setError(`Erreur : ${msg}`);
+      }
       setStep("input");
     }
   }

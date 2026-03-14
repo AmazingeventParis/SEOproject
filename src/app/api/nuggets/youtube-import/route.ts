@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { YoutubeTranscript } from "youtube-transcript";
+
+// Allow up to 120s for transcript fetch + AI extraction
+export const maxDuration = 120;
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { routeAI } from "@/lib/ai/router";
 import { getServerClient } from "@/lib/supabase/client";
