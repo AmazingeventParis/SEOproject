@@ -433,14 +433,13 @@ export function buildCalloutPromptTemplate(
   return `<div class="expert-callout" style="display:flex;gap:16px;align-items:flex-start;padding:20px 24px;background:${style.bgColor};border-left:4px solid ${style.borderColor};border-radius:8px;margin:24px 0;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
   <div style="flex-shrink:0;padding-top:2px">
     ${avatarHtml}
-  </div>
-  <div style="flex:1;min-width:0">
+</div>
+<div style="flex:1;min-width:0">
     <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
       <strong style="font-size:1rem;color:${style.titleColor}">TITRE DE L'ENCART</strong>
     </div>
-    <p style="font-size:0.92rem;color:${style.accentColor};margin:0 0 4px 0;font-weight:600">${personaName} - ${personaRole}</p>
-    <p style="margin:0;line-height:1.6;color:#374151">Le contenu de l'encart ici. 2-4 phrases maximum, avis tranche ou astuce actionable.</p>
-  </div>
+Le contenu de l'encart ici. 2-4 phrases maximum, avis tranche ou astuce actionable.
+</div>
 </div>`
 }
 

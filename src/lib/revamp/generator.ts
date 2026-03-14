@@ -280,6 +280,11 @@ export async function pushToWordPress(
         contentHtml = fixCalloutAvatars(contentHtml, persona.avatar_reference_url, persona.name)
       }
     }
+    // Remove "Persona Name - Role" line from callouts (not wanted in final output)
+    contentHtml = contentHtml.replace(
+      /<p\s+style="[^"]*font-size:0\.92rem[^"]*font-weight:600[^"]*">[^<]*<\/p>\s*/g,
+      ''
+    )
   }
 
   // Update dateModified in JSON-LD for Google freshness signals

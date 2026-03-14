@@ -885,6 +885,14 @@ async function executeWriteBlock(
     )
   }
 
+  // Post-process: remove "Persona Name - Role" line from expert callouts (not wanted in final output)
+  if (processedHtml.includes('expert-callout')) {
+    processedHtml = processedHtml.replace(
+      /<p\s+style="[^"]*font-size:0\.92rem[^"]*font-weight:600[^"]*">[^<]*<\/p>\s*/g,
+      ''
+    )
+  }
+
   // Update the specific block
   const updatedBlocks = [...contentBlocks]
   updatedBlocks[blockIndex] = {
