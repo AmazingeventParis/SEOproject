@@ -87,8 +87,8 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     jsonMode: true,
   },
   extract_nuggets: {
-    provider: 'google',
-    model: 'gemini-2.5-flash',
+    provider: 'openai',
+    model: 'gpt-4o-mini',
     maxTokens: 8192,
     temperature: 0.3,
     jsonMode: true,
