@@ -23,34 +23,55 @@ export function NuggetDialog({ open, onOpenChange, nugget, onSuccess }: NuggetDi
   const isEdit = !!nugget;
 
   async function handleSubmit(data: NuggetFormData) {
-    const payload = {
-      ...data,
-      source_ref: data.source_ref || null,
-      site_id: data.site_id || null,
-      persona_id: data.persona_id || null,
-    };
-
     try {
-      const url = isEdit ? `/api/nuggets/${nugget.id}` : "/api/nuggets";
-      const method = isEdit ? "PATCH" : "POST";
+      if (isEdit) {
+        // Edit: update single nugget (keep first selected site or null)
+        const payload = {
+          ...data,
+          source_ref: data.source_ref || null,
+          site_id: data.site_ids.length > 0 ? data.site_ids[0] : null,
+          persona_id: data.persona_id || null,
+        };
+        delete (payload as Record<string, unknown>).site_ids;
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Erreur inconnue");
+        const res = await fetch(`/api/nuggets/${nugget.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Erreur inconnue");
+        }
+        toast({ title: "Nugget mis a jour", description: "Le nugget a ete mis a jour." });
+      } else {
+        // Create: one nugget per selected site (or one with null if none)
+        const siteIds = data.site_ids.length > 0 ? data.site_ids : [null];
+        let created = 0;
+        for (const siteId of siteIds) {
+          const payload = {
+            content: data.content,
+            source_type: data.source_type,
+            source_ref: data.source_ref || null,
+            site_id: siteId,
+            persona_id: data.persona_id || null,
+            tags: data.tags,
+          };
+          const res = await fetch("/api/nuggets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (res.ok) created++;
+        }
+        const plural = created > 1 ? "s" : "";
+        toast({
+          title: `Nugget${plural} cree${plural}`,
+          description: created > 1
+            ? `${created} nuggets crees (1 par site selectionne).`
+            : "Le nugget a ete ajoute.",
+        });
       }
-
-      toast({
-        title: isEdit ? "Nugget mis a jour" : "Nugget cree",
-        description: isEdit
-          ? "Le nugget a ete mis a jour."
-          : "Le nugget a ete ajoute.",
-      });
 
       onOpenChange(false);
       onSuccess();

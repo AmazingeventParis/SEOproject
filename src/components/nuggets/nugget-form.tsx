@@ -30,6 +30,7 @@ export interface NuggetFormData {
   source_type: string;
   source_ref: string;
   site_id: string;
+  site_ids: string[];
   persona_id: string;
   tags: string[];
 }
@@ -51,6 +52,7 @@ export function NuggetForm({ nugget, onSubmit, submitLabel = "Enregistrer" }: Nu
     source_type: nugget?.source_type ?? "note",
     source_ref: nugget?.source_ref ?? "",
     site_id: nugget?.site_id ?? "",
+    site_ids: nugget?.site_id ? [nugget.site_id] : [],
     persona_id: nugget?.persona_id ?? "",
     tags: nugget?.tags ?? [],
   });
@@ -173,27 +175,48 @@ export function NuggetForm({ nugget, onSubmit, submitLabel = "Enregistrer" }: Nu
         />
       </div>
 
-      {/* Site */}
+      {/* Sites (multi-select checkboxes) */}
       <div className="space-y-2">
-        <Label htmlFor="site_id">Site</Label>
-        <Select
-          value={formData.site_id || "__none__"}
-          onValueChange={(value) =>
-            handleChange("site_id", value === "__none__" ? "" : value)
-          }
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Tous les sites" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">Tous les sites</SelectItem>
-            {sites.map((site) => (
-              <SelectItem key={site.id} value={site.id}>
-                {site.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label>Sites (optionnel)</Label>
+        <div className="flex flex-wrap gap-2">
+          {sites.map((site) => (
+            <label
+              key={site.id}
+              className={`flex items-center gap-2 rounded-md border px-3 py-1.5 cursor-pointer text-sm transition-colors ${
+                formData.site_ids.includes(site.id)
+                  ? "bg-primary/10 border-primary/40 text-primary"
+                  : "hover:bg-muted"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={formData.site_ids.includes(site.id)}
+                onChange={() => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    site_ids: prev.site_ids.includes(site.id)
+                      ? prev.site_ids.filter((id) => id !== site.id)
+                      : [...prev.site_ids, site.id],
+                    site_id: "", // will be set per-save
+                  }));
+                }}
+                className="h-3.5 w-3.5 rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              {site.name}
+            </label>
+          ))}
+        </div>
+        {sites.length === 0 && (
+          <p className="text-xs text-muted-foreground">Aucun site configure.</p>
+        )}
+        {formData.site_ids.length === 0 && (
+          <p className="text-xs text-muted-foreground">Aucun site selectionne = disponible pour tous les sites.</p>
+        )}
+        {formData.site_ids.length > 1 && (
+          <p className="text-xs text-muted-foreground">
+            Le nugget sera duplique pour les {formData.site_ids.length} sites selectionnes.
+          </p>
+        )}
       </div>
 
       {/* Tags */}
