@@ -13,7 +13,7 @@ const youtubeImportSchema = z.object({
   transcript: z.string().optional(),
 });
 
-const TRANSCRIPT_CHAR_LIMIT = 30_000;
+const TRANSCRIPT_CHAR_LIMIT = 15_000;
 const LANGUAGES_TO_TRY = ["fr", "en", "es", "de", "pt", "it"];
 
 const EXTRACT_PROMPT = `Tu es un expert en extraction de connaissances. Extrais entre 3 et 15 "nuggets" (pepites de connaissance) de ce contenu.
@@ -105,33 +105,45 @@ async function extractNuggetsFromVideo(videoUrl: string): Promise<{ content: str
   const apiKey = await resolveGeminiKey();
   const client = new GoogleGenAI({ apiKey });
 
-  const result = await client.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: [
-      {
-        fileData: {
-          fileUri: videoUrl,
-          mimeType: "video/*",
+  try {
+    const result = await client.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: [
+        {
+          fileData: {
+            fileUri: videoUrl,
+            mimeType: "video/*",
+          },
         },
+        { text: EXTRACT_PROMPT },
+      ],
+      config: {
+        maxOutputTokens: 8192,
+        temperature: 0.3,
+        safetySettings: SAFETY_SETTINGS,
       },
-      { text: EXTRACT_PROMPT },
-    ],
-    config: {
-      maxOutputTokens: 8192,
-      temperature: 0.3,
-      safetySettings: SAFETY_SETTINGS,
-    },
-  });
+    });
 
-  const text = result.text ?? "";
-  const jsonStr = extractJsonFromText(text);
-  const parsed = JSON.parse(jsonStr);
+    const text = result.text ?? "";
+    const jsonStr = extractJsonFromText(text);
+    const parsed = JSON.parse(jsonStr);
 
-  if (!Array.isArray(parsed.nuggets)) {
-    throw new Error("Format invalide");
+    if (!Array.isArray(parsed.nuggets)) {
+      throw new Error("Format invalide");
+    }
+
+    return parsed.nuggets;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("token count exceeds") || msg.includes("1048576") || msg.includes("INVALID_ARGUMENT")) {
+      throw new Error(
+        "La video est trop longue pour etre analysee directement. " +
+        "Utilisez l'option de transcription manuelle : copiez la transcription depuis YouTube " +
+        "(bouton \"...\" sous la video → \"Afficher la transcription\") et collez-la dans le champ prevu."
+      );
+    }
+    throw err;
   }
-
-  return parsed.nuggets;
 }
 
 function extractJsonFromText(text: string): string {
