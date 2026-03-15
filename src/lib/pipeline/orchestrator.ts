@@ -1315,10 +1315,14 @@ async function executeSeo(
   const existingLinkSlugs = new Set<string>()
   const hrefRegex = /<a\s[^>]*href=["']([^"']+)["']/gi
   const allWrittenHtml = updatedBlocks.filter(b => b.content_html).map(b => b.content_html).join(' ')
+  // Normalize domain: strip protocol and trailing slash for URL construction
+  const rawDomain = site?.domain || ''
+  const cleanDomain = rawDomain.replace(/^https?:\/\//, '').replace(/\/+$/, '')
+  const siteBaseUrl = cleanDomain ? `https://${cleanDomain}` : ''
   let hrefMatch: RegExpExecArray | null
   while ((hrefMatch = hrefRegex.exec(allWrittenHtml)) !== null) {
     try {
-      const url = new URL(hrefMatch[1], `https://${site?.domain || 'x.com'}`)
+      const url = new URL(hrefMatch[1], siteBaseUrl || 'https://example.com')
       existingLinkSlugs.add(url.pathname.replace(/^\/|\/$/g, ''))
     } catch { /* skip malformed */ }
   }
@@ -1332,7 +1336,7 @@ async function executeSeo(
         if (existingLinkSlugs.has(l.targetSlug)) continue
         linksToInject.push({
           anchorText: l.anchorText,
-          url: `https://${site?.domain || ''}/${l.targetSlug}`,
+          url: `${siteBaseUrl}/${l.targetSlug}`,
         })
       }
     }
@@ -1359,7 +1363,7 @@ async function executeSeo(
       if (matchCount >= 2) {
         linksToInject.push({
           anchorText: post.title,
-          url: post.link || `https://${site?.domain || ''}/${post.slug}`,
+          url: post.link || `${siteBaseUrl}/${post.slug}`,
         })
         existingSlugs.add(post.slug)
       }
@@ -2163,7 +2167,8 @@ async function executePublish(
   // 1. Assemble full HTML as Gutenberg blocks for WordPress
   //    Each content block becomes editable individually in the WP editor
   const gutenbergParts: string[] = []
-  let needsCss = ''
+  let needsTableCss = false
+  let needsFaqCss = false
 
   let isFirstBlock = true
   for (const block of contentBlocks) {
@@ -2186,12 +2191,12 @@ async function executePublish(
     // Apply table inline styles if needed
     if (blockHtml.includes('<table')) {
       blockHtml = inlineTableStyles(blockHtml, site?.theme_color || null)
-      needsCss += WP_TABLE_CSS + '\n'
+      needsTableCss = true
     }
 
     // Track FAQ CSS need
     if (blockHtml.includes('mhd-faq-container') || blockHtml.includes('mhd-faq-item') || blockHtml.includes('faq-section') || blockHtml.includes('faq-item')) {
-      needsCss += WP_FAQ_CSS + '\n'
+      needsFaqCss = true
     }
 
     gutenbergParts.push(convertHtmlToGutenbergBlocks(blockHtml))
@@ -2204,20 +2209,20 @@ async function executePublish(
     gutenbergParts.push(`<!-- wp:html -->\n<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>\n<!-- /wp:html -->`)
   }
 
-  // Prepend CSS as a single merged <style> block (deduplicate whole blocks, not lines)
+  // Prepend CSS as a single <style> block
   let fullHtml = gutenbergParts.join('\n\n')
-  if (needsCss) {
-    // Extract all CSS rules from <style> blocks and merge into one
-    const allRules: string[] = []
-    const styleRegex = /<style>([\s\S]*?)<\/style>/gi
-    let styleMatch: RegExpExecArray | null
-    while ((styleMatch = styleRegex.exec(needsCss)) !== null) {
-      allRules.push(styleMatch[1].trim())
-    }
-    if (allRules.length > 0) {
-      const mergedCss = `<style>\n${allRules.join('\n')}\n</style>`
-      fullHtml = `<!-- wp:html -->\n${mergedCss}\n<!-- /wp:html -->\n\n` + fullHtml
-    }
+  const cssBlocks: string[] = []
+  if (needsTableCss) {
+    const tableRules = WP_TABLE_CSS.replace(/<\/?style>/g, '').trim()
+    cssBlocks.push(tableRules)
+  }
+  if (needsFaqCss) {
+    const faqRules = WP_FAQ_CSS.replace(/<\/?style>/g, '').trim()
+    cssBlocks.push(faqRules)
+  }
+  if (cssBlocks.length > 0) {
+    const mergedCss = `<style>\n${cssBlocks.join('\n')}\n</style>`
+    fullHtml = `<!-- wp:html -->\n${mergedCss}\n<!-- /wp:html -->\n\n` + fullHtml
   }
 
   // Strip Elementor wrapper markup from kept blocks (imported WP articles retain old markup)
