@@ -87,8 +87,8 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     jsonMode: true,
   },
   extract_nuggets: {
-    provider: 'google',
-    model: 'gemini-3-flash-preview',
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-20250514',
     maxTokens: 8192,
     temperature: 0.3,
     jsonMode: true,

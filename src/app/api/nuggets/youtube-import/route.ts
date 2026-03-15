@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { YoutubeTranscript } from "youtube-transcript";
+import { routeAI } from "@/lib/ai/router";
 
 // Allow up to 120s for transcript fetch + AI extraction
 export const maxDuration = 120;
-import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
-import { routeAI } from "@/lib/ai/router";
-import { getServerClient } from "@/lib/supabase/client";
+
 
 const youtubeImportSchema = z.object({
   url: z.string().url("URL invalide"),
@@ -67,84 +66,6 @@ async function fetchTranscriptWithFallback(videoId: string): Promise<string | nu
   return null;
 }
 
-async function resolveGeminiKey(): Promise<string> {
-  const envKey = process.env.GEMINI_API_KEY;
-  if (envKey) return envKey;
-
-  try {
-    const supabase = getServerClient();
-    const { data, error } = await supabase
-      .from("seo_config")
-      .select("value")
-      .eq("key", "gemini_api_key")
-      .single();
-
-    if (!error && data?.value) {
-      const val = data.value as unknown;
-      if (typeof val === "string" && val.length > 0) return val;
-    }
-  } catch {
-    // fall through
-  }
-
-  throw new Error("Cle API Gemini non configuree.");
-}
-
-/**
- * Fallback: send YouTube URL directly to Gemini for video analysis.
- * Gemini 2.0 Flash can process YouTube videos natively via fileData.
- */
-const SAFETY_SETTINGS = [
-  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-];
-
-async function extractNuggetsFromVideo(videoUrl: string): Promise<{ content: string; tags: string[] }[]> {
-  const apiKey = await resolveGeminiKey();
-  const client = new GoogleGenAI({ apiKey });
-
-  try {
-    const result = await client.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: [
-        {
-          fileData: {
-            fileUri: videoUrl,
-            mimeType: "video/*",
-          },
-        },
-        { text: EXTRACT_PROMPT },
-      ],
-      config: {
-        maxOutputTokens: 8192,
-        temperature: 0.3,
-        safetySettings: SAFETY_SETTINGS,
-      },
-    });
-
-    const text = result.text ?? "";
-    const jsonStr = extractJsonFromText(text);
-    const parsed = JSON.parse(jsonStr);
-
-    if (!Array.isArray(parsed.nuggets)) {
-      throw new Error("Format invalide");
-    }
-
-    return parsed.nuggets;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("token count exceeds") || msg.includes("1048576") || msg.includes("INVALID_ARGUMENT")) {
-      throw new Error(
-        "La video est trop longue pour etre analysee directement. " +
-        "Utilisez l'option de transcription manuelle : copiez la transcription depuis YouTube " +
-        "(bouton \"...\" sous la video → \"Afficher la transcription\") et collez-la dans le champ prevu."
-      );
-    }
-    throw err;
-  }
-}
 
 function extractJsonFromText(text: string): string {
   // Remove markdown code fences
@@ -229,8 +150,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
   try {
     let nuggets: { content: string; tags: string[] }[];
     let transcriptLength = 0;
@@ -264,22 +183,12 @@ export async function POST(request: NextRequest) {
         );
         nuggets = parseNuggetsFromAIResponse(aiResponse.content);
       } else {
-        // Method 3: Gemini direct video analysis (no transcript needed)
-        // If blocked by safety filters, fail with a clear message
-        try {
-          method = "video";
-          nuggets = await extractNuggetsFromVideo(videoUrl);
-        } catch (videoErr) {
-          const videoMsg = videoErr instanceof Error ? videoErr.message : String(videoErr);
-          if (videoMsg.includes("blocked") || videoMsg.includes("SAFETY") || videoMsg.includes("OTHER")) {
-            throw new Error(
-              "La video a ete bloquee par les filtres de securite de Gemini. " +
-              "Utilisez l'option de transcription manuelle : copiez la transcription depuis YouTube " +
-              "(bouton \"...\" sous la video → \"Afficher la transcription\") et collez-la dans le champ prevu."
-            );
-          }
-          throw videoErr;
-        }
+        // No auto-transcript available — ask user for manual transcript
+        throw new Error(
+          "Aucune transcription automatique disponible pour cette video. " +
+          "Utilisez l'option de transcription manuelle : copiez la transcription depuis YouTube " +
+          "(bouton \"...\" sous la video → \"Afficher la transcription\") et collez-la dans le champ prevu."
+        );
       }
     }
 
