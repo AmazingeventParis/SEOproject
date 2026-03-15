@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { YoutubeTranscript } from "youtube-transcript";
+import { GoogleGenAI } from "@google/genai";
 import { routeAI } from "@/lib/ai/router";
+import { getServerClient } from "@/lib/supabase/client";
 
 // Allow up to 120s for transcript fetch + AI extraction
 export const maxDuration = 120;
@@ -66,6 +68,41 @@ async function fetchTranscriptWithFallback(videoId: string): Promise<string | nu
   return null;
 }
 
+
+// ---- Gemini video fallback (free tier) when no transcript available ----
+
+async function resolveGeminiKey(): Promise<string> {
+  if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
+  try {
+    const supabase = getServerClient();
+    const { data, error } = await supabase
+      .from("seo_config").select("value").eq("key", "gemini_api_key").single();
+    if (!error && data?.value && typeof data.value === "string") return data.value;
+  } catch { /* fall through */ }
+  throw new Error("Cle API Gemini non configuree.");
+}
+
+async function extractNuggetsFromVideo(
+  videoUrl: string,
+): Promise<{ content: string; tags: string[] }[]> {
+  const apiKey = await resolveGeminiKey();
+  const client = new GoogleGenAI({ apiKey });
+
+  const result = await client.models.generateContent({
+    model: "gemini-2.0-flash",
+    contents: [
+      { fileData: { fileUri: videoUrl, mimeType: "video/*" } },
+      { text: EXTRACT_PROMPT },
+    ],
+    config: { maxOutputTokens: 8192, temperature: 0.3 },
+  });
+
+  const text = result.text ?? "";
+  const jsonStr = extractJsonFromText(text);
+  const parsed = JSON.parse(jsonStr);
+  if (!Array.isArray(parsed.nuggets)) throw new Error("Format invalide");
+  return parsed.nuggets;
+}
 
 function extractJsonFromText(text: string): string {
   // Remove markdown code fences
@@ -183,12 +220,26 @@ export async function POST(request: NextRequest) {
         );
         nuggets = parseNuggetsFromAIResponse(aiResponse.content);
       } else {
-        // No auto-transcript available — ask user for manual transcript
-        throw new Error(
-          "Aucune transcription automatique disponible pour cette video. " +
-          "Utilisez l'option de transcription manuelle : copiez la transcription depuis YouTube " +
-          "(bouton \"...\" sous la video → \"Afficher la transcription\") et collez-la dans le champ prevu."
-        );
+        // Method 3: No transcript — fallback to Gemini direct video analysis (free)
+        const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        try {
+          method = "video";
+          nuggets = await extractNuggetsFromVideo(videoUrl);
+        } catch (videoErr) {
+          const videoMsg = videoErr instanceof Error ? videoErr.message : String(videoErr);
+          if (videoMsg.includes("token count exceeds") || videoMsg.includes("1048576")) {
+            throw new Error(
+              "La video est trop longue pour etre analysee directement. " +
+              "Copiez la transcription depuis YouTube (bouton \"...\" → \"Afficher la transcription\") " +
+              "et collez-la dans le champ prevu."
+            );
+          }
+          throw new Error(
+            "Aucune transcription automatique disponible et l'analyse video a echoue. " +
+            "Copiez la transcription depuis YouTube (bouton \"...\" → \"Afficher la transcription\") " +
+            "et collez-la dans le champ prevu."
+          );
+        }
       }
     }
 
