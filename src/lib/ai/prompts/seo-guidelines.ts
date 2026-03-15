@@ -30,26 +30,29 @@ Penalites E-E-A-T :
  */
 export const SEO_FAQ_RULES = `Format HTML : le bloc FAQ DOIT contenir le H2 + l'accordion natif <details>/<summary> avec balisage Schema.org FAQ.
 Structure COMPLETE a generer :
-<h2>Questions frequentes</h2>
-<div class="faq-section" itemscope itemtype="https://schema.org/FAQPage">
-  <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
-    <summary itemprop="name">Question ici ?</summary>
-    <div class="faq-answer" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-      <div itemprop="text">
-        <p>Reponse directe en 2-4 phrases. Solution concrete.</p>
+<div class="mhd-faq-container">
+  <h2>Questions frequentes sur [SUJET]</h2>
+  <div class="faq-section" itemscope itemtype="https://schema.org/FAQPage">
+    <details class="mhd-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+      <summary itemprop="name">Question ici ?</summary>
+      <div class="mhd-faq-answer" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+        <div itemprop="text">
+          <p>Reponse directe en 2-4 phrases. Solution concrete.</p>
+        </div>
       </div>
-    </div>
-  </details>
-  <!-- Repeter <details> pour chaque question -->
+    </details>
+    <!-- Repeter <details> pour chaque question -->
+  </div>
 </div>
 
 Regles FAQ :
-- Le <h2> DOIT etre inclus UNE SEULE FOIS dans le HTML genere. NE DUPLIQUE JAMAIS le titre — si tu generes <h2>FAQ</h2>, ne le repete pas
-- Le heading du bloc FAQ est "FAQ" — pas de variante longue comme "FAQ : Vos questions recurrentes sur..."
+- Le <h2> DOIT etre inclus UNE SEULE FOIS dans le HTML genere, a l'interieur du <div class="mhd-faq-container">
+- Le heading du bloc FAQ doit etre "Questions frequentes sur [sujet de l'article]"
 - Reponses COURTES : 2-4 phrases maximum, directes et actionables
 - Chaque reponse donne une VRAIE SOLUTION rapide a la question posee
 - Optimise pour le featured snippet Google (reponse immediate, pas de bavardage)
-- 3 a 6 questions basees sur les "People Also Ask"`
+- 3 a 6 questions basees sur les "People Also Ask"
+- UTILISE EXACTEMENT les classes CSS : mhd-faq-container, mhd-faq-item, mhd-faq-answer (pas d'autres noms)`
 
 /**
  * Forbidden AI-sounding patterns.
