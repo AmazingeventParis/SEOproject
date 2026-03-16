@@ -1980,18 +1980,20 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
  * Gere le zebra-striping, hover et responsive (impossible en inline pur).
  */
 const WP_FAQ_CSS = `<style>
-.mhd-faq-container{max-width:850px;margin:40px auto;font-family:'Inter',system-ui,-apple-system,sans-serif;color:#334155}
-.mhd-faq-container h2{color:#065f46;text-align:center;font-size:1.8rem;margin-bottom:30px}
-.mhd-faq-item{background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:16px;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);box-shadow:0 2px 4px rgba(0,0,0,0.02)}
-.mhd-faq-item:hover{border-color:#10b981;box-shadow:0 10px 15px -3px rgba(16,185,129,0.1)}
+.mhd-faq-wrapper{max-width:850px;margin:40px auto;font-family:'Inter',system-ui,-apple-system,sans-serif;padding:0 20px}
+.mhd-faq-title{color:#1e293b;text-align:center;font-size:2rem;font-weight:800;margin-bottom:35px;letter-spacing:-0.02em}
+.mhd-faq-item{background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;margin-bottom:15px;overflow:hidden;transition:all 0.3s ease}
+.mhd-faq-item:hover{border-color:#10b981;box-shadow:0 4px 12px rgba(16,185,129,0.08)}
 .mhd-faq-item[open]{border-color:#10b981;box-shadow:0 10px 20px -5px rgba(0,0,0,0.05)}
-.mhd-faq-item summary{padding:20px 24px;list-style:none;cursor:pointer;font-weight:700;font-size:1.1rem;color:#0f172a;display:flex;justify-content:space-between;align-items:center;outline:none}
+.mhd-faq-item summary{padding:22px 28px;list-style:none;cursor:pointer;font-weight:700;font-size:1.1rem;color:#0f172a;display:flex;justify-content:space-between;align-items:center;outline:none}
 .mhd-faq-item summary::-webkit-details-marker{display:none}
-.mhd-faq-item summary::after{content:'';width:22px;height:22px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2310b981' stroke-width='3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E") no-repeat center;transition:transform 0.3s ease}
+.mhd-faq-item summary::after{content:'';width:20px;height:20px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2310b981' stroke-width='3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E") no-repeat center;transition:transform 0.4s cubic-bezier(0.4,0,0.2,1)}
 .mhd-faq-item[open] summary::after{transform:rotate(180deg)}
-.mhd-faq-answer{padding:0 24px 24px 24px;line-height:1.7;font-size:1rem;color:#475569;border-top:1px solid #f1f5f9;animation:mhdFadeIn 0.4s ease-out}
-.mhd-faq-answer p{margin:15px 0 0 0}
+.mhd-faq-content{padding:0 28px 25px 28px;line-height:1.7;font-size:1rem;color:#475569;border-top:1px solid #f1f5f9;animation:mhdFadeIn 0.4s ease-out}
+.mhd-faq-content p{margin:15px 0 0 0}
+.mhd-faq-content strong{color:#064e3b}
 @keyframes mhdFadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:640px){.mhd-faq-item summary{font-size:1rem;padding:18px 22px}.mhd-faq-title{font-size:1.6rem}}
 </style>`
 
 const WP_TABLE_CSS = `<style>
@@ -2221,7 +2223,7 @@ async function executePublish(
     }
 
     // Track FAQ CSS need
-    if (blockHtml.includes('mhd-faq-container') || blockHtml.includes('mhd-faq-item') || blockHtml.includes('faq-section') || blockHtml.includes('faq-item')) {
+    if (blockHtml.includes('mhd-faq-wrapper') || blockHtml.includes('mhd-faq-item') || blockHtml.includes('faq-section') || blockHtml.includes('faq-item')) {
       needsFaqCss = true
     }
 
