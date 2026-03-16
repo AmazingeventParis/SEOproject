@@ -893,6 +893,32 @@ async function executeWriteBlock(
     )
   }
 
+  // Post-process: enforce max 3 callouts per article — strip excess callouts
+  if (processedHtml.includes('expert-callout')) {
+    // Count existing callouts in previously written blocks
+    let existingCallouts = 0
+    for (let ci = 0; ci < blockIndex; ci++) {
+      const cb = contentBlocks[ci]
+      if (cb.content_html && (cb.status === 'written' || cb.status === 'approved')) {
+        const cm = cb.content_html.match(/class="expert-callout"/g)
+        if (cm) existingCallouts += cm.length
+      }
+    }
+    // Count callouts in this block
+    const thisBlockCallouts = (processedHtml.match(/class="expert-callout"/g) || []).length
+    if (existingCallouts + thisBlockCallouts > 3) {
+      // Remove excess callouts from this block (keep only what fits within limit)
+      const allowed = Math.max(0, 3 - existingCallouts)
+      if (allowed === 0) {
+        // Remove ALL callouts from this block
+        processedHtml = processedHtml.replace(
+          /<div\s+class="expert-callout"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/g,
+          ''
+        )
+      }
+    }
+  }
+
   // Update the specific block
   const updatedBlocks = [...contentBlocks]
   updatedBlocks[blockIndex] = {
@@ -1691,9 +1717,9 @@ Retourne UNIQUEMENT un JSON valide :
     const contentIdx = contentBlocksOnly.indexOf(block)
     if (contentIdx < lastThirdStart) continue
 
-    // Check if block is over-long (> 350 words in last third)
+    // Check if block is over-long (> 250 words in last third)
     const wordCount = block.word_count || countWords(block.content_html)
-    if (wordCount <= 350) continue
+    if (wordCount <= 250) continue
 
     // This block is in the last third AND too long — flag for condensation
     condensedCount++
@@ -1709,7 +1735,7 @@ Retourne UNIQUEMENT un JSON valide :
           const contentIdx = contentBlocksOnly.indexOf(b as ContentBlock)
           if (contentIdx < lastThirdStart) return false
           const wc = b.word_count || countWords(b.content_html)
-          return wc > 350
+          return wc > 250
         })
 
       if (blocksToCondense.length > 0) {
@@ -1718,7 +1744,7 @@ Retourne UNIQUEMENT un JSON valide :
 Ces blocs sont dans le DERNIER TIERS de l'article. Le lecteur a deja eu la reponse principale. Il faut aller a l'essentiel.
 
 ## REGLES DE CONDENSATION
-- Reduis chaque bloc a 200-300 mots maximum
+- Reduis chaque bloc a 150-250 mots maximum
 - Garde UNIQUEMENT les informations essentielles et les points cles
 - Supprime les phrases de contexte, les rappels, les developpements secondaires
 - Prefere les listes a puces aux longs paragraphes

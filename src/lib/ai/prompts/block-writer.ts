@@ -164,11 +164,13 @@ ${(() => {
 ${buildCalloutPromptTemplate(calloutStyle, persona.name, persona.role, persona.avatar_reference_url)}
 
 **Regles des encarts expert :**
+- MAXIMUM 3 encarts expert par article entier. ${(calloutStyleIndex ?? 0) >= 3 ? 'LIMITE ATTEINTE — NE GENERE AUCUN encart expert dans ce bloc.' : `Il y en a deja ${calloutStyleIndex ?? 0} dans les blocs precedents — il en reste ${3 - (calloutStyleIndex ?? 0)} maximum.`}
 - Le TITRE varie selon le contexte : "Mon avis", "L'astuce de ${persona.name}", "Mon conseil", "Ce que je recommande", "A retenir"
 - Contenu COURT : 2-4 phrases max, avis TRANCHE ou astuce ACTIONABLE
 - Le nom et role du persona sont affiches automatiquement — ne les repete pas dans le texte
 - Styles inline OBLIGATOIRES sur CHAQUE element (div, img, p, strong)
-- L'encart expert est ideal pour : avis personnel, retour d'experience, astuce pratique, mise en garde basee sur l'experience`
+- Reserve les encarts aux moments ESSENTIELS : avis tranche sur un sujet controverse, astuce pratique tres utile, mise en garde importante basee sur l'experience
+- NE PAS ajouter un encart si le contenu n'apporte pas un avis FORT ou une astuce VRAIMENT actionable`
 })()}
 
 ### Pour un format "table"
