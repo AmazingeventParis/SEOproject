@@ -2322,12 +2322,12 @@ async function executePublish(
     wpPostId = wpPost.id
     wpUrl = wpPost.link
   } else {
-    // Create new post — publish directly
+    // Create new post as draft (review before going live)
     const result = await createPost(article.site_id, {
       title: article.title || article.keyword,
       content: fullHtml,
       slug: article.slug || article.keyword.toLowerCase().replace(/\s+/g, '-'),
-      status: 'publish',
+      status: 'draft',
       excerpt,
       featured_media: heroMediaId,
       categories: categoryIds,
