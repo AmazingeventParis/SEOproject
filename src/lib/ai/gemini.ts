@@ -94,6 +94,15 @@ export async function callGemini(options: {
     }
   }
 
+  // Disable safety filters to avoid false positives on benign content
+  // (e.g. articles about body morphology, health topics, etc.)
+  config.safetySettings = [
+    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+  ]
+
   // Convert messages to chat history format
   const allMessages = options.messages
   const history = allMessages.slice(0, -1).map((m) => ({
@@ -125,6 +134,9 @@ export async function callGemini(options: {
     }
     if (!text) {
       const finishReason = result.candidates?.[0]?.finishReason || 'UNKNOWN'
+      const safetyRatings = result.candidates?.[0]?.safetyRatings
+      const safetyInfo = safetyRatings ? ` safetyRatings: ${JSON.stringify(safetyRatings)}` : ''
+      console.error(`[gemini] Reponse vide — finishReason: ${finishReason}, model: ${modelName}${safetyInfo}`)
       throw new Error(`Gemini n'a retourne aucun texte (finishReason: ${finishReason}, model: ${modelName})`)
     }
   }
@@ -216,6 +228,14 @@ export async function generateWithGemini(
   if (modelName.startsWith('gemini-3')) {
     config.thinkingConfig = { thinkingLevel: 'MEDIUM' }
   }
+
+  // Disable safety filters to avoid false positives
+  config.safetySettings = [
+    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+  ]
 
   const result = await client.models.generateContent({
     model: modelName,

@@ -88,7 +88,11 @@ function extractJSON<T = unknown>(raw: string): T {
     }
   }
 
-  throw new Error(`JSON invalide. Debut de la reponse IA : ${raw.substring(0, 300)}`)
+  // Check for common non-JSON responses (safety blocks, error messages)
+  if (/^(Blocked|Bad Request|Error|I cannot|I'm sorry|Je ne peux)/i.test(raw.trim())) {
+    throw new Error(`La reponse IA a ete bloquee ou est invalide. Debut : ${raw.substring(0, 200)}`)
+  }
+  throw new Error(`JSON invalide dans la reponse IA. Debut : ${raw.substring(0, 300)}`)
 }
 
 /**
