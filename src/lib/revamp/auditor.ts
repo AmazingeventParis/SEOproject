@@ -100,11 +100,14 @@ ${opKws || 'Aucun'}
   "newSectionsToAdd": [{ "heading": "...", "type": "h2", "insertAfterIndex": 2, "directive": "...", "keyIdeas": ["..."] }],
   "preservedLinks": [{ "url": "...", "anchorText": "...", "isInternal": true }],
   "preservedCTAs": ["texte du CTA..."],
-  "suggestedTitle": "Nouveau titre optimise ou null",
-  "suggestedMetaDescription": "Nouvelle meta description ou null"
+  "suggestedTitle": "Nouveau titre SEO optimise (55-65 caracteres, mot-cle en debut, accrocheur)",
+  "suggestedMetaDescription": "Meta description optimisee (140-155 caracteres, mot-cle inclus, incitation au clic, annee ${new Date().getFullYear()})"
 }
 
-overallScore = score de 0 a 100 de l'etat actuel de l'article (100 = excellent, pas besoin de revamp)`
+IMPORTANT : suggestedTitle et suggestedMetaDescription sont OBLIGATOIRES, ne jamais retourner null.
+- suggestedTitle : 55-65 caracteres, mot-cle "${keyword}" en debut, chiffres ou annee si pertinent
+- suggestedMetaDescription : 140-155 caracteres, mot-cle inclus, benefice clair, call-to-action implicite
+- overallScore = score de 0 a 100 de l'etat actuel de l'article (100 = excellent, pas besoin de revamp)`
 
   const response = await routeAI('analyze_serp', [
     { role: 'user', content: prompt },

@@ -122,6 +122,11 @@ export async function POST(
   // Build selected authority link for the article (used by block-writer)
   const selectedAuthorityLink = linkSuggestions?.selectedAuthority || null
 
+  // Extract meta data from audit
+  const auditData = updatedAudit as Record<string, unknown> | null
+  const suggestedTitle = (auditData?.suggestedTitle as string) || revamp.original_title
+  const suggestedMetaDesc = (auditData?.suggestedMetaDescription as string) || null
+
   // If no article_id exists, create a full article for the pipeline
   let articleId = revamp.article_id
   if (!articleId) {
@@ -132,7 +137,9 @@ export async function POST(
         keyword: revamp.original_keyword,
         search_intent: searchIntent,
         status: 'writing',
-        title: revamp.original_title,
+        title: suggestedTitle,
+        seo_title: suggestedTitle,
+        meta_description: suggestedMetaDesc,
         wp_post_id: revamp.wp_post_id,
         content_blocks: enrichedBlocks,
         persona_id: personaId,
@@ -156,6 +163,9 @@ export async function POST(
       .from('seo_articles')
       .update({
         search_intent: searchIntent,
+        title: suggestedTitle,
+        seo_title: suggestedTitle,
+        meta_description: suggestedMetaDesc,
         content_blocks: enrichedBlocks,
         persona_id: personaId,
         year_tag: new Date().getFullYear(),

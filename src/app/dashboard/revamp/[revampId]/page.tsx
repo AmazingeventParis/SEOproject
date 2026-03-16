@@ -491,11 +491,24 @@ export default function RevampDetailPage() {
                 </div>
               )}
 
-              {/* Suggested title */}
-              {revamp.audit.suggestedTitle && (
-                <div className="rounded-lg bg-muted p-3">
-                  <p className="text-sm font-medium">Titre suggere :</p>
-                  <p className="text-sm mt-1">{revamp.audit.suggestedTitle}</p>
+              {/* Suggested Meta Data */}
+              {(revamp.audit.suggestedTitle || revamp.audit.suggestedMetaDescription) && (
+                <div className="space-y-3 rounded-lg bg-muted p-4">
+                  <p className="text-sm font-semibold">Meta-donnees suggerees</p>
+                  {revamp.audit.suggestedTitle && (
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Titre SEO (balise title)</p>
+                      <p className="text-sm font-medium">{revamp.audit.suggestedTitle}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{revamp.audit.suggestedTitle.length} caracteres</p>
+                    </div>
+                  )}
+                  {revamp.audit.suggestedMetaDescription && (
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Meta description</p>
+                      <p className="text-sm">{revamp.audit.suggestedMetaDescription}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{revamp.audit.suggestedMetaDescription.length} caracteres</p>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
