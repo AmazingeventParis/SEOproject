@@ -8,7 +8,6 @@ import { getServerClient } from "@/lib/supabase/client";
 // Allow up to 120s for transcript fetch + AI extraction
 export const maxDuration = 120;
 
-
 const youtubeImportSchema = z.object({
   url: z.string().url("URL invalide"),
   transcript: z.string().optional(),
@@ -45,7 +44,12 @@ function extractVideoId(url: string): string | null {
   return null;
 }
 
-async function fetchTranscriptWithFallback(videoId: string): Promise<string | null> {
+// ---- Transcript fetching: 3 methods for maximum reliability ----
+
+/**
+ * Method A: youtube-transcript library (works for most videos)
+ */
+async function fetchViaLibrary(videoId: string): Promise<string | null> {
   for (const lang of LANGUAGES_TO_TRY) {
     try {
       const segments = await YoutubeTranscript.fetchTranscript(videoId, { lang });
@@ -55,19 +59,156 @@ async function fetchTranscriptWithFallback(videoId: string): Promise<string | nu
       // Try next language
     }
   }
-
   // Last attempt: no language specified
   try {
     const segments = await YoutubeTranscript.fetchTranscript(videoId);
     const text = segments.map((s) => s.text).join(" ");
     if (text.trim().length > 50) return text;
   } catch {
-    // Transcript not available
+    // Not available via library
   }
-
   return null;
 }
 
+/**
+ * Method B: Direct YouTube innertube API (more reliable, bypasses library issues)
+ * Fetches the video page HTML, extracts captions track URL, downloads captions XML
+ */
+async function fetchViaInnertube(videoId: string): Promise<string | null> {
+  try {
+    // Fetch video page to extract captions data
+    const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+      },
+    });
+    if (!pageRes.ok) return null;
+    const pageHtml = await pageRes.text();
+
+    // Extract captions data from ytInitialPlayerResponse
+    const playerMatch = pageHtml.match(/ytInitialPlayerResponse\s*=\s*(\{[\s\S]+?\});/);
+    if (!playerMatch) return null;
+
+    // Parse just enough to find captions — use regex to avoid parsing huge JSON
+    const captionsSection = pageHtml.match(/"captionTracks"\s*:\s*(\[[\s\S]+?\])/);
+    if (!captionsSection) return null;
+
+    let captionTracks: { baseUrl: string; languageCode: string }[];
+    try {
+      captionTracks = JSON.parse(captionsSection[1]);
+    } catch {
+      return null;
+    }
+
+    if (!captionTracks || captionTracks.length === 0) return null;
+
+    // Find best language track
+    let track = captionTracks.find((t) => t.languageCode === "fr");
+    if (!track) track = captionTracks.find((t) => t.languageCode?.startsWith("fr"));
+    if (!track) track = captionTracks.find((t) => t.languageCode === "en");
+    if (!track) track = captionTracks[0]; // Any available
+
+    if (!track?.baseUrl) return null;
+
+    // Fetch the captions XML
+    const captionRes = await fetch(track.baseUrl);
+    if (!captionRes.ok) return null;
+    const captionXml = await captionRes.text();
+
+    // Parse XML: extract text from <text> elements
+    const textSegments: string[] = [];
+    const textRegex = /<text[^>]*>([\s\S]*?)<\/text>/g;
+    let textMatch: RegExpExecArray | null;
+    while ((textMatch = textRegex.exec(captionXml)) !== null) {
+      // Decode HTML entities
+      const decoded = textMatch[1]
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&apos;/g, "'")
+        .replace(/<[^>]*>/g, "") // strip any nested tags
+        .trim();
+      if (decoded) textSegments.push(decoded);
+    }
+
+    const text = textSegments.join(" ");
+    return text.length > 50 ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Method C: YouTube oEmbed + innertube API with consent bypass
+ * Some videos require cookie consent — this tries with a consent cookie
+ */
+async function fetchViaConsentBypass(videoId: string): Promise<string | null> {
+  try {
+    const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Cookie": "CONSENT=YES+cb.20210328-17-p0.en+FX+; SOCS=CAISNQgDEitib3FfaWRlbnRpdHlmcm9udGVuZHVpc2VydmVyXzIwMjMwODI5LjA3X3AxGgJmciADGgYIgJnZpwY",
+      },
+      redirect: "follow",
+    });
+    if (!pageRes.ok) return null;
+    const pageHtml = await pageRes.text();
+
+    // Try to extract captions from timedtext API URL in the page
+    const timedTextMatch = pageHtml.match(/"baseUrl"\s*:\s*"(https:\/\/www\.youtube\.com\/api\/timedtext[^"]+)"/);
+    if (!timedTextMatch) return null;
+
+    const timedTextUrl = timedTextMatch[1].replace(/\\u0026/g, "&");
+
+    const captionRes = await fetch(timedTextUrl);
+    if (!captionRes.ok) return null;
+    const captionXml = await captionRes.text();
+
+    const textSegments: string[] = [];
+    const textRegex = /<text[^>]*>([\s\S]*?)<\/text>/g;
+    let textMatch: RegExpExecArray | null;
+    while ((textMatch = textRegex.exec(captionXml)) !== null) {
+      const decoded = textMatch[1]
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&apos;/g, "'")
+        .replace(/<[^>]*>/g, "")
+        .trim();
+      if (decoded) textSegments.push(decoded);
+    }
+
+    const text = textSegments.join(" ");
+    return text.length > 50 ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Master transcript fetcher: tries all 3 methods in order
+ */
+async function fetchTranscriptWithFallback(videoId: string): Promise<string | null> {
+  // Method A: youtube-transcript library
+  const libResult = await fetchViaLibrary(videoId);
+  if (libResult) return libResult;
+
+  // Method B: Direct innertube API scraping
+  const innertubeResult = await fetchViaInnertube(videoId);
+  if (innertubeResult) return innertubeResult;
+
+  // Method C: Consent bypass scraping
+  const consentResult = await fetchViaConsentBypass(videoId);
+  if (consentResult) return consentResult;
+
+  return null;
+}
 
 // ---- Gemini video fallback (free tier) when no transcript available ----
 
@@ -119,11 +260,8 @@ function extractJsonFromText(text: string): string {
     if (depth === 0) return cleaned.slice(start, i + 1);
   }
 
-  // JSON was truncated (maxOutputTokens reached) — attempt repair
+  // JSON was truncated — attempt repair
   let truncated = cleaned.slice(start);
-
-  // If we're inside a string value, close it
-  // Count unescaped quotes to determine if we're inside a string
   let inString = false;
   for (let i = 0; i < truncated.length; i++) {
     if (truncated[i] === '\\') { i++; continue; }
@@ -131,21 +269,14 @@ function extractJsonFromText(text: string): string {
   }
   if (inString) truncated += '"';
 
-  // Close any open objects/arrays by removing the last incomplete entry
-  // and closing brackets
-  // Find the last complete nugget entry (last '}' that closes a nugget object)
   const lastCompleteObj = truncated.lastIndexOf("}");
   if (lastCompleteObj > 0) {
-    // Take up to and including the last complete object
     let repaired = truncated.slice(0, lastCompleteObj + 1);
-    // Remove trailing comma if present
     repaired = repaired.replace(/,\s*$/, "");
-    // Close the nuggets array and root object
     repaired += "\n]\n}";
     return repaired;
   }
 
-  // Last resort: return what we have and let JSON.parse fail with a clearer error
   return truncated;
 }
 
@@ -205,7 +336,7 @@ export async function POST(request: NextRequest) {
       );
       nuggets = parseNuggetsFromAIResponse(aiResponse.content);
     } else {
-      // Method 2: Try auto-transcript first
+      // Method 2: Try auto-transcript (3 methods: library → innertube → consent bypass)
       const transcript = await fetchTranscriptWithFallback(videoId);
 
       if (transcript) {
@@ -235,7 +366,8 @@ export async function POST(request: NextRequest) {
             );
           }
           throw new Error(
-            "Aucune transcription automatique disponible et l'analyse video a echoue. " +
+            "Aucune transcription automatique disponible et l'analyse video a echoue (" +
+            videoMsg.slice(0, 100) + "). " +
             "Copiez la transcription depuis YouTube (bouton \"...\" → \"Afficher la transcription\") " +
             "et collez-la dans le champ prevu."
           );
