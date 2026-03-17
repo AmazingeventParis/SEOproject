@@ -24,6 +24,7 @@ export type SearchIntent =
   | 'discover'
   | 'lead_gen'
   | 'informational'
+  | 'opinion'
 
 // ---- Internal link target (used in content blocks for strategic linking) ----
 

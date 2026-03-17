@@ -2,48 +2,12 @@ import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
 const MIGRATION_SQL = `
-ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS title_suggestions jsonb DEFAULT NULL;
-ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS seo_title text DEFAULT NULL;
-ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS authority_link_suggestions jsonb DEFAULT NULL;
-ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS selected_authority_link jsonb DEFAULT NULL;
-ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS theme_color text DEFAULT NULL;
-ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS money_page_url text DEFAULT NULL;
-ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS money_page_description text DEFAULT NULL;
-ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS authority_link_suggestions jsonb DEFAULT NULL;
-ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS selected_authority_link jsonb DEFAULT NULL;
-ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS year_tag INTEGER DEFAULT NULL;
-ALTER TABLE seo_nuggets DROP CONSTRAINT IF EXISTS seo_nuggets_source_type_check;
-ALTER TABLE seo_nuggets ADD CONSTRAINT seo_nuggets_source_type_check
-  CHECK (source_type IN ('vocal','tweet','note','url','observation','youtube'));
-ALTER TABLE seo_articles ADD COLUMN IF NOT EXISTS hero_image_url text DEFAULT NULL;
-ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS blog_path text DEFAULT NULL;
-ALTER TABLE seo_revamps ADD COLUMN IF NOT EXISTS link_suggestions jsonb DEFAULT NULL;
-
--- Persona multi-sites: pivot table
-CREATE TABLE IF NOT EXISTS seo_persona_sites (
-  persona_id uuid NOT NULL REFERENCES seo_personas(id) ON DELETE CASCADE,
-  site_id    uuid NOT NULL REFERENCES seo_sites(id) ON DELETE CASCADE,
-  created_at timestamptz DEFAULT now(),
-  PRIMARY KEY (persona_id, site_id)
-);
-
--- Migrate existing site_id data to pivot table
-INSERT INTO seo_persona_sites (persona_id, site_id)
-SELECT id, site_id FROM seo_personas WHERE site_id IS NOT NULL
-ON CONFLICT DO NOTHING;
-
--- Make site_id nullable (kept for backward compat, no longer used)
-ALTER TABLE seo_personas ALTER COLUMN site_id DROP NOT NULL;
+-- Add 'opinion' to search_intent enum
+ALTER TYPE seo_search_intent ADD VALUE IF NOT EXISTS 'opinion';
 `;
 
-// POST /api/migrate — Run pending schema migrations (dev only)
+// POST /api/migrate — Run pending schema migrations
 export async function POST() {
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json(
-      { status: "error", message: "Migration route disabled in production. Run SQL manually in Supabase." },
-      { status: 403 }
-    );
-  }
   const dbPassword = process.env.POSTGRES_PASSWORD;
 
   if (!dbPassword) {

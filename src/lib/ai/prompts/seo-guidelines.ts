@@ -579,6 +579,42 @@ export const INTENT_STRATEGIES: Record<string, { plan: string; writing: string; 
 - FAQ orientee objections (leve les freins) ?`,
   },
 
+  opinion: {
+    plan: `Strategie "opinion" — Avis critique independant, ton tranche :
+- Bloc intro (OBLIGATOIRE, type "paragraph", heading null) : pose la question controversee en 100-140 mots, interpelle le lecteur ("Faut-il vraiment... ?", "Est-ce une arnaque ?"), contient le mot-cle principal
+- Titre H1 PROVOCATEUR : question directe, affirmation a contre-courant ou promesse de verite ("Tuiles solaires : fausse bonne idee ?", "[Produit] : on vous dit TOUT ce qu'on ne vous dit pas", "[Sujet] : pourquoi je deconseille en 2026")
+- Premier H2 = VERDICT FRANC des le depart, pas de suspense. Le persona prend position clairement ("Mon avis honnete apres X mois", "Ce que personne ne dit sur [sujet]")
+- H2 suivants = arguments structures POUR et CONTRE avec preuves, chiffres, vecu terrain
+- Un H2 "Les points qui fachent" ou "Ce qu'on ne vous dit pas" obligatoire — c'est le coeur de la valeur ajoutee
+- Un H2 "A qui ca s'adresse vraiment ?" pour nuancer et etre honnete
+- Ton critique mais JUSTE : pas de demolissage gratuit, chaque critique est argumentee avec des faits ou du vecu
+- FAQ orientee doutes et objections courantes
+- 1800-2800 mots
+- format_hint : "mixed" (prose + listes + tableaux pour comparer)
+- generate_image sur les H2 cles (verdict, points qui fachent)`,
+    writing: `Strategie d'ecriture "opinion" — Objectif : avis critique independant qui inspire confiance :
+- Le persona parle en son nom propre, avec son VECU et ses EXPERIENCES concretes (la bio du persona est ta source principale)
+- Ton DIRECT et TRANCHE : prends position clairement, pas de "ca depend" mou. Dis "je deconseille" ou "je recommande" avec conviction
+- Style conversationnel expert : comme un ami qui s'y connait et qui te dit la verite sans filtre
+- Arguments TOUJOURS etayes : chiffres, retours terrain, comparaisons concretes, cout reel vs cout annonce
+- Formulations percutantes : "La realite, c'est que...", "Ce qu'on oublie de vous dire...", "Sur le papier c'est seduisant, mais en pratique..."
+- Avantages ET inconvenients traites avec la MEME honnetete — pas de biais commercial
+- Si le produit/sujet est bon : le dire clairement MAIS avec les reserves
+- Si le produit/sujet est mauvais : le dire clairement MAIS reconnaitre les cas ou ca peut convenir
+- Listes "Pour" / "Contre" avec des points concrets (pas des generalites)
+- Mets en gras les verdicts forts et les chiffres cles
+- ZERO langue de bois, ZERO formule corporate, ZERO "il est important de noter que"`,
+    critique: `Criteres specifiques "opinion" :
+- Le persona prend-il position clairement (verdict tranche, pas tiede) ?
+- Les critiques sont-elles argumentees avec des faits, chiffres ou vecu ?
+- Y a-t-il un equilibre honnetete (avantages ET inconvenients traites) ?
+- Le ton est-il authentique et expert (pas un copier-coller marketing) ?
+- Section "points qui fachent" / "ce qu'on ne vous dit pas" presente ?
+- Section "a qui ca s'adresse vraiment" presente ?
+- Le vecu terrain du persona est-il perceptible dans les arguments ?
+- Les recommandations sont-elles nuancees par profil utilisateur ?`,
+  },
+
   informational: {
     plan: `Strategie "informational" — Guide pedagogique / reference :
 - Bloc intro (OBLIGATOIRE, type "paragraph", heading null) : pose le sujet de maniere accessible en 100-140 mots, contient le mot-cle principal

@@ -28,6 +28,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 const SEARCH_INTENT_OPTIONS: { value: SearchIntent; label: string }[] = [
   { value: "traffic", label: "Trafic" },
   { value: "review", label: "Test / Avis" },
+  { value: "opinion", label: "Avis critique / Opinion" },
   { value: "comparison", label: "Comparatif" },
   { value: "discover", label: "Decouverte" },
   { value: "lead_gen", label: "Generation de leads" },
