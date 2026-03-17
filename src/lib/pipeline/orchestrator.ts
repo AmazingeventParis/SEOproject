@@ -923,6 +923,9 @@ async function executeWriteBlock(
     }
   }
 
+  // Repair any truncated HTML tags before saving
+  processedHtml = repairTruncatedHtml(processedHtml)
+
   // Update the specific block
   const updatedBlocks = [...contentBlocks]
   updatedBlocks[blockIndex] = {
@@ -2262,6 +2265,9 @@ async function executePublish(
     fullHtml = stripElementorFromHtml(fullHtml)
   }
 
+  // Repair any truncated HTML tables/tags before publishing
+  fullHtml = repairTruncatedHtml(fullHtml)
+
   // 2. Extract intro as excerpt (first paragraph block without heading)
   const introBlock = contentBlocks.find(b => b.type === 'paragraph' && !b.heading && b.content_html)
   const excerpt = introBlock
@@ -2589,6 +2595,48 @@ async function executeRefresh(
 }
 
 // ---- Helpers ----
+
+/**
+ * Repair truncated HTML: ensure all opened tags (<table>, <thead>, <tbody>, <tr>, <th>, <td>, <ul>, <ol>, <li>, <div>, <details>, <summary>)
+ * are properly closed. Also removes completely broken/truncated tags (tag that ends mid-attribute).
+ */
+function repairTruncatedHtml(html: string): string {
+  // 1. Remove any tag that is clearly truncated (opened but never closed with >)
+  //    e.g. <table style="width:100%"><thead><tr><th style="background:#2D5A27;color:#FFFFFF
+  //    This pattern finds the last < that has no matching >
+  const lastOpen = html.lastIndexOf('<')
+  if (lastOpen !== -1) {
+    const lastClose = html.indexOf('>', lastOpen)
+    if (lastClose === -1) {
+      // The HTML ends with an unclosed tag — truncate it
+      html = html.substring(0, lastOpen).trim()
+    }
+  }
+
+  // 2. Count open/close for block-level elements and close any unclosed ones
+  const pairedTags = ['table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'ul', 'ol', 'li', 'div', 'details', 'summary', 'figure', 'figcaption']
+  const openCounts: Record<string, number> = {}
+
+  for (const tag of pairedTags) {
+    const openMatches = html.match(new RegExp(`<${tag}[\\s>]`, 'gi'))
+    const closeMatches = html.match(new RegExp(`</${tag}>`, 'gi'))
+    const opens = openMatches ? openMatches.length : 0
+    const closes = closeMatches ? closeMatches.length : 0
+    openCounts[tag] = opens - closes
+  }
+
+  // Close unclosed tags in reverse nesting order (inner first)
+  const closingOrder = ['figcaption', 'figure', 'summary', 'li', 'td', 'th', 'tr', 'tfoot', 'tbody', 'thead', 'table', 'ol', 'ul', 'div', 'details']
+  let suffix = ''
+  for (const tag of closingOrder) {
+    const unclosed = openCounts[tag] || 0
+    for (let i = 0; i < unclosed; i++) {
+      suffix += `</${tag}>`
+    }
+  }
+
+  return html + suffix
+}
 
 function countWords(html: string): number {
   const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
