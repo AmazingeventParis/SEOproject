@@ -35,7 +35,8 @@ CREATE TYPE seo_search_intent AS ENUM (
   'comparison',
   'discover',
   'lead_gen',
-  'informational'
+  'informational',
+  'opinion'
 );
 
 -- ---------------------------------------------------------------------------

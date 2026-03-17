@@ -6,8 +6,14 @@ const MIGRATION_SQL = `
 ALTER TYPE seo_search_intent ADD VALUE IF NOT EXISTS 'opinion';
 `;
 
-// POST /api/migrate — Run pending schema migrations
+// POST /api/migrate — Run pending schema migrations (dev only)
 export async function POST() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { status: "error", message: "Migration route disabled in production. Run SQL manually in Supabase." },
+      { status: 403 }
+    );
+  }
   const dbPassword = process.env.POSTGRES_PASSWORD;
 
   if (!dbPassword) {
