@@ -47,7 +47,7 @@ const updateArticleSchema = z.object({
   persona_id: z.string().uuid().nullable().optional(),
   silo_id: z.string().uuid().nullable().optional(),
   search_intent: z
-    .enum(["traffic", "review", "comparison", "discover", "lead_gen", "informational"])
+    .enum(["traffic", "review", "comparison", "discover", "lead_gen", "informational", "opinion"])
     .optional(),
   word_count: z.number().optional(),
   json_ld: z.record(z.string(), z.unknown()).nullable().optional(),

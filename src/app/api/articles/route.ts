@@ -20,7 +20,7 @@ const createArticleSchema = z.object({
   site_id: z.string().uuid("site_id doit etre un UUID valide"),
   keyword: z.string().min(1, "Le mot-cle est requis"),
   search_intent: z
-    .enum(["traffic", "review", "comparison", "discover", "lead_gen", "informational"])
+    .enum(["traffic", "review", "comparison", "discover", "lead_gen", "informational", "opinion"])
     .optional()
     .default("traffic"),
   persona_id: z.string().uuid("persona_id doit etre un UUID valide").nullable().optional(),
