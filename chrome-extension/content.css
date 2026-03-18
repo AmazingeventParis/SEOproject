@@ -1,0 +1,260 @@
+/* SEO Nugget Grabber - Overlay styles */
+#sng-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 420px;
+  max-height: 100vh;
+  background: #fff;
+  border-left: 3px solid #7c3aed;
+  box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+  z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  color: #1e293b;
+  overflow-y: auto;
+  transition: transform 0.3s ease;
+}
+
+#sng-overlay.sng-hidden {
+  transform: translateX(100%);
+}
+
+#sng-overlay * {
+  box-sizing: border-box;
+}
+
+.sng-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.sng-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.sng-close {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.sng-body {
+  padding: 16px;
+}
+
+.sng-field {
+  margin-bottom: 14px;
+}
+
+.sng-field label {
+  display: block;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.sng-field textarea,
+.sng-field input,
+.sng-field select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1e293b;
+  background: #f8fafc;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.sng-field textarea:focus,
+.sng-field input:focus,
+.sng-field select:focus {
+  border-color: #7c3aed;
+  background: #fff;
+}
+
+.sng-field textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.sng-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.sng-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: #ede9fe;
+  color: #6d28d9;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.sng-tag button {
+  background: none;
+  border: none;
+  color: #6d28d9;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  line-height: 1;
+}
+
+.sng-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  width: 100%;
+}
+
+.sng-btn-primary {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  color: #fff;
+}
+
+.sng-btn-primary:hover {
+  background: linear-gradient(135deg, #6d28d9, #5b21b6);
+}
+
+.sng-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sng-btn-secondary {
+  background: #f1f5f9;
+  color: #475569;
+  margin-top: 8px;
+}
+
+.sng-btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+.sng-status {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.sng-status.success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.sng-status.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.sng-status.loading {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+/* Nugget preview cards for AI extraction */
+.sng-nugget-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: #fafafa;
+  position: relative;
+}
+
+.sng-nugget-card.selected {
+  border-color: #7c3aed;
+  background: #faf5ff;
+}
+
+.sng-nugget-card label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  color: #1e293b;
+}
+
+.sng-nugget-card input[type="checkbox"] {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  accent-color: #7c3aed;
+  flex-shrink: 0;
+}
+
+.sng-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 16px 0;
+}
+
+.sng-count {
+  text-align: center;
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 12px;
+}
+
+/* Toast notification */
+#sng-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 12px 20px;
+  background: #166534;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  z-index: 2147483647;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  transition: opacity 0.3s, transform 0.3s;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+#sng-toast.sng-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
