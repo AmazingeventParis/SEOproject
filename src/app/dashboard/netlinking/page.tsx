@@ -238,6 +238,24 @@ export default function NetlinkingPage() {
     }
   };
 
+  // Apply recommendation to opportunity (set target_keyword + target_page)
+  const applyRecommendation = async (vendorDomain: string, targetKeyword: string, targetPage: string) => {
+    const opp = opportunities.find(o => o.vendor_domain === vendorDomain);
+    if (!opp) return;
+    try {
+      const res = await fetch(`/api/netlinking/opportunities/${opp.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_keyword: targetKeyword, target_page: targetPage }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      toast({ title: "Recommandation appliquee", description: `${vendorDomain} → "${targetKeyword}"` });
+      loadData();
+    } catch (e) {
+      toast({ title: "Erreur", description: e instanceof Error ? e.message : "Erreur", variant: "destructive" });
+    }
+  };
+
   // AI Recommendation
   const runRecommendation = async () => {
     setRecommendLoading(true);
@@ -431,6 +449,9 @@ export default function NetlinkingPage() {
                               <p><span className="text-muted-foreground">Mot-cle :</span> <span className="font-medium text-purple-700">{item.recommended_content.target_keyword}</span></p>
                               <p><span className="text-muted-foreground">Page cible :</span> {item.recommended_content.target_page}</p>
                               <p><span className="text-muted-foreground">Ancre :</span> {item.recommended_content.anchor_type} — &quot;{item.recommended_content.anchor_text_suggestion}&quot;</p>
+                              <Button size="sm" className="mt-2 bg-purple-600 hover:bg-purple-700 text-white" onClick={() => applyRecommendation(item.vendor_domain, item.recommended_content.target_keyword, item.recommended_content.target_page)}>
+                                <Zap className="w-3 h-3 mr-1" /> Appliquer cette reco
+                              </Button>
                             </div>
                             {item.risks.length > 0 && (
                               <div className="p-2 bg-red-50/50 rounded border border-red-100">
@@ -533,11 +554,15 @@ export default function NetlinkingPage() {
                             <Button size="sm" variant="ghost" onClick={() => analyzeOpportunity(opp.id)} disabled={analyzingId === opp.id} title="Analyser">
                               {analyzingId === opp.id ? "..." : <Brain className="w-4 h-4" />}
                             </Button>
-                            {opp.target_page && opp.target_keyword && (
-                              <Button size="sm" variant="ghost" onClick={() => generateArticle(opp.id)} disabled={generatingId === opp.id} title="Generer article">
-                                {generatingId === opp.id ? "..." : <FileText className="w-4 h-4" />}
-                              </Button>
-                            )}
+                            <Button size="sm" variant="ghost" onClick={() => {
+                              if (!opp.target_page || !opp.target_keyword) {
+                                toast({ title: "Mot-cle requis", description: "Lancez d'abord la Recommandation IA puis cliquez 'Appliquer cette reco' pour definir le mot-cle cible.", variant: "destructive" });
+                                return;
+                              }
+                              generateArticle(opp.id);
+                            }} disabled={generatingId === opp.id} title={opp.target_keyword ? `Generer article — ${opp.target_keyword}` : "Definissez d'abord le mot-cle cible"}>
+                              {generatingId === opp.id ? "..." : <FileText className={`w-4 h-4 ${!opp.target_keyword ? "opacity-40" : ""}`} />}
+                            </Button>
                             <CsvImportDialog opportunityId={opp.id} vendorDomain={opp.vendor_domain} onImported={loadData} />
                             <Button size="sm" variant="ghost" className="text-red-500" onClick={() => deleteOpportunity(opp.id)} title="Supprimer">
                               <Trash2 className="w-4 h-4" />
