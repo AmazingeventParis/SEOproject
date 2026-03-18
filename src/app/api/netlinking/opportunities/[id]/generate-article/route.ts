@@ -12,16 +12,20 @@ interface RouteContext {
 export async function POST(_request: NextRequest, { params }: RouteContext) {
   const supabase = getServerClient();
 
-  const { data: opp, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: oppRaw, error } = await supabase
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .from("seo_link_opportunities" as any)
     .select("*, seo_sites!seo_link_opportunities_site_id_fkey(name, domain, niche)")
     .eq("id", params.id)
     .single();
 
-  if (error || !opp) {
+  if (error || !oppRaw) {
     return NextResponse.json({ error: "Opportunite non trouvee" }, { status: 404 });
   }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const opp = oppRaw as any;
 
   if (!opp.target_page || !opp.target_keyword) {
     return NextResponse.json({ error: "target_page et target_keyword sont requis" }, { status: 422 });
@@ -30,11 +34,14 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
   const site = opp.seo_sites as { name: string; domain: string; niche: string | null } | null;
 
   // Check existing anchor distribution from purchases
-  const { data: purchases } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: purchasesRaw } = await supabase
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .from("seo_link_purchases" as any)
     .select("anchor_type")
     .eq("site_id", opp.site_id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const purchases = purchasesRaw as any[];
 
   let anchorProfile: { exact: number; broad: number; brand: number } | undefined;
   if (purchases && purchases.length > 0) {

@@ -24,7 +24,8 @@ export async function POST(request: NextRequest) {
   }
 
   // Fetch latest profile for the site
-  const { data: profile } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: profileRaw } = await supabase
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .from("seo_link_profiles" as any)
     .select("*")
@@ -32,6 +33,8 @@ export async function POST(request: NextRequest) {
     .order("snapshot_date", { ascending: false })
     .limit(1)
     .single();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const profile = profileRaw as any;
 
   // Fetch site info
   const { data: site } = await supabase

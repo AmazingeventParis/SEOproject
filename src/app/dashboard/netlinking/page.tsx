@@ -372,7 +372,7 @@ export default function NetlinkingPage() {
                                   </div>
                                 )}
                                 {safetyAlert && <p className="text-xs text-red-600 mt-2">{safetyAlert}</p>}
-                                {analysis?.impact_simulation && (
+                                {!!analysis?.impact_simulation && (
                                   <div className="mt-2 p-2 bg-blue-50 rounded text-xs">
                                     <p className="font-semibold">Simulation d&apos;impact :</p>
                                     <p>{(analysis.impact_simulation as Record<string, unknown>).rationale as string}</p>
@@ -382,7 +382,7 @@ export default function NetlinkingPage() {
                               <div className="space-y-2">
                                 {opp.target_page && <p className="text-xs"><span className="font-semibold">Cible :</span> {opp.target_page}</p>}
                                 {opp.niche && <p className="text-xs"><span className="font-semibold">Niche vendeur :</span> {opp.niche}</p>}
-                                {analysis?.topical_rationale && <p className="text-xs"><span className="font-semibold">Pertinence :</span> {analysis.topical_rationale as string}</p>}
+                                {!!analysis?.topical_rationale && <p className="text-xs"><span className="font-semibold">Pertinence :</span> {String(analysis.topical_rationale)}</p>}
                                 {opp.vendor_keywords.length > 0 && (
                                   <p className="text-xs text-muted-foreground">{opp.vendor_keywords.length} mots-cles Semrush importes</p>
                                 )}

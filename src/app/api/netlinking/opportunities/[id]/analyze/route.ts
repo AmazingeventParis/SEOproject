@@ -15,17 +15,20 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
   const supabase = getServerClient();
 
   // Fetch opportunity
-  const { data: opp, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: oppRaw, error } = await supabase
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .from("seo_link_opportunities" as any)
     .select("*, seo_sites!seo_link_opportunities_site_id_fkey(name, domain, niche)")
     .eq("id", params.id)
     .single();
 
-  if (error || !opp) {
+  if (error || !oppRaw) {
     return NextResponse.json({ error: "Opportunite non trouvee" }, { status: 404 });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const opp = oppRaw as any;
   const site = opp.seo_sites as { name: string; domain: string; niche: string | null } | null;
   const vendorKeywords = (opp.vendor_keywords || []) as VendorKeyword[];
 
