@@ -13,7 +13,7 @@ import { AddOpportunityDialog } from "@/components/netlinking/add-opportunity-di
 import { CsvImportDialog } from "@/components/netlinking/csv-import-dialog";
 import {
   Shield, TrendingUp, Target, Brain, FileText,
-  Sparkles, ExternalLink, Trash2, Copy, Zap,
+  Sparkles, ExternalLink, Trash2, Copy, Zap, CheckCircle,
 } from "lucide-react";
 
 interface Site { id: string; name: string; domain: string; niche: string | null }
@@ -232,6 +232,33 @@ export default function NetlinkingPage() {
       console.log("[netlinking] saveProfile response:", res.status, JSON.stringify(json));
       if (!res.ok) throw new Error(json.error + (json.details ? " — " + JSON.stringify(json.details) : ""));
       toast({ title: "Profil sauvegarde" });
+      loadData();
+    } catch (e) {
+      toast({ title: "Erreur", description: e instanceof Error ? e.message : "Erreur", variant: "destructive" });
+    }
+  };
+
+  // Validate purchase — create purchase from opportunity
+  const validatePurchase = async (opp: Opportunity) => {
+    if (!confirm(`Valider l'achat du lien sur ${opp.vendor_domain} pour ${opp.price}€ ?`)) return;
+    try {
+      const res = await fetch("/api/netlinking/purchases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          opportunity_id: opp.id,
+          site_id: opp.site_id,
+          vendor_domain: opp.vendor_domain,
+          price_paid: opp.price,
+          currency: "EUR",
+          target_page: opp.target_page,
+          anchor_text: opp.target_keyword,
+          anchor_type: "broad",
+          do_follow: true,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      toast({ title: "Achat valide", description: `${opp.vendor_domain} — ${opp.price}€` });
       loadData();
     } catch (e) {
       toast({ title: "Erreur", description: e instanceof Error ? e.message : "Erreur", variant: "destructive" });
@@ -563,6 +590,11 @@ export default function NetlinkingPage() {
                             }} disabled={generatingId === opp.id} title={opp.target_keyword ? `Generer article — ${opp.target_keyword}` : "Definissez d'abord le mot-cle cible"}>
                               {generatingId === opp.id ? "..." : <FileText className={`w-4 h-4 ${!opp.target_keyword ? "opacity-40" : ""}`} />}
                             </Button>
+                            {opp.status !== "purchased" && (
+                              <Button size="sm" variant="ghost" className="text-green-600" onClick={() => validatePurchase(opp)} title="Valider l'achat">
+                                <CheckCircle className="w-4 h-4" />
+                              </Button>
+                            )}
                             <CsvImportDialog opportunityId={opp.id} vendorDomain={opp.vendor_domain} onImported={loadData} />
                             <Button size="sm" variant="ghost" className="text-red-500" onClick={() => deleteOpportunity(opp.id)} title="Supprimer">
                               <Trash2 className="w-4 h-4" />
