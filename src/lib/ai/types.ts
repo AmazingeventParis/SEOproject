@@ -20,6 +20,8 @@ export type AITask =
   | 'generate_table'              // Convert selected text into a responsive HTML table -> Gemini Flash
   | 'optimize_blocks'             // Auto-optimize content blocks based on critique issues -> Gemini Pro
   | 'check_persona_consistency'   // Check persona voice consistency across blocks -> Gemini Flash
+  | 'analyze_link_gap'             // Netlinking gap analysis -> Gemini Flash
+  | 'generate_netlinking_article'  // Generate netlinking article -> Gemini Pro
 
 export interface AIMessage {
   role: 'user' | 'assistant' | 'system'

@@ -121,6 +121,19 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     temperature: 0.2,
     jsonMode: true,
   },
+  analyze_link_gap: {
+    provider: 'google',
+    model: 'gemini-3-flash-preview',
+    maxTokens: 4096,
+    temperature: 0.3,
+    jsonMode: true,
+  },
+  generate_netlinking_article: {
+    provider: 'google',
+    model: 'gemini-3.1-pro-preview',
+    maxTokens: 8192,
+    temperature: 0.7,
+  },
 }
 
 // ---- Cross-provider fallback map ----
