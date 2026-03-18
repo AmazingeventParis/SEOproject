@@ -24,7 +24,11 @@
   }
 
   function savePrefs(prefs) {
-    chrome.storage.local.set({ [PREFS_KEY]: prefs });
+    return new Promise((resolve) => {
+      chrome.storage.local.get(PREFS_KEY, (data) => {
+        chrome.storage.local.set({ [PREFS_KEY]: { ...(data[PREFS_KEY] || {}), ...prefs } }, resolve);
+      });
+    });
   }
 
   async function fetchSites() {
@@ -36,7 +40,6 @@
       chrome.storage.local.set({ [SITES_CACHE_KEY]: sites });
       return sites;
     } catch (e) {
-      // Try cache
       return new Promise((resolve) => {
         chrome.storage.local.get(SITES_CACHE_KEY, (data) => resolve(data[SITES_CACHE_KEY] || []));
       });
@@ -90,68 +93,20 @@
     return overlay;
   }
 
-  // ==================== SAVE DIALOG (for selected text) ====================
-  async function showSaveDialog(text, url) {
-    const panel = createOverlay();
-    const sites = await fetchSites();
-    const prefs = await getPrefs();
+  // ==================== SHARED: Site checkboxes + persona + tags ====================
 
-    panel.innerHTML = `
-      <div class="sng-header">
-        <h2>💎 Sauvegarder un nugget</h2>
-        <button class="sng-close" id="sng-close">&times;</button>
-      </div>
-      <div class="sng-body">
-        <div id="sng-msg"></div>
-        <div class="sng-field">
-          <label>Contenu</label>
-          <textarea id="sng-content">${escapeHtml(text)}</textarea>
-        </div>
-        <div class="sng-field">
-          <label>Site</label>
-          <select id="sng-site">
-            <option value="">-- Tous les sites --</option>
-            ${sites.map((s) => `<option value="${s.id}" ${s.id === prefs.site_id ? "selected" : ""}>${s.name} (${s.domain})</option>`).join("")}
-          </select>
-        </div>
-        <div class="sng-field">
-          <label>Persona</label>
-          <select id="sng-persona">
-            <option value="">-- Aucun --</option>
-          </select>
-        </div>
-        <div class="sng-field">
-          <label>Tags (Entrée pour ajouter)</label>
-          <input id="sng-tag-input" placeholder="ex: isolation, renovation..." />
-          <div class="sng-tags" id="sng-tags"></div>
-        </div>
-        <div class="sng-field">
-          <label>Source</label>
-          <input id="sng-source" value="${escapeHtml(url || "")}" readonly style="color:#94a3b8" />
-        </div>
-        <button class="sng-btn sng-btn-primary" id="sng-save">💾 Sauvegarder</button>
-      </div>
-    `;
+  function renderSiteCheckboxes(sites, selectedIds) {
+    return sites.map((s) => `
+      <label class="sng-site-check">
+        <input type="checkbox" value="${s.id}" ${selectedIds.includes(s.id) ? "checked" : ""} />
+        <span>${escapeHtml(s.name)}</span>
+        <small style="color:#94a3b8">${escapeHtml(s.domain)}</small>
+      </label>
+    `).join("");
+  }
 
-    const tags = [];
-    const siteSelect = panel.querySelector("#sng-site");
-    const personaSelect = panel.querySelector("#sng-persona");
-
-    // Load personas when site changes
-    async function loadPersonas() {
-      const siteId = siteSelect.value;
-      const personas = await fetchPersonas(siteId);
-      personaSelect.innerHTML =
-        '<option value="">-- Aucun --</option>' +
-        personas.map((p) => `<option value="${p.id}" ${p.id === prefs.persona_id ? "selected" : ""}>${p.name} (${p.role})</option>`).join("");
-    }
-
-    siteSelect.addEventListener("change", loadPersonas);
-    loadPersonas();
-
-    // Tags
-    const tagInput = panel.querySelector("#sng-tag-input");
-    const tagsContainer = panel.querySelector("#sng-tags");
+  function setupTagInput(tagInput, tagsContainer, initialTags) {
+    const tags = [...initialTags];
 
     function renderTags() {
       tagsContainer.innerHTML = tags
@@ -177,44 +132,140 @@
       }
     });
 
+    renderTags();
+    return { getTags: () => [...tags] };
+  }
+
+  function getCheckedSiteIds(container) {
+    return Array.from(container.querySelectorAll('.sng-site-check input:checked')).map((cb) => cb.value);
+  }
+
+  // Save one nugget per checked site (or once with site_id=null if none checked)
+  async function saveNuggetToSites({ content, siteIds, personaId, tags, sourceRef }) {
+    const base = await getApiBase();
+    let saved = 0;
+    let errors = 0;
+
+    const targets = siteIds.length > 0 ? siteIds : [null];
+
+    for (const siteId of targets) {
+      try {
+        const res = await fetch(`${base}/api/nuggets`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content,
+            source_type: "url",
+            source_ref: sourceRef || null,
+            site_id: siteId,
+            persona_id: personaId || null,
+            tags: tags.length > 0 ? tags : undefined,
+          }),
+        });
+        if (res.ok) saved++;
+        else errors++;
+      } catch {
+        errors++;
+      }
+    }
+
+    return { saved, errors };
+  }
+
+  // ==================== SAVE DIALOG (for selected text) ====================
+  async function showSaveDialog(text, url) {
+    const panel = createOverlay();
+    const sites = await fetchSites();
+    const prefs = await getPrefs();
+    const selectedSiteIds = prefs.site_ids || (prefs.site_id ? [prefs.site_id] : []);
+
+    panel.innerHTML = `
+      <div class="sng-header">
+        <h2>💎 Sauvegarder un nugget</h2>
+        <button class="sng-close" id="sng-close">&times;</button>
+      </div>
+      <div class="sng-body">
+        <div id="sng-msg"></div>
+        <div class="sng-field">
+          <label>Contenu</label>
+          <textarea id="sng-content">${escapeHtml(text)}</textarea>
+        </div>
+        <div class="sng-field">
+          <label>Sites (cocher un ou plusieurs)</label>
+          <div id="sng-sites" class="sng-site-list">
+            ${renderSiteCheckboxes(sites, selectedSiteIds)}
+          </div>
+        </div>
+        <div class="sng-field">
+          <label>Persona (optionnel)</label>
+          <select id="sng-persona">
+            <option value="">-- Aucun --</option>
+          </select>
+        </div>
+        <div class="sng-field">
+          <label>Tags (Entree pour ajouter)</label>
+          <input id="sng-tag-input" placeholder="ex: isolation, renovation..." />
+          <div class="sng-tags" id="sng-tags"></div>
+        </div>
+        <div class="sng-field">
+          <label>Source</label>
+          <input id="sng-source" value="${escapeHtml(url || "")}" readonly style="color:#94a3b8" />
+        </div>
+        <button class="sng-btn sng-btn-primary" id="sng-save">💾 Sauvegarder</button>
+      </div>
+    `;
+
+    const personaSelect = panel.querySelector("#sng-persona");
+    const sitesContainer = panel.querySelector("#sng-sites");
+    const tagCtrl = setupTagInput(
+      panel.querySelector("#sng-tag-input"),
+      panel.querySelector("#sng-tags"),
+      []
+    );
+
+    // Load personas for first checked site
+    async function loadPersonas() {
+      const checkedIds = getCheckedSiteIds(sitesContainer);
+      const firstSiteId = checkedIds[0] || "";
+      const personas = await fetchPersonas(firstSiteId);
+      personaSelect.innerHTML =
+        '<option value="">-- Aucun --</option>' +
+        personas.map((p) => `<option value="${p.id}" ${p.id === prefs.persona_id ? "selected" : ""}>${p.name} (${p.role})</option>`).join("");
+    }
+
+    sitesContainer.addEventListener("change", loadPersonas);
+    loadPersonas();
+
     // Save
     panel.querySelector("#sng-save").addEventListener("click", async () => {
       const content = panel.querySelector("#sng-content").value.trim();
       if (!content) return;
 
+      const siteIds = getCheckedSiteIds(sitesContainer);
+      if (siteIds.length === 0) {
+        showToast("Cochez au moins un site", true);
+        return;
+      }
+
       const msgEl = panel.querySelector("#sng-msg");
       msgEl.innerHTML = '<div class="sng-status loading">⏳ Sauvegarde en cours...</div>';
 
-      const base = await getApiBase();
-      const body = {
+      savePrefs({ site_ids: siteIds, persona_id: personaSelect.value });
+
+      const { saved, errors } = await saveNuggetToSites({
         content,
-        source_type: "url",
-        source_ref: url || null,
-        site_id: siteSelect.value || null,
-        persona_id: personaSelect.value || null,
-        tags: tags.length > 0 ? tags : undefined,
-      };
+        siteIds,
+        personaId: personaSelect.value,
+        tags: tagCtrl.getTags(),
+        sourceRef: url,
+      });
 
-      // Save prefs
-      savePrefs({ site_id: siteSelect.value, persona_id: personaSelect.value });
-
-      try {
-        const res = await fetch(`${base}/api/nuggets`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || "Erreur serveur");
-        }
-
-        msgEl.innerHTML = '<div class="sng-status success">✅ Nugget sauvegardé !</div>';
-        showToast("💎 Nugget sauvegardé !");
+      if (errors === 0) {
+        msgEl.innerHTML = `<div class="sng-status success">✅ Nugget sauvegarde sur ${saved} site(s) !</div>`;
+        showToast(`💎 Nugget sauvegarde sur ${saved} site(s) !`);
         setTimeout(removeOverlay, 1500);
-      } catch (e) {
-        msgEl.innerHTML = `<div class="sng-status error">❌ ${escapeHtml(e.message)}</div>`;
+      } else {
+        msgEl.innerHTML = `<div class="sng-status error">⚠️ ${saved} OK, ${errors} erreur(s)</div>`;
       }
     });
 
@@ -226,6 +277,7 @@
     const panel = createOverlay();
     const sites = await fetchSites();
     const prefs = await getPrefs();
+    const selectedSiteIds = prefs.site_ids || (prefs.site_id ? [prefs.site_id] : []);
 
     panel.innerHTML = `
       <div class="sng-header">
@@ -238,39 +290,61 @@
           <label>Sujet cible (optionnel)</label>
           <input id="sng-topic" placeholder="ex: isolation thermique, pompe a chaleur..." value="${escapeHtml((prefs.topic || ""))}" />
         </div>
-        <div class="sng-field">
-          <label>Site</label>
-          <select id="sng-site">
-            <option value="">-- Tous les sites --</option>
-            ${sites.map((s) => `<option value="${s.id}" ${s.id === prefs.site_id ? "selected" : ""}>${s.name} (${s.domain})</option>`).join("")}
-          </select>
-        </div>
-        <div class="sng-field">
-          <label>Persona</label>
-          <select id="sng-persona">
-            <option value="">-- Aucun --</option>
-          </select>
-        </div>
-        <button class="sng-btn sng-btn-primary" id="sng-extract">🤖 Extraire les pépites</button>
+        <button class="sng-btn sng-btn-primary" id="sng-extract">🤖 Extraire les pepites</button>
+
         <div id="sng-results" style="margin-top:16px"></div>
+
+        <div id="sng-save-section" style="display:none">
+          <div class="sng-divider"></div>
+          <h3 style="font-size:13px;font-weight:700;margin-bottom:10px;color:#475569">Ou sauvegarder ?</h3>
+          <div class="sng-field">
+            <label>Sites (cocher un ou plusieurs)</label>
+            <div id="sng-sites" class="sng-site-list">
+              ${renderSiteCheckboxes(sites, selectedSiteIds)}
+            </div>
+          </div>
+          <div class="sng-field">
+            <label>Persona (optionnel)</label>
+            <select id="sng-persona">
+              <option value="">-- Aucun --</option>
+            </select>
+          </div>
+          <div class="sng-field">
+            <label>Tags supplementaires (Entree pour ajouter)</label>
+            <input id="sng-tag-input" placeholder="ex: isolation, renovation..." />
+            <div class="sng-tags" id="sng-tags"></div>
+          </div>
+          <button class="sng-btn sng-btn-primary" id="sng-save-all">💾 Sauvegarder la selection</button>
+        </div>
       </div>
     `;
 
-    const siteSelect = panel.querySelector("#sng-site");
     const personaSelect = panel.querySelector("#sng-persona");
+    const sitesContainer = panel.querySelector("#sng-sites");
+    const saveSection = panel.querySelector("#sng-save-section");
 
+    // Load personas for first checked site
     async function loadPersonas() {
-      const siteId = siteSelect.value;
-      const personas = await fetchPersonas(siteId);
+      const checkedIds = getCheckedSiteIds(sitesContainer);
+      const firstSiteId = checkedIds[0] || "";
+      const personas = await fetchPersonas(firstSiteId);
       personaSelect.innerHTML =
         '<option value="">-- Aucun --</option>' +
         personas.map((p) => `<option value="${p.id}" ${p.id === prefs.persona_id ? "selected" : ""}>${p.name} (${p.role})</option>`).join("");
     }
 
-    siteSelect.addEventListener("change", loadPersonas);
+    sitesContainer.addEventListener("change", loadPersonas);
     loadPersonas();
 
+    const tagCtrl = setupTagInput(
+      panel.querySelector("#sng-tag-input"),
+      panel.querySelector("#sng-tags"),
+      []
+    );
+
     panel.querySelector("#sng-close").addEventListener("click", removeOverlay);
+
+    let extractedNuggets = [];
 
     // Extract button
     panel.querySelector("#sng-extract").addEventListener("click", async () => {
@@ -278,20 +352,15 @@
       const msgEl = panel.querySelector("#sng-msg");
       const resultsEl = panel.querySelector("#sng-results");
 
-      // Save prefs
-      savePrefs({
-        site_id: siteSelect.value,
-        persona_id: personaSelect.value,
-        topic,
-      });
+      savePrefs({ topic });
 
       msgEl.innerHTML = '<div class="sng-status loading">🤖 Analyse IA en cours... (10-30 secondes)</div>';
       resultsEl.innerHTML = "";
+      saveSection.style.display = "none";
 
-      // Get page text content
       const pageContent = extractPageText();
-
       const base = await getApiBase();
+
       try {
         const res = await fetch(`${base}/api/nuggets/web-extract`, {
           method: "POST",
@@ -309,22 +378,22 @@
         }
 
         const data = await res.json();
-        const nuggets = data.nuggets || [];
+        extractedNuggets = data.nuggets || [];
 
-        if (nuggets.length === 0) {
-          msgEl.innerHTML = '<div class="sng-status error">Aucune pépite trouvée sur cette page.</div>';
+        if (extractedNuggets.length === 0) {
+          msgEl.innerHTML = '<div class="sng-status error">Aucune pepite trouvee sur cette page.</div>';
           return;
         }
 
-        msgEl.innerHTML = `<div class="sng-status success">✅ ${nuggets.length} pépites trouvées</div>`;
+        msgEl.innerHTML = `<div class="sng-status success">✅ ${extractedNuggets.length} pepites trouvees — selectionnez puis sauvegardez</div>`;
 
         // Render nuggets with checkboxes
         resultsEl.innerHTML = `
-          <div class="sng-count">${nuggets.length} pépites extraites — sélectionnez celles à sauvegarder</div>
-          ${nuggets.map((n, i) => `
+          <div class="sng-count">${extractedNuggets.length} pepites extraites</div>
+          ${extractedNuggets.map((n, i) => `
             <div class="sng-nugget-card selected">
               <label>
-                <input type="checkbox" data-i="${i}" checked />
+                <input type="checkbox" class="sng-nugget-cb" data-i="${i}" checked />
                 <span>${escapeHtml(n.content)}</span>
               </label>
               <div class="sng-tags" style="margin-top:6px;margin-left:24px">
@@ -332,61 +401,71 @@
               </div>
             </div>
           `).join("")}
-          <button class="sng-btn sng-btn-primary" id="sng-save-all">💾 Sauvegarder la sélection</button>
         `;
 
-        // Toggle card style on checkbox change
-        resultsEl.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+        // Toggle card style
+        resultsEl.querySelectorAll(".sng-nugget-cb").forEach((cb) => {
           cb.addEventListener("change", () => {
             cb.closest(".sng-nugget-card").classList.toggle("selected", cb.checked);
           });
         });
 
-        // Save selected
-        resultsEl.querySelector("#sng-save-all").addEventListener("click", async () => {
-          const checkboxes = resultsEl.querySelectorAll('input[type="checkbox"]:checked');
-          const selected = Array.from(checkboxes).map((cb) => nuggets[parseInt(cb.dataset.i)]);
+        // Show save section (sites + persona + tags)
+        saveSection.style.display = "block";
 
-          if (selected.length === 0) {
-            showToast("Sélectionnez au moins une pépite", true);
-            return;
-          }
-
-          msgEl.innerHTML = `<div class="sng-status loading">⏳ Sauvegarde de ${selected.length} pépites...</div>`;
-
-          let saved = 0;
-          let errors = 0;
-
-          for (const nugget of selected) {
-            try {
-              const res = await fetch(`${base}/api/nuggets`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  content: nugget.content,
-                  source_type: "url",
-                  source_ref: url || null,
-                  site_id: siteSelect.value || null,
-                  persona_id: personaSelect.value || null,
-                  tags: nugget.tags || [],
-                }),
-              });
-              if (res.ok) saved++;
-              else errors++;
-            } catch {
-              errors++;
-            }
-          }
-
-          if (errors === 0) {
-            msgEl.innerHTML = `<div class="sng-status success">✅ ${saved} pépites sauvegardées !</div>`;
-            showToast(`💎 ${saved} pépites sauvegardées !`);
-          } else {
-            msgEl.innerHTML = `<div class="sng-status error">⚠️ ${saved} sauvegardées, ${errors} erreurs</div>`;
-          }
-        });
       } catch (e) {
         msgEl.innerHTML = `<div class="sng-status error">❌ ${escapeHtml(e.message)}</div>`;
+      }
+    });
+
+    // Save selected nuggets
+    panel.querySelector("#sng-save-all").addEventListener("click", async () => {
+      const siteIds = getCheckedSiteIds(sitesContainer);
+      if (siteIds.length === 0) {
+        showToast("Cochez au moins un site", true);
+        return;
+      }
+
+      const checkedBoxes = panel.querySelectorAll(".sng-nugget-cb:checked");
+      const selected = Array.from(checkedBoxes).map((cb) => extractedNuggets[parseInt(cb.dataset.i)]);
+
+      if (selected.length === 0) {
+        showToast("Selectionnez au moins une pepite", true);
+        return;
+      }
+
+      const msgEl = panel.querySelector("#sng-msg");
+      const extraTags = tagCtrl.getTags();
+      const personaId = personaSelect.value;
+
+      savePrefs({ site_ids: siteIds, persona_id: personaId });
+
+      const totalOps = selected.length * siteIds.length;
+      msgEl.innerHTML = `<div class="sng-status loading">⏳ Sauvegarde de ${selected.length} pepites sur ${siteIds.length} site(s)... (${totalOps} operations)</div>`;
+
+      let saved = 0;
+      let errors = 0;
+
+      for (const nugget of selected) {
+        // Merge AI tags + user extra tags (no duplicates)
+        const allTags = [...new Set([...(nugget.tags || []), ...extraTags])];
+
+        const result = await saveNuggetToSites({
+          content: nugget.content,
+          siteIds,
+          personaId,
+          tags: allTags,
+          sourceRef: url,
+        });
+        saved += result.saved;
+        errors += result.errors;
+      }
+
+      if (errors === 0) {
+        msgEl.innerHTML = `<div class="sng-status success">✅ ${saved} nuggets sauvegardes !</div>`;
+        showToast(`💎 ${saved} nuggets sauvegardes !`);
+      } else {
+        msgEl.innerHTML = `<div class="sng-status error">⚠️ ${saved} OK, ${errors} erreur(s)</div>`;
       }
     });
   }
@@ -394,7 +473,6 @@
   // ==================== UTILITIES ====================
 
   function extractPageText() {
-    // Get the main content, excluding nav, footer, sidebar, ads
     const selectorsToRemove = [
       "nav", "header", "footer", "aside",
       '[role="navigation"]', '[role="banner"]', '[role="contentinfo"]',
@@ -403,14 +481,11 @@
       "script", "style", "noscript", "iframe",
     ];
 
-    // Clone body to avoid modifying the actual page
     const clone = document.body.cloneNode(true);
-
     selectorsToRemove.forEach((sel) => {
       clone.querySelectorAll(sel).forEach((el) => el.remove());
     });
 
-    // Try to find main content area
     const mainContent =
       clone.querySelector("main") ||
       clone.querySelector("article") ||
@@ -421,9 +496,7 @@
       clone;
 
     let text = mainContent.innerText || mainContent.textContent || "";
-    // Clean up whitespace
     text = text.replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ").trim();
-
     return text;
   }
 

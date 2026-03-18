@@ -223,6 +223,50 @@
   flex-shrink: 0;
 }
 
+/* Site checkboxes list */
+.sng-site-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sng-site-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.1s;
+}
+
+.sng-site-check:hover {
+  background: #f8fafc;
+}
+
+.sng-site-check:has(input:checked) {
+  border-color: #7c3aed;
+  background: #faf5ff;
+}
+
+.sng-site-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #7c3aed;
+  flex-shrink: 0;
+}
+
+.sng-site-check span {
+  font-weight: 500;
+}
+
+.sng-site-check small {
+  margin-left: auto;
+  font-size: 11px;
+}
+
 .sng-divider {
   height: 1px;
   background: #e2e8f0;
