@@ -96,21 +96,37 @@ export async function POST(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const profile = profileRaw as any;
 
-  // Build context for AI
-  const oppsContext = opportunities.map((o) => ({
-    domain: o.vendor_domain,
-    tf: o.tf,
-    cf: o.cf,
-    da: o.da,
-    traffic: o.organic_traffic,
-    price: o.price,
-    niche: o.niche || "non specifiee",
-    target_keyword: o.target_keyword || null,
-    target_page: o.target_page || null,
-    vendor_keywords: (o.vendor_keywords || []).slice(0, 10).map((k: { keyword: string; traffic: number; position: number }) =>
-      `${k.keyword} (pos:${k.position}, trafic:${k.traffic})`
-    ),
-  }));
+  // Build context for AI — enriched with Semrush data
+  const oppsContext = opportunities.map((o) => {
+    const vendorKws = (o.vendor_keywords || []) as { keyword: string; traffic: number; position: number; volume: number }[];
+    const totalTrafficSemrush = vendorKws.reduce((s: number, k: { traffic: number }) => s + (k.traffic || 0), 0);
+    const kwsTop10 = vendorKws.filter((k: { position: number }) => k.position <= 10).length;
+    const kwsTop3 = vendorKws.filter((k: { position: number }) => k.position <= 3).length;
+    const tfCfRatio = o.cf > 0 ? (o.tf / o.cf).toFixed(2) : "N/A";
+
+    return {
+      domain: o.vendor_domain,
+      tf: o.tf,
+      cf: o.cf,
+      da: o.da,
+      tf_cf_ratio: tfCfRatio,
+      organic_traffic_declared: o.organic_traffic,
+      price: o.price,
+      price_per_tf: o.tf > 0 ? Math.round(o.price / o.tf) : "Infini",
+      niche: o.niche || "non specifiee",
+      target_keyword: o.target_keyword || null,
+      target_page: o.target_page || null,
+      semrush_data: {
+        total_keywords: vendorKws.length,
+        total_traffic_semrush: totalTrafficSemrush,
+        keywords_top_3: kwsTop3,
+        keywords_top_10: kwsTop10,
+        top_keywords: vendorKws.slice(0, 15).map((k) =>
+          `${k.keyword} (pos:${k.position}, vol:${k.volume || "?"}, trafic:${k.traffic})`
+        ),
+      },
+    };
+  });
 
   const existingKeywordsStr = existingKeywords.length > 0
     ? existingKeywords.map((k: { keyword: string; title: string }) => `- "${k.keyword}" (${k.title})`).join("\n")
@@ -121,7 +137,7 @@ export async function POST(request: NextRequest) {
         `- ${p.vendor_domain} → ${p.target_page || "?"} (ancre: ${p.anchor_type || "?"})`).join("\n")
     : "Aucun achat precedent";
 
-  const prompt = `Tu es un consultant SEO Senior expert en netlinking. Tu dois analyser les opportunites de liens et recommander la meilleure strategie.
+  const prompt = `Tu es un consultant SEO Senior expert en netlinking avec 15 ans d'experience. Tu dois evaluer la QUALITE REELLE de chaque site vendeur et recommander la meilleure strategie.
 
 SITE CLIENT :
 - Domaine : ${site.domain}
@@ -136,18 +152,30 @@ ${existingKeywordsStr}
 ACHATS DE LIENS PRECEDENTS (eviter les doublons de pages cibles) :
 ${purchasesStr}
 
-OPPORTUNITES DISPONIBLES :
+OPPORTUNITES DISPONIBLES (avec donnees Semrush) :
 ${JSON.stringify(oppsContext, null, 2)}
 
-ANALYSE DEMANDEE :
-1. **Classement** : Classe les opportunites de la meilleure a la pire avec justification
-2. **Recommandation** : Pour chaque opportunite, recommande :
-   - Le type de contenu a proposer au vendeur (article invité thematique, guide, comparatif, etc.)
-   - Le mot-cle cible OPTIMAL (different des mots-cles deja positionnes !)
-   - La page de ton site a linker (existante ou a creer)
-   - Le type d'ancre recommande (exact, large, marque)
-3. **Alertes** : Signale les risques (ratio TF/CF suspect, niche trop eloignee, prix excessif)
-4. **Strategie globale** : Conseille sur l'ordre d'achat et le budget optimal
+SCORING — Evalue chaque site vendeur selon ces criteres :
+1. **Metriques SEO** : TF, CF, DA, ratio TF/CF (bon si > 0.5, suspect si < 0.3)
+2. **Donnees Semrush** : nombre de mots-cles positionnes, trafic reel, keywords en top 3/10 (un site avec TF correct mais ZERO trafic Semrush = site potentiellement mort ou PBN)
+3. **Rapport qualite/prix** : prix vs valeur reelle du lien (prix/TF, prix vs trafic)
+4. **Pertinence thematique** : niche vendeur vs niche client
+5. **Signaux de danger** : ratio TF/CF trop bas, pas de trafic organique, niche trop eloignee, prix excessif
+
+LABELS OBLIGATOIRES — Attribue UN label par site :
+- "pepite" (score >= 85) : excellent rapport qualite/prix, metriques solides, trafic reel, thematique alignee
+- "super" (score 70-84) : tres bon site, quelques reserves mineures
+- "correct" (score 55-69) : acceptable, bon pour diversifier le profil
+- "moyen" (score 40-54) : peut servir mais pas prioritaire
+- "a_eviter" (score < 40) : ne merite pas l'investissement (skip = true)
+
+Un site avec skip=true est un site qu'il ne faut PAS acheter. Sois honnete et tranchant.
+
+RECOMMANDATION pour chaque site NON skip :
+- Type de contenu adapte au site vendeur
+- Mot-cle cible DIFFERENT des mots-cles deja positionnes
+- Page cible existante ou a creer
+- Ancre recommandee
 
 Reponds UNIQUEMENT en JSON valide :
 {
@@ -156,25 +184,33 @@ Reponds UNIQUEMENT en JSON valide :
       "vendor_domain": "domaine.fr",
       "rank": 1,
       "score": 85,
-      "verdict": "Excellent choix / Bon choix / A eviter / etc.",
-      "justification": "Pourquoi ce classement",
+      "label": "pepite / super / correct / moyen / a_eviter",
+      "skip": false,
+      "verdict": "Resume en 1 phrase",
+      "justification": "Analyse detaillee : metriques, Semrush, rapport qualite/prix",
+      "metrics_analysis": {
+        "tf_cf_verdict": "Bon ratio / Ratio suspect / etc.",
+        "semrush_verdict": "Trafic reel confirme / Site sans trafic / etc.",
+        "price_verdict": "Excellent prix / Prix correct / Surpaye / etc."
+      },
       "recommended_content": {
         "type": "article invite / guide / comparatif / etc.",
-        "topic_suggestion": "Sujet precis de l'article",
-        "target_keyword": "mot-cle a cibler (PAS un doublon)",
+        "topic_suggestion": "Sujet precis",
+        "target_keyword": "mot-cle (PAS un doublon)",
         "target_page": "URL existante ou 'a creer: /slug-suggere'",
         "anchor_type": "exact / broad / brand",
         "anchor_text_suggestion": "texte d'ancre suggere"
       },
-      "risks": ["risque 1", "risque 2"]
+      "risks": ["risque 1"]
     }
   ],
   "strategy": {
-    "buy_order": ["domaine1.fr", "domaine2.fr"],
-    "total_budget": <number>,
-    "expected_impact": "Description de l'impact attendu",
-    "keywords_to_avoid": ["mot-cle deja positionne 1", "etc."],
-    "missing_topics": ["sujet non couvert qui pourrait etre cible"]
+    "buy_order": ["domaine1.fr"],
+    "skip_list": ["domaine-nul.fr"],
+    "total_budget": 0,
+    "expected_impact": "Description impact",
+    "keywords_to_avoid": ["mot-cle deja positionne"],
+    "missing_topics": ["sujet non couvert a cibler"]
   }
 }`;
 

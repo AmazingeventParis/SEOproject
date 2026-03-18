@@ -53,14 +53,20 @@ interface RecommendedContent {
   target_page: string; anchor_type: string; anchor_text_suggestion: string;
 }
 
+interface MetricsAnalysis {
+  tf_cf_verdict: string; semrush_verdict: string; price_verdict: string;
+}
+
 interface RankingItem {
-  vendor_domain: string; rank: number; score: number; verdict: string;
-  justification: string; recommended_content: RecommendedContent; risks: string[];
+  vendor_domain: string; rank: number; score: number; label: string;
+  skip: boolean; verdict: string; justification: string;
+  metrics_analysis: MetricsAnalysis;
+  recommended_content: RecommendedContent; risks: string[];
 }
 
 interface RecommendStrategy {
-  buy_order: string[]; total_budget: number; expected_impact: string;
-  keywords_to_avoid: string[]; missing_topics: string[];
+  buy_order: string[]; skip_list: string[]; total_budget: number;
+  expected_impact: string; keywords_to_avoid: string[]; missing_topics: string[];
 }
 
 interface Recommendation {
@@ -371,35 +377,78 @@ export default function NetlinkingPage() {
               <CardContent className="space-y-4">
                 {/* Ranking */}
                 <div className="space-y-3">
-                  {recommendation.ranking.map((item, idx) => (
-                    <div key={idx} className={`p-3 rounded-lg border ${item.rank === 1 ? "border-green-300 bg-green-50/50" : item.rank === 2 ? "border-yellow-200 bg-yellow-50/30" : "border-gray-200 bg-white/50"}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${item.rank === 1 ? "bg-green-600 text-white" : item.rank === 2 ? "bg-yellow-500 text-white" : "bg-gray-400 text-white"}`}>#{item.rank}</span>
-                          <span className="font-semibold">{item.vendor_domain}</span>
-                          <Badge variant={item.score >= 70 ? "default" : item.score >= 40 ? "secondary" : "destructive"}>{item.score}/100</Badge>
+                  {recommendation.ranking.map((item, idx) => {
+                    const labelColors: Record<string, string> = {
+                      pepite: "bg-emerald-600 text-white",
+                      super: "bg-green-500 text-white",
+                      correct: "bg-blue-500 text-white",
+                      moyen: "bg-yellow-500 text-white",
+                      a_eviter: "bg-red-600 text-white",
+                    };
+                    const labelEmojis: Record<string, string> = {
+                      pepite: "💎", super: "🔥", correct: "✅", moyen: "😐", a_eviter: "🚫",
+                    };
+                    const cardBorder = item.skip
+                      ? "border-red-300 bg-red-50/30 opacity-75"
+                      : item.label === "pepite" ? "border-emerald-300 bg-emerald-50/50"
+                      : item.label === "super" ? "border-green-300 bg-green-50/50"
+                      : item.label === "correct" ? "border-blue-200 bg-blue-50/30"
+                      : "border-gray-200 bg-white/50";
+
+                    return (
+                      <div key={idx} className={`p-3 rounded-lg border ${cardBorder}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${item.skip ? "bg-red-600 text-white" : item.rank === 1 ? "bg-green-600 text-white" : item.rank === 2 ? "bg-yellow-500 text-white" : "bg-gray-400 text-white"}`}>
+                              {item.skip ? "✕" : `#${item.rank}`}
+                            </span>
+                            <span className={`font-semibold ${item.skip ? "line-through text-muted-foreground" : ""}`}>{item.vendor_domain}</span>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${labelColors[item.label] || "bg-gray-500 text-white"}`}>
+                              {labelEmojis[item.label] || ""} {item.label?.toUpperCase()}
+                            </span>
+                            <Badge variant={item.score >= 70 ? "default" : item.score >= 40 ? "secondary" : "destructive"}>{item.score}/100</Badge>
+                          </div>
+                          <span className="text-sm font-medium text-muted-foreground">{item.verdict}</span>
                         </div>
-                        <span className="text-sm font-medium text-muted-foreground">{item.verdict}</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-2">{item.justification}</p>
-                      <div className="grid md:grid-cols-2 gap-3 text-xs">
-                        <div className="p-2 bg-white/80 rounded border">
-                          <p className="font-semibold mb-1">Contenu recommande</p>
-                          <p><span className="text-muted-foreground">Type :</span> {item.recommended_content.type}</p>
-                          <p><span className="text-muted-foreground">Sujet :</span> {item.recommended_content.topic_suggestion}</p>
-                          <p><span className="text-muted-foreground">Mot-cle :</span> <span className="font-medium text-purple-700">{item.recommended_content.target_keyword}</span></p>
-                          <p><span className="text-muted-foreground">Page cible :</span> {item.recommended_content.target_page}</p>
-                          <p><span className="text-muted-foreground">Ancre :</span> {item.recommended_content.anchor_type} — &quot;{item.recommended_content.anchor_text_suggestion}&quot;</p>
-                        </div>
-                        {item.risks.length > 0 && (
-                          <div className="p-2 bg-red-50/50 rounded border border-red-100">
-                            <p className="font-semibold mb-1 text-red-700">Risques</p>
-                            <ul className="list-disc pl-4 text-red-600">{item.risks.map((r, i) => <li key={i}>{r}</li>)}</ul>
+
+                        <p className="text-sm text-muted-foreground mb-2">{item.justification}</p>
+
+                        {/* Metrics analysis */}
+                        {item.metrics_analysis && (
+                          <div className="flex flex-wrap gap-2 mb-2 text-xs">
+                            <span className="px-2 py-1 rounded bg-gray-100">{item.metrics_analysis.tf_cf_verdict}</span>
+                            <span className="px-2 py-1 rounded bg-gray-100">{item.metrics_analysis.semrush_verdict}</span>
+                            <span className="px-2 py-1 rounded bg-gray-100">{item.metrics_analysis.price_verdict}</span>
+                          </div>
+                        )}
+
+                        {!item.skip && (
+                          <div className="grid md:grid-cols-2 gap-3 text-xs">
+                            <div className="p-2 bg-white/80 rounded border">
+                              <p className="font-semibold mb-1">Contenu recommande</p>
+                              <p><span className="text-muted-foreground">Type :</span> {item.recommended_content.type}</p>
+                              <p><span className="text-muted-foreground">Sujet :</span> {item.recommended_content.topic_suggestion}</p>
+                              <p><span className="text-muted-foreground">Mot-cle :</span> <span className="font-medium text-purple-700">{item.recommended_content.target_keyword}</span></p>
+                              <p><span className="text-muted-foreground">Page cible :</span> {item.recommended_content.target_page}</p>
+                              <p><span className="text-muted-foreground">Ancre :</span> {item.recommended_content.anchor_type} — &quot;{item.recommended_content.anchor_text_suggestion}&quot;</p>
+                            </div>
+                            {item.risks.length > 0 && (
+                              <div className="p-2 bg-red-50/50 rounded border border-red-100">
+                                <p className="font-semibold mb-1 text-red-700">Risques</p>
+                                <ul className="list-disc pl-4 text-red-600">{item.risks.map((r, i) => <li key={i}>{r}</li>)}</ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {item.skip && (
+                          <div className="p-2 bg-red-100 rounded border border-red-200 text-xs text-red-700 font-medium">
+                            🚫 Ce site ne merite pas l&apos;investissement — {item.risks.join(". ")}
                           </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Strategy */}
@@ -407,8 +456,13 @@ export default function NetlinkingPage() {
                   <p className="font-semibold text-sm mb-2 flex items-center gap-1"><Target className="w-4 h-4" /> Strategie globale</p>
                   <div className="grid md:grid-cols-2 gap-3 text-xs">
                     <div>
-                      <p><span className="font-medium">Ordre d&apos;achat :</span> {recommendation.strategy.buy_order.join(" → ")}</p>
-                      <p><span className="font-medium">Budget total :</span> {recommendation.strategy.total_budget}€</p>
+                      {recommendation.strategy.buy_order.length > 0 && (
+                        <p><span className="font-medium">Ordre d&apos;achat :</span> {recommendation.strategy.buy_order.join(" → ")}</p>
+                      )}
+                      {recommendation.strategy.skip_list?.length > 0 && (
+                        <p className="text-red-600"><span className="font-medium">A ne pas acheter :</span> {recommendation.strategy.skip_list.join(", ")}</p>
+                      )}
+                      <p><span className="font-medium">Budget recommande :</span> {recommendation.strategy.total_budget}€</p>
                       <p className="mt-1">{recommendation.strategy.expected_impact}</p>
                     </div>
                     <div>
