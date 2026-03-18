@@ -203,8 +203,8 @@ export default function NetlinkingPage() {
         body: JSON.stringify(payload),
       });
       const json = await res.json();
-      console.log("[netlinking] saveProfile response:", res.status, json);
-      if (!res.ok) throw new Error(json.error || JSON.stringify(json.details) || "Erreur inconnue");
+      console.log("[netlinking] saveProfile response:", res.status, JSON.stringify(json));
+      if (!res.ok) throw new Error(json.error + (json.details ? " — " + JSON.stringify(json.details) : ""));
       toast({ title: "Profil sauvegarde" });
       loadData();
     } catch (e) {

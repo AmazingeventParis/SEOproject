@@ -43,8 +43,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Corps invalide" }, { status: 400 });
   }
 
+  console.log("[netlinking] profiles POST body:", JSON.stringify(body));
   const parsed = createProfileSchema.safeParse(body);
   if (!parsed.success) {
+    console.log("[netlinking] profiles POST validation error:", JSON.stringify(parsed.error.format()));
     return NextResponse.json({ error: "Validation echouee", details: parsed.error.format() }, { status: 422 });
   }
 
