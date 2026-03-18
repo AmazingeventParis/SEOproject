@@ -103,7 +103,20 @@ export default function NetlinkingPage() {
     const [oppData, purchData, profData] = await Promise.all([oppRes.json(), purchRes.json(), profRes.json()]);
     setOpportunities(oppData || []);
     setPurchases(purchData || []);
-    setProfile(profData?.[0] || null);
+    const latestProfile = profData?.[0] || null;
+    setProfile(latestProfile);
+    if (latestProfile) {
+      setProfileForm({
+        tf: String(latestProfile.tf || ""),
+        cf: String(latestProfile.cf || ""),
+        da: String(latestProfile.da || ""),
+        dr: String(latestProfile.dr || ""),
+        referring_domains: String(latestProfile.referring_domains || ""),
+        total_backlinks: String(latestProfile.total_backlinks || ""),
+        organic_traffic: String(latestProfile.organic_traffic || ""),
+        organic_keywords: String(latestProfile.organic_keywords || ""),
+      });
+    }
     setGap(null);
   }, [selectedSite]);
 
@@ -193,7 +206,6 @@ export default function NetlinkingPage() {
       console.log("[netlinking] saveProfile response:", res.status, json);
       if (!res.ok) throw new Error(json.error || JSON.stringify(json.details) || "Erreur inconnue");
       toast({ title: "Profil sauvegarde" });
-      setProfileForm({ tf: "", cf: "", da: "", dr: "", referring_domains: "", total_backlinks: "", organic_traffic: "", organic_keywords: "" });
       loadData();
     } catch (e) {
       toast({ title: "Erreur", description: e instanceof Error ? e.message : "Erreur", variant: "destructive" });
