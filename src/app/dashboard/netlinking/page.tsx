@@ -543,16 +543,16 @@ export default function NetlinkingPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-4 gap-3 mb-4">
-                <div><Label>TF</Label><Input type="number" value={profileForm.tf} onChange={e => setProfileForm({...profileForm, tf: e.target.value})} placeholder={String(profile?.tf || 0)} /></div>
-                <div><Label>CF</Label><Input type="number" value={profileForm.cf} onChange={e => setProfileForm({...profileForm, cf: e.target.value})} placeholder={String(profile?.cf || 0)} /></div>
-                <div><Label>DA</Label><Input type="number" value={profileForm.da} onChange={e => setProfileForm({...profileForm, da: e.target.value})} placeholder={String(profile?.da || 0)} /></div>
-                <div><Label>DR</Label><Input type="number" value={profileForm.dr} onChange={e => setProfileForm({...profileForm, dr: e.target.value})} placeholder={String(profile?.dr || 0)} /></div>
+                <div><Label>TF</Label><Input type="number" value={profileForm.tf} onChange={e => setProfileForm(prev => ({...prev, tf: e.target.value}))} placeholder={String(profile?.tf || 0)} /></div>
+                <div><Label>CF</Label><Input type="number" value={profileForm.cf} onChange={e => setProfileForm(prev => ({...prev, cf: e.target.value}))} placeholder={String(profile?.cf || 0)} /></div>
+                <div><Label>DA</Label><Input type="number" value={profileForm.da} onChange={e => setProfileForm(prev => ({...prev, da: e.target.value}))} placeholder={String(profile?.da || 0)} /></div>
+                <div><Label>DR</Label><Input type="number" value={profileForm.dr} onChange={e => setProfileForm(prev => ({...prev, dr: e.target.value}))} placeholder={String(profile?.dr || 0)} /></div>
               </div>
               <div className="grid grid-cols-4 gap-3 mb-4">
-                <div><Label>Domaines referents</Label><Input type="number" value={profileForm.referring_domains} onChange={e => setProfileForm({...profileForm, referring_domains: e.target.value})} placeholder={String(profile?.referring_domains || 0)} /></div>
-                <div><Label>Total backlinks</Label><Input type="number" value={profileForm.total_backlinks} onChange={e => setProfileForm({...profileForm, total_backlinks: e.target.value})} placeholder={String(profile?.total_backlinks || 0)} /></div>
-                <div><Label>Trafic organique</Label><Input type="number" value={profileForm.organic_traffic} onChange={e => setProfileForm({...profileForm, organic_traffic: e.target.value})} placeholder={String(profile?.organic_traffic || 0)} /></div>
-                <div><Label>Mots-cles</Label><Input type="number" value={profileForm.organic_keywords} onChange={e => setProfileForm({...profileForm, organic_keywords: e.target.value})} placeholder={String(profile?.organic_keywords || 0)} /></div>
+                <div><Label>Domaines referents</Label><Input type="number" value={profileForm.referring_domains} onChange={e => setProfileForm(prev => ({...prev, referring_domains: e.target.value}))} placeholder={String(profile?.referring_domains || 0)} /></div>
+                <div><Label>Total backlinks</Label><Input type="number" value={profileForm.total_backlinks} onChange={e => setProfileForm(prev => ({...prev, total_backlinks: e.target.value}))} placeholder={String(profile?.total_backlinks || 0)} /></div>
+                <div><Label>Trafic organique</Label><Input type="number" value={profileForm.organic_traffic} onChange={e => setProfileForm(prev => ({...prev, organic_traffic: e.target.value}))} placeholder={String(profile?.organic_traffic || 0)} /></div>
+                <div><Label>Mots-cles</Label><Input type="number" value={profileForm.organic_keywords} onChange={e => setProfileForm(prev => ({...prev, organic_keywords: e.target.value}))} placeholder={String(profile?.organic_keywords || 0)} /></div>
               </div>
               <Button onClick={saveProfile}>Sauvegarder le snapshot</Button>
             </CardContent>
