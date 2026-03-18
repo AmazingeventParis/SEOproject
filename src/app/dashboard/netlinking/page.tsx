@@ -167,24 +167,33 @@ export default function NetlinkingPage() {
 
   // Save profile
   const saveProfile = async () => {
+    if (!selectedSite) {
+      toast({ title: "Erreur", description: "Selectionnez un site d'abord", variant: "destructive" });
+      return;
+    }
     try {
+      const payload = {
+        site_id: selectedSite,
+        tf: Number(profileForm.tf) || 0,
+        cf: Number(profileForm.cf) || 0,
+        da: Number(profileForm.da) || 0,
+        dr: Number(profileForm.dr) || 0,
+        referring_domains: Number(profileForm.referring_domains) || 0,
+        total_backlinks: Number(profileForm.total_backlinks) || 0,
+        organic_traffic: Number(profileForm.organic_traffic) || 0,
+        organic_keywords: Number(profileForm.organic_keywords) || 0,
+      };
+      console.log("[netlinking] saveProfile payload:", payload);
       const res = await fetch("/api/netlinking/profiles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          site_id: selectedSite,
-          tf: parseInt(profileForm.tf) || 0,
-          cf: parseInt(profileForm.cf) || 0,
-          da: parseInt(profileForm.da) || 0,
-          dr: parseInt(profileForm.dr) || 0,
-          referring_domains: parseInt(profileForm.referring_domains) || 0,
-          total_backlinks: parseInt(profileForm.total_backlinks) || 0,
-          organic_traffic: parseInt(profileForm.organic_traffic) || 0,
-          organic_keywords: parseInt(profileForm.organic_keywords) || 0,
-        }),
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error((await res.json()).error);
+      const json = await res.json();
+      console.log("[netlinking] saveProfile response:", res.status, json);
+      if (!res.ok) throw new Error(json.error || JSON.stringify(json.details) || "Erreur inconnue");
       toast({ title: "Profil sauvegarde" });
+      setProfileForm({ tf: "", cf: "", da: "", dr: "", referring_domains: "", total_backlinks: "", organic_traffic: "", organic_keywords: "" });
       loadData();
     } catch (e) {
       toast({ title: "Erreur", description: e instanceof Error ? e.message : "Erreur", variant: "destructive" });
