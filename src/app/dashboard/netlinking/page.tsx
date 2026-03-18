@@ -13,7 +13,7 @@ import { AddOpportunityDialog } from "@/components/netlinking/add-opportunity-di
 import { CsvImportDialog } from "@/components/netlinking/csv-import-dialog";
 import {
   Shield, TrendingUp, Target, Brain, FileText,
-  Sparkles, ExternalLink, Trash2, Copy,
+  Sparkles, ExternalLink, Trash2, Copy, Zap,
 } from "lucide-react";
 
 interface Site { id: string; name: string; domain: string; niche: string | null }
@@ -46,6 +46,26 @@ interface Profile {
 
 interface GapResult {
   summary: string; strengths: string[]; weaknesses: string[]; priorities: string[];
+}
+
+interface RecommendedContent {
+  type: string; topic_suggestion: string; target_keyword: string;
+  target_page: string; anchor_type: string; anchor_text_suggestion: string;
+}
+
+interface RankingItem {
+  vendor_domain: string; rank: number; score: number; verdict: string;
+  justification: string; recommended_content: RecommendedContent; risks: string[];
+}
+
+interface RecommendStrategy {
+  buy_order: string[]; total_budget: number; expected_impact: string;
+  keywords_to_avoid: string[]; missing_topics: string[];
+}
+
+interface Recommendation {
+  ranking: RankingItem[];
+  strategy: RecommendStrategy;
 }
 
 function scoreBadge(score: number, label: string) {
@@ -81,7 +101,9 @@ export default function NetlinkingPage() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
-  const [profileForm, setProfileForm] = useState({ tf: "", cf: "", da: "", dr: "", referring_domains: "", total_backlinks: "", organic_traffic: "", organic_keywords: "" });
+  const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
+  const [recommendLoading, setRecommendLoading] = useState(false);
+  const [profileForm, setProfileForm] = useState({ tf: "", cf: "", da: "", referring_domains: "", total_backlinks: "", organic_traffic: "", organic_keywords: "" });
   const { toast } = useToast();
 
   // Load sites
@@ -110,7 +132,6 @@ export default function NetlinkingPage() {
         tf: String(latestProfile.tf || ""),
         cf: String(latestProfile.cf || ""),
         da: String(latestProfile.da || ""),
-        dr: String(latestProfile.dr || ""),
         referring_domains: String(latestProfile.referring_domains || ""),
         total_backlinks: String(latestProfile.total_backlinks || ""),
         organic_traffic: String(latestProfile.organic_traffic || ""),
@@ -190,7 +211,6 @@ export default function NetlinkingPage() {
         tf: Number(profileForm.tf) || 0,
         cf: Number(profileForm.cf) || 0,
         da: Number(profileForm.da) || 0,
-        dr: Number(profileForm.dr) || 0,
         referring_domains: Number(profileForm.referring_domains) || 0,
         total_backlinks: Number(profileForm.total_backlinks) || 0,
         organic_traffic: Number(profileForm.organic_traffic) || 0,
@@ -209,6 +229,26 @@ export default function NetlinkingPage() {
       loadData();
     } catch (e) {
       toast({ title: "Erreur", description: e instanceof Error ? e.message : "Erreur", variant: "destructive" });
+    }
+  };
+
+  // AI Recommendation
+  const runRecommendation = async () => {
+    setRecommendLoading(true);
+    setRecommendation(null);
+    try {
+      const res = await fetch("/api/netlinking/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site_id: selectedSite }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setRecommendation(data);
+    } catch (e) {
+      toast({ title: "Erreur", description: e instanceof Error ? e.message : "Erreur", variant: "destructive" });
+    } finally {
+      setRecommendLoading(false);
     }
   };
 
@@ -246,12 +286,13 @@ export default function NetlinkingPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
           { label: "Trust Flow", value: profile?.tf ?? "—", icon: Shield, color: (profile?.tf || 0) >= 30 ? "text-green-600" : "text-red-600" },
           { label: "Citation Flow", value: profile?.cf ?? "—", icon: TrendingUp, color: "text-blue-600" },
           { label: "Domain Authority", value: profile?.da ?? "—", icon: Target, color: (profile?.da || 0) >= 30 ? "text-green-600" : "text-yellow-600" },
           { label: "Trafic organique", value: profile?.organic_traffic?.toLocaleString() ?? "—", icon: Sparkles, color: "text-purple-600" },
+          { label: "Mots-cles", value: profile?.organic_keywords?.toLocaleString() ?? "—", icon: FileText, color: "text-orange-600" },
         ].map((kpi) => (
           <Card key={kpi.label}>
             <CardContent className="pt-6">
@@ -283,6 +324,12 @@ export default function NetlinkingPage() {
               <Brain className="w-4 h-4 mr-1" />
               {gapLoading ? "Analyse..." : "Gap Analysis IA"}
             </Button>
+            {opportunities.length > 0 && (
+              <Button size="sm" onClick={runRecommendation} disabled={recommendLoading} className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700">
+                <Zap className="w-4 h-4 mr-1" />
+                {recommendLoading ? "Analyse en cours..." : "Recommandation IA"}
+              </Button>
+            )}
           </div>
 
           {gap && (
@@ -310,6 +357,76 @@ export default function NetlinkingPage() {
                     <ol className="list-decimal pl-5">{gap.priorities.map((p, i) => <li key={i}>{p}</li>)}</ol>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* AI Recommendation */}
+          {recommendation && (
+            <Card className="border-blue-200 bg-gradient-to-br from-blue-50/50 to-purple-50/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2"><Zap className="w-4 h-4 text-purple-600" /> Recommandation IA</CardTitle>
+                <CardDescription>Analyse croisee des opportunites et de vos mots-cles existants</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Ranking */}
+                <div className="space-y-3">
+                  {recommendation.ranking.map((item, idx) => (
+                    <div key={idx} className={`p-3 rounded-lg border ${item.rank === 1 ? "border-green-300 bg-green-50/50" : item.rank === 2 ? "border-yellow-200 bg-yellow-50/30" : "border-gray-200 bg-white/50"}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${item.rank === 1 ? "bg-green-600 text-white" : item.rank === 2 ? "bg-yellow-500 text-white" : "bg-gray-400 text-white"}`}>#{item.rank}</span>
+                          <span className="font-semibold">{item.vendor_domain}</span>
+                          <Badge variant={item.score >= 70 ? "default" : item.score >= 40 ? "secondary" : "destructive"}>{item.score}/100</Badge>
+                        </div>
+                        <span className="text-sm font-medium text-muted-foreground">{item.verdict}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-2">{item.justification}</p>
+                      <div className="grid md:grid-cols-2 gap-3 text-xs">
+                        <div className="p-2 bg-white/80 rounded border">
+                          <p className="font-semibold mb-1">Contenu recommande</p>
+                          <p><span className="text-muted-foreground">Type :</span> {item.recommended_content.type}</p>
+                          <p><span className="text-muted-foreground">Sujet :</span> {item.recommended_content.topic_suggestion}</p>
+                          <p><span className="text-muted-foreground">Mot-cle :</span> <span className="font-medium text-purple-700">{item.recommended_content.target_keyword}</span></p>
+                          <p><span className="text-muted-foreground">Page cible :</span> {item.recommended_content.target_page}</p>
+                          <p><span className="text-muted-foreground">Ancre :</span> {item.recommended_content.anchor_type} — &quot;{item.recommended_content.anchor_text_suggestion}&quot;</p>
+                        </div>
+                        {item.risks.length > 0 && (
+                          <div className="p-2 bg-red-50/50 rounded border border-red-100">
+                            <p className="font-semibold mb-1 text-red-700">Risques</p>
+                            <ul className="list-disc pl-4 text-red-600">{item.risks.map((r, i) => <li key={i}>{r}</li>)}</ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Strategy */}
+                <div className="p-3 rounded-lg border border-purple-200 bg-purple-50/30">
+                  <p className="font-semibold text-sm mb-2 flex items-center gap-1"><Target className="w-4 h-4" /> Strategie globale</p>
+                  <div className="grid md:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <p><span className="font-medium">Ordre d&apos;achat :</span> {recommendation.strategy.buy_order.join(" → ")}</p>
+                      <p><span className="font-medium">Budget total :</span> {recommendation.strategy.total_budget}€</p>
+                      <p className="mt-1">{recommendation.strategy.expected_impact}</p>
+                    </div>
+                    <div>
+                      {recommendation.strategy.missing_topics.length > 0 && (
+                        <div>
+                          <p className="font-medium text-green-700">Sujets non couverts a cibler :</p>
+                          <ul className="list-disc pl-4">{recommendation.strategy.missing_topics.map((t, i) => <li key={i}>{t}</li>)}</ul>
+                        </div>
+                      )}
+                      {recommendation.strategy.keywords_to_avoid.length > 0 && (
+                        <div className="mt-1">
+                          <p className="font-medium text-red-600">Mots-cles a eviter (deja positionnes) :</p>
+                          <p className="text-muted-foreground">{recommendation.strategy.keywords_to_avoid.join(", ")}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -563,11 +680,10 @@ export default function NetlinkingPage() {
               <CardDescription>Entrez les metriques actuelles (Majestic, Ahrefs, Semrush)</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-4 gap-3 mb-4">
+              <div className="grid grid-cols-3 gap-3 mb-4">
                 <div><Label>TF</Label><Input type="number" min={0} value={profileForm.tf} onChange={e => setProfileForm(prev => ({...prev, tf: e.target.value}))} placeholder="0" /></div>
                 <div><Label>CF</Label><Input type="number" min={0} value={profileForm.cf} onChange={e => setProfileForm(prev => ({...prev, cf: e.target.value}))} placeholder="0" /></div>
                 <div><Label>DA</Label><Input type="number" min={0} value={profileForm.da} onChange={e => setProfileForm(prev => ({...prev, da: e.target.value}))} placeholder="0" /></div>
-                <div><Label>DR</Label><Input type="number" min={0} value={profileForm.dr} onChange={e => setProfileForm(prev => ({...prev, dr: e.target.value}))} placeholder="0" /></div>
               </div>
               <div className="grid grid-cols-4 gap-3 mb-4">
                 <div><Label>Domaines referents</Label><Input type="number" value={profileForm.referring_domains} onChange={e => setProfileForm(prev => ({...prev, referring_domains: e.target.value}))} placeholder={String(profile?.referring_domains || 0)} /></div>
@@ -585,11 +701,10 @@ export default function NetlinkingPage() {
                 <CardTitle className="text-base">Dernier snapshot — {profile.snapshot_date}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-4 gap-4 text-center">
+                <div className="grid grid-cols-3 gap-4 text-center">
                   <div><p className="text-2xl font-bold text-green-600">{profile.tf}</p><p className="text-xs text-muted-foreground">TF</p></div>
                   <div><p className="text-2xl font-bold text-blue-600">{profile.cf}</p><p className="text-xs text-muted-foreground">CF</p></div>
                   <div><p className="text-2xl font-bold text-purple-600">{profile.da}</p><p className="text-xs text-muted-foreground">DA</p></div>
-                  <div><p className="text-2xl font-bold text-orange-600">{profile.dr}</p><p className="text-xs text-muted-foreground">DR</p></div>
                 </div>
               </CardContent>
             </Card>
