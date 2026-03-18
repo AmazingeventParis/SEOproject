@@ -564,10 +564,10 @@ export default function NetlinkingPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-4 gap-3 mb-4">
-                <div><Label>TF</Label><Input type="number" value={profileForm.tf} onChange={e => setProfileForm(prev => ({...prev, tf: e.target.value}))} placeholder={String(profile?.tf || 0)} /></div>
-                <div><Label>CF</Label><Input type="number" value={profileForm.cf} onChange={e => setProfileForm(prev => ({...prev, cf: e.target.value}))} placeholder={String(profile?.cf || 0)} /></div>
-                <div><Label>DA</Label><Input type="number" value={profileForm.da} onChange={e => setProfileForm(prev => ({...prev, da: e.target.value}))} placeholder={String(profile?.da || 0)} /></div>
-                <div><Label>DR</Label><Input type="number" value={profileForm.dr} onChange={e => setProfileForm(prev => ({...prev, dr: e.target.value}))} placeholder={String(profile?.dr || 0)} /></div>
+                <div><Label>TF <span className="text-muted-foreground font-normal">(0-100)</span></Label><Input type="number" min={0} max={100} value={profileForm.tf} onChange={e => setProfileForm(prev => ({...prev, tf: e.target.value}))} placeholder="0" /></div>
+                <div><Label>CF <span className="text-muted-foreground font-normal">(0-100)</span></Label><Input type="number" min={0} max={100} value={profileForm.cf} onChange={e => setProfileForm(prev => ({...prev, cf: e.target.value}))} placeholder="0" /></div>
+                <div><Label>DA <span className="text-muted-foreground font-normal">(0-100)</span></Label><Input type="number" min={0} max={100} value={profileForm.da} onChange={e => setProfileForm(prev => ({...prev, da: e.target.value}))} placeholder="0" /></div>
+                <div><Label>DR <span className="text-muted-foreground font-normal">(0-100)</span></Label><Input type="number" min={0} max={100} value={profileForm.dr} onChange={e => setProfileForm(prev => ({...prev, dr: e.target.value}))} placeholder="0" /></div>
               </div>
               <div className="grid grid-cols-4 gap-3 mb-4">
                 <div><Label>Domaines referents</Label><Input type="number" value={profileForm.referring_domains} onChange={e => setProfileForm(prev => ({...prev, referring_domains: e.target.value}))} placeholder={String(profile?.referring_domains || 0)} /></div>

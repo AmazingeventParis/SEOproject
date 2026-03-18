@@ -4,14 +4,14 @@ import { getServerClient } from "@/lib/supabase/client";
 
 const createProfileSchema = z.object({
   site_id: z.string().uuid(),
-  tf: z.number().min(0).max(100).default(0),
-  cf: z.number().min(0).max(100).default(0),
-  da: z.number().min(0).max(100).default(0),
-  dr: z.number().min(0).max(100).default(0),
-  referring_domains: z.number().min(0).default(0),
-  total_backlinks: z.number().min(0).default(0),
-  organic_traffic: z.number().min(0).default(0),
-  organic_keywords: z.number().min(0).default(0),
+  tf: z.coerce.number().min(0).max(100).default(0),
+  cf: z.coerce.number().min(0).max(100).default(0),
+  da: z.coerce.number().min(0).max(100).default(0),
+  dr: z.coerce.number().min(0).max(100).default(0),
+  referring_domains: z.coerce.number().min(0).default(0),
+  total_backlinks: z.coerce.number().min(0).default(0),
+  organic_traffic: z.coerce.number().min(0).default(0),
+  organic_keywords: z.coerce.number().min(0).default(0),
   notes: z.string().nullable().optional(),
 });
 
@@ -43,10 +43,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Corps invalide" }, { status: 400 });
   }
 
-  console.log("[netlinking] profiles POST body:", JSON.stringify(body));
+  // Clamp score values to 0-100 before validation
+  if (body && typeof body === "object") {
+    const b = body as Record<string, unknown>;
+    for (const key of ["tf", "cf", "da", "dr"]) {
+      if (typeof b[key] === "number" && b[key] as number > 100) b[key] = 100;
+      if (typeof b[key] === "number" && (b[key] as number) < 0) b[key] = 0;
+    }
+  }
   const parsed = createProfileSchema.safeParse(body);
   if (!parsed.success) {
-    console.log("[netlinking] profiles POST validation error:", JSON.stringify(parsed.error.format()));
     return NextResponse.json({ error: "Validation echouee", details: parsed.error.format() }, { status: 422 });
   }
 
