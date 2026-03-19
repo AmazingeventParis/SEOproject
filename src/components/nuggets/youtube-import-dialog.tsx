@@ -95,7 +95,7 @@ export function YoutubeImportDialog({
       }
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 120_000); // 2 min timeout
+      const timeout = setTimeout(() => controller.abort(), 180_000); // 3 min timeout
 
       const res = await fetch("/api/nuggets/youtube-import", {
         method: "POST",

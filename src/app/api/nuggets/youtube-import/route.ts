@@ -5,8 +5,8 @@ import { GoogleGenAI } from "@google/genai";
 import { routeAI } from "@/lib/ai/router";
 import { getServerClient } from "@/lib/supabase/client";
 
-// Allow up to 120s for transcript fetch + AI extraction
-export const maxDuration = 120;
+// Allow up to 180s for transcript fetch + AI extraction
+export const maxDuration = 180;
 
 const youtubeImportSchema = z.object({
   url: z.string().url("URL invalide"),
@@ -192,20 +192,32 @@ async function fetchViaConsentBypass(videoId: string): Promise<string | null> {
 }
 
 /**
- * Master transcript fetcher: tries all 3 methods in order
+ * Add timeout to a promise
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
+/**
+ * Master transcript fetcher: runs all 3 methods in parallel, returns first success
  */
 async function fetchTranscriptWithFallback(videoId: string): Promise<string | null> {
-  // Method A: youtube-transcript library
-  const libResult = await fetchViaLibrary(videoId);
-  if (libResult) return libResult;
+  // Run all 3 methods in parallel with individual 30s timeouts
+  const results = await Promise.allSettled([
+    withTimeout(fetchViaLibrary(videoId), 30_000),
+    withTimeout(fetchViaInnertube(videoId), 30_000),
+    withTimeout(fetchViaConsentBypass(videoId), 30_000),
+  ]);
 
-  // Method B: Direct innertube API scraping
-  const innertubeResult = await fetchViaInnertube(videoId);
-  if (innertubeResult) return innertubeResult;
-
-  // Method C: Consent bypass scraping
-  const consentResult = await fetchViaConsentBypass(videoId);
-  if (consentResult) return consentResult;
+  // Return first non-null result
+  for (const result of results) {
+    if (result.status === "fulfilled" && result.value) {
+      return result.value;
+    }
+  }
 
   return null;
 }
