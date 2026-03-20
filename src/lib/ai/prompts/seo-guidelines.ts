@@ -506,21 +506,25 @@ export const INTENT_STRATEGIES: Record<string, { plan: string; writing: string; 
 - Le tableau utilise <div class="table-container"><table>...</table></div> avec colonnes produits
 - format_hint : "table" pour le bloc comparatif principal, "prose" pour les analyses
 - 1500-2500 mots
-- Le dernier H2 avant FAQ = "Lequel choisir ?" avec verdict personnalise par profil`,
+- Le dernier H2 avant FAQ = "Lequel choisir ?" avec verdict personnalise par profil
+- Si des DONNEES PRODUITS sont fournies, le tableau comparatif DOIT utiliser UNIQUEMENT ces donnees. INTERDIT d'inventer des specs, prix ou notes. Chaque cellule de spec doit avoir un code couleur (vert=above, orange=average, rouge=below) via styles inline.
+- Les liens d'affiliation ne sont inseres QUE pour les produits avec affiliate_enabled=true`,
     writing: `Strategie d'ecriture "comparison" — Objectif : comparatif objectif + verdict :
 - Tableau HTML dans <div class="table-container"><table> avec <thead> Critere | Produit A | Produit B
-- Design epure : pas de bordures lourdes, zebra-striping et hover geres par CSS
-- Attribut data-removable="true" sur les <th>/<td> des colonnes produit
+- CODE COULEUR OBLIGATOIRE sur chaque cellule de spec : vert (above average), orange (average), rouge (below average) via styles inline sur les <td>
+- Design epure avec styles inline (compatible WordPress) : border-collapse, padding, font-weight
 - Apres le tableau : analyse prose de chaque critere important
-- Ton objectif et factuel, chiffres precis
+- Ton objectif et factuel, chiffres precis — UNIQUEMENT les donnees fournies
 - Verdict personnalise : "Si vous cherchez X → Produit A / Si votre priorite est Y → Produit B"
-- Ne favorise pas un produit arbitrairement — argumente chaque recommandation`,
+- Ne favorise pas un produit arbitrairement — argumente chaque recommandation
+- Boutons CTA affilies : uniquement pour les produits avec lien d'affiliation actif, attribut rel="nofollow sponsored"`,
     critique: `Criteres specifiques "comparison" :
-- Tableau comparatif present dans un <div class="table-container"> ?
+- Tableau comparatif present avec code couleur (vert/orange/rouge) sur les cellules ?
 - Equilibre entre les produits compares (pas de biais visible) ?
+- Les donnees du tableau correspondent-elles EXACTEMENT aux donnees produits fournies (pas d'invention) ?
 - Verdict "lequel choisir selon votre profil" present ?
 - Format standardise (tableau + analyses par critere) respecte ?
-- Criteres de comparaison pertinents et factuels ?`,
+- Liens d'affiliation avec rel="nofollow sponsored" uniquement sur les produits actives ?`,
   },
 
   discover: {

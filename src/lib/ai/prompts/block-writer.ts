@@ -51,6 +51,10 @@ interface BlockWriterParams {
   totalBlocks?: number
   articleOutline?: string
   blockKeyIdeas?: string[]
+  productComparison?: {
+    products: { name: string; brand: string | null; price: number | null; price_label: string | null; rating: number | null; rating_scale: number; verdict: string | null; pros: string[]; cons: string[]; specs: { criterion_id: string; value: string; rating: string }[]; affiliate_url: string | null; affiliate_enabled: boolean }[]
+    criteria: { id: string; name: string; unit: string | null }[]
+  }
 }
 
 interface BlockWriterPrompt {
@@ -404,6 +408,58 @@ Ce bloc est dans la partie intermediaire de l'article. Approfondis le sujet mais
 - Bon equilibre entre detail et concision
 - Paragraphes courts (2-3 lignes)
 - Chaque phrase doit apporter de la valeur — zero remplissage`
+  }
+
+  // Inject product comparison data for comparison intent
+  const { productComparison } = params
+  if (productComparison && productComparison.products.length > 0) {
+    user += `\n\n## DONNEES PRODUITS (UTILISE EXCLUSIVEMENT CES DONNEES)
+
+⚠️ REGLE ABSOLUE : NE PAS inventer de specs, prix, notes ou avantages non fournis.
+Utilise UNIQUEMENT les donnees ci-dessous. Si une donnee manque, omets-la.
+
+### Criteres : ${productComparison.criteria.map(c => c.name + (c.unit ? ` (${c.unit})` : '')).join(', ')}`
+
+    for (const p of productComparison.products) {
+      user += `\n\n**${p.name}**${p.brand ? ` — ${p.brand}` : ''}`
+      if (p.price != null) user += ` | Prix: ${p.price_label || `${p.price} EUR`}`
+      if (p.rating != null) user += ` | Note: ${p.rating}/${p.rating_scale}`
+      const specsWithValues = p.specs.filter(s => s.value)
+      if (specsWithValues.length > 0) {
+        for (const s of specsWithValues) {
+          const criterion = productComparison.criteria.find(c => c.id === s.criterion_id)
+          if (criterion) user += `\n  ${criterion.name}: ${s.value} [${s.rating}]`
+        }
+      }
+      if (p.pros.length > 0) user += `\n  + ${p.pros.join(' | ')}`
+      if (p.cons.length > 0) user += `\n  - ${p.cons.join(' | ')}`
+      if (p.verdict) user += `\n  Verdict: ${p.verdict}`
+    }
+
+    // Color coding instructions for table blocks
+    if (block.format_hint === 'table') {
+      user += `\n\n### CODE COULEUR TABLEAU COMPARATIF (STYLES INLINE OBLIGATOIRES)
+Pour chaque cellule <td> du tableau qui contient une spec :
+- rating "above" → style="background:#dcfce7;color:#166534;font-weight:600;padding:8px 12px"
+- rating "average" → style="background:#fef9c3;color:#854d0e;padding:8px 12px"
+- rating "below" → style="background:#fee2e2;color:#991b1b;font-weight:600;padding:8px 12px"
+Pour le <thead> : style="background:#f1f5f9;font-weight:700;padding:10px 12px;text-align:center"
+Pour le <table> : style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0"
+Chaque <td> et <th> doit avoir style="border:1px solid #e2e8f0" en plus des couleurs.`
+    }
+
+    // Affiliate link instructions
+    const affiliateProducts = productComparison.products.filter(p => p.affiliate_enabled && p.affiliate_url)
+    if (affiliateProducts.length > 0) {
+      user += `\n\n### LIENS D'AFFILIATION
+Apres le tableau comparatif OU dans la section verdict, insere un bouton CTA pour chaque produit affilie :
+<a href="URL" rel="nofollow sponsored" target="_blank" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;margin:4px">Voir le prix — NomProduit</a>
+
+Produits affilies :
+${affiliateProducts.map(p => `- ${p.name} → ${p.affiliate_url}`).join('\n')}
+
+Pour les produits SANS lien d'affiliation, NE PAS generer de CTA.`
+    }
   }
 
   user += `\n\n## 3 REGLES STRICTES

@@ -44,6 +44,10 @@ interface PlanArchitectParams {
     mustAnswerQuestions: string[]
   }
   selectedContentGaps?: string[]
+  productComparison?: {
+    products: { name: string; brand: string | null; price: number | null; price_label: string | null; rating: number | null; rating_scale: number; verdict: string | null; pros: string[]; cons: string[]; specs: { criterion_id: string; value: string; rating: string }[]; affiliate_url: string | null; affiliate_enabled: boolean }[]
+    criteria: { id: string; name: string; unit: string | null }[]
+  }
 }
 
 interface PlanArchitectPrompt {
@@ -79,7 +83,7 @@ interface PlanArchitectPrompt {
 export function buildPlanArchitectPrompt(
   params: PlanArchitectParams
 ): PlanArchitectPrompt {
-  const { keyword, searchIntent, persona, serpData, nuggets, existingSiloArticles, moneyPage, competitorContent, semanticAnalysis, selectedContentGaps } = params
+  const { keyword, searchIntent, persona, serpData, nuggets, existingSiloArticles, moneyPage, competitorContent, semanticAnalysis, selectedContentGaps, productComparison } = params
 
   const currentYear = new Date().getFullYear()
 
@@ -522,6 +526,52 @@ IMPORTANT : les lacunes entre crochets indiquent un FORMAT SPECIFIQUE a respecte
 Nous sommes en ${currentYear}. TOUTE reference temporelle, date ou annee dans les titres, seo_titles, meta_description et content_blocks DOIT etre ${currentYear}.
 INTERDIT : 2024, 2025 ou toute annee autre que ${currentYear}.
 EXCEPTION SLUG : les slugs ne doivent JAMAIS contenir d'annee (un slug est intemporel, il ne change pas d'une annee a l'autre).`
+
+  // Inject product comparison data for "comparison" intent
+  if (productComparison && productComparison.products.length > 0) {
+    user += `\n\n## DONNEES PRODUITS POUR LE COMPARATIF (SOURCE UNIQUE DE VERITE)
+
+⚠️ REGLE ABSOLUE : tu DOIS utiliser UNIQUEMENT les donnees produits ci-dessous.
+INTERDIT d'inventer des specs, prix, notes, avantages ou inconvenients non fournis.
+Si une donnee n'est pas fournie pour un produit, OMETS-LA — ne l'invente pas.
+
+### Criteres de comparaison definis
+${productComparison.criteria.map(c => `- ${c.name}${c.unit ? ` (${c.unit})` : ''}`).join('\n')}
+
+### Produits a comparer`
+
+    for (const p of productComparison.products) {
+      user += `\n\n**${p.name}**${p.brand ? ` (${p.brand})` : ''}`
+      if (p.price != null) user += `\n- Prix : ${p.price_label || `${p.price} EUR`}`
+      if (p.rating != null) user += `\n- Note : ${p.rating}/${p.rating_scale}`
+      if (p.pros.length > 0) user += `\n- Avantages : ${p.pros.join(' | ')}`
+      if (p.cons.length > 0) user += `\n- Inconvenients : ${p.cons.join(' | ')}`
+      if (p.verdict) user += `\n- Verdict : ${p.verdict}`
+      if (p.affiliate_enabled && p.affiliate_url) user += `\n- Lien affilie : ${p.affiliate_url}`
+      const specsWithValues = p.specs.filter(s => s.value)
+      if (specsWithValues.length > 0) {
+        user += `\n- Specs :`
+        for (const s of specsWithValues) {
+          const criterion = productComparison.criteria.find(c => c.id === s.criterion_id)
+          if (criterion) user += `\n  - ${criterion.name} : ${s.value} (${s.rating})`
+        }
+      }
+    }
+
+    user += `\n\n### STRUCTURE OBLIGATOIRE POUR LE COMPARATIF
+- Le PREMIER H2 DOIT contenir un tableau comparatif avec les donnees produits fournies
+- format_hint = "table" pour ce bloc
+- writing_directive DOIT mentionner : "Generer un tableau HTML avec code couleur : vert (above), orange (average), rouge (below) sur chaque cellule de spec"
+- Les H2 suivants analysent chaque critere important en utilisant UNIQUEMENT les donnees fournies
+- Un H2 "Avantages et inconvenients" utilise les pros/cons fournis pour chaque produit
+- Le dernier H2 avant FAQ = "Lequel choisir ?" avec verdict personnalise par profil utilisateur`
+
+    if (productComparison.products.some(p => p.affiliate_enabled)) {
+      user += `\n\n### LIENS D'AFFILIATION
+Les produits suivants ont un lien d'affiliation actif. Le block-writer devra inserer un CTA "Voir le prix" avec l'attribut rel="nofollow sponsored" :
+${productComparison.products.filter(p => p.affiliate_enabled && p.affiliate_url).map(p => `- ${p.name} → ${p.affiliate_url}`).join('\n')}`
+    }
+  }
 
   user += `\n\n## INSTRUCTIONS FINALES
 1. PYRAMIDE INVERSEE : le premier H2 repond DIRECTEMENT a l'intention de recherche

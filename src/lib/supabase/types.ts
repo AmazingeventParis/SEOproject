@@ -63,6 +63,51 @@ export interface SelectedAuthorityLink {
   anchor_context: string
 }
 
+// ---- Product comparison types ----
+
+export type ProductRating = 'above' | 'average' | 'below'
+
+export interface ProductSpec {
+  criterion_id: string
+  value: string
+  rating: ProductRating
+}
+
+export interface ComparisonProduct {
+  id: string
+  article_id: string
+  name: string
+  brand: string | null
+  price: number | null
+  price_label: string | null
+  image_url: string | null
+  affiliate_url: string | null
+  affiliate_enabled: boolean
+  rating: number | null
+  rating_scale: number
+  verdict: string | null
+  pros: string[]
+  cons: string[]
+  specs: ProductSpec[]
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ComparisonCriterion {
+  id: string
+  article_id: string
+  name: string
+  unit: string | null
+  sort_order: number
+  created_at: string
+}
+
+export interface ProductComparisonData {
+  products: ComparisonProduct[]
+  criteria: ComparisonCriterion[]
+}
+
 // ---- Content block (JSONB stored inside seo_articles.content_blocks) ----
 
 export interface ContentBlock {

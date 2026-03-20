@@ -450,6 +450,16 @@ async function executePlan(
     ? { url: site.money_page_url, description: site.money_page_description || '' }
     : null
 
+  // Fetch product comparison data if intent is "comparison"
+  let productComparison: Parameters<typeof buildPlanArchitectPrompt>[0]['productComparison'] = undefined
+  if (article.search_intent === 'comparison') {
+    const serpObj = serpDataRaw as Record<string, unknown> | null
+    if (serpObj?.productComparison) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      productComparison = serpObj.productComparison as any
+    }
+  }
+
   // Build prompt and call AI
   const prompt = buildPlanArchitectPrompt({
     keyword: article.keyword,
@@ -462,6 +472,7 @@ async function executePlan(
     competitorContent: serpDataRaw?.competitorContent,
     semanticAnalysis: serpDataRaw?.semanticAnalysis,
     selectedContentGaps: (serpDataRaw as Record<string, unknown> | null)?.selectedContentGaps as string[] | undefined,
+    productComparison,
   })
 
   const aiResponse = modelOverride
@@ -868,6 +879,12 @@ async function executeWriteBlock(
     totalBlocks: contentBlocks.filter((b: ContentBlock) => b.type !== 'image').length,
     articleOutline,
     blockKeyIdeas: block.key_ideas || [],
+    productComparison: (() => {
+      if (article.search_intent !== 'comparison') return undefined
+      const sd = article.serp_data as Record<string, unknown> | null
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return sd?.productComparison as any
+    })(),
   })
 
   const aiResponse = modelOverride

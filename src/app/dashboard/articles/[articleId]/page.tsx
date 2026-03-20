@@ -42,6 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { ModelSelector } from "@/components/articles/model-selector";
+import { ProductComparisonEditor } from "@/components/articles/product-comparison-editor";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
@@ -73,6 +74,7 @@ import {
   BarChart3,
   TrendingUp,
   Copy,
+  ShoppingCart,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -1980,6 +1982,12 @@ export default function ArticleDetailPage() {
             <FileText className="mr-1.5 h-4 w-4" />
             Plan
           </TabsTrigger>
+          {article.search_intent === "comparison" && (
+            <TabsTrigger value="products">
+              <ShoppingCart className="mr-1.5 h-4 w-4" />
+              Produits
+            </TabsTrigger>
+          )}
           <TabsTrigger value="content">
             <Eye className="mr-1.5 h-4 w-4" />
             Contenu
@@ -2624,6 +2632,13 @@ export default function ArticleDetailPage() {
             );
           })()}
         </TabsContent>
+
+        {/* ========== PRODUCTS TAB (comparison only) ========== */}
+        {article.search_intent === "comparison" && (
+          <TabsContent value="products" className="space-y-4">
+            <ProductComparisonEditor articleId={article.id} />
+          </TabsContent>
+        )}
 
         {/* ========== CONTENT TAB ========== */}
         <TabsContent value="content" className="space-y-4">
