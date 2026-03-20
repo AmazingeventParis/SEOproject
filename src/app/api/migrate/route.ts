@@ -2,18 +2,42 @@ import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
 const MIGRATION_SQL = `
--- Add 'opinion' to search_intent enum
-ALTER TYPE seo_search_intent ADD VALUE IF NOT EXISTS 'opinion';
+-- 004-products: Product comparison tables
+CREATE TABLE IF NOT EXISTS seo_comparison_criteria (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  article_id uuid NOT NULL REFERENCES seo_articles(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  unit text,
+  sort_order integer DEFAULT 0,
+  created_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_seo_comparison_criteria_article_id ON seo_comparison_criteria(article_id);
+
+CREATE TABLE IF NOT EXISTS seo_products (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  article_id uuid NOT NULL REFERENCES seo_articles(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  brand text,
+  price numeric(10,2),
+  price_label text,
+  image_url text,
+  affiliate_url text,
+  affiliate_enabled boolean DEFAULT false,
+  rating numeric(3,1),
+  rating_scale integer DEFAULT 10,
+  verdict text,
+  pros text[] DEFAULT ARRAY[]::text[],
+  cons text[] DEFAULT ARRAY[]::text[],
+  specs jsonb DEFAULT '[]'::jsonb,
+  sort_order integer DEFAULT 0,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_seo_products_article_id ON seo_products(article_id);
 `;
 
-// POST /api/migrate — Run pending schema migrations (dev only)
+// POST /api/migrate — Run pending schema migrations
 export async function POST() {
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json(
-      { status: "error", message: "Migration route disabled in production. Run SQL manually in Supabase." },
-      { status: 403 }
-    );
-  }
   const dbPassword = process.env.POSTGRES_PASSWORD;
 
   if (!dbPassword) {
