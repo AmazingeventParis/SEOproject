@@ -77,39 +77,60 @@ export function generateSeoFilename(
 }
 
 /**
- * French alt text templates indexed by image position/context.
- * Each template includes the keyword naturally for SEO.
- * Variety avoids repetitive alt patterns across an article.
+ * Translate an English image prompt hint to a natural French alt description.
+ * Maps common English image description terms to French equivalents.
  */
-const ALT_HERO_TEMPLATES = [
-  (kw: string) => `Illustration principale sur ${kw}`,
-  (kw: string) => `Guide complet : ${kw}`,
-  (kw: string) => `Tout savoir sur ${kw}`,
-];
+function translatePromptToFrenchAlt(promptHint: string): string {
+  let text = promptHint
+    .toLowerCase()
+    // Common English → French translations for image descriptions
+    .replace(/\beditorial photo (of |showing )?/gi, "photo de ")
+    .replace(/\bphotograph (of |showing )?/gi, "photo de ")
+    .replace(/\bclose-up (of |on )?/gi, "gros plan sur ")
+    .replace(/\baerial view (of )?/gi, "vue aerienne de ")
+    .replace(/\boverhead (view |shot )?(of )?/gi, "vue de dessus de ")
+    .replace(/\bwide shot (of )?/gi, "plan large de ")
+    .replace(/\bperson /gi, "personne ")
+    .replace(/\bpeople /gi, "personnes ")
+    .replace(/\bwoman /gi, "femme ")
+    .replace(/\bman /gi, "homme ")
+    .replace(/\bhome /gi, "maison ")
+    .replace(/\bhouse /gi, "maison ")
+    .replace(/\bgarden /gi, "jardin ")
+    .replace(/\bkitchen /gi, "cuisine ")
+    .replace(/\bbathroom /gi, "salle de bain ")
+    .replace(/\bworker /gi, "artisan ")
+    .replace(/\binstalling /gi, "installant ")
+    .replace(/\bmodern /gi, "moderne ")
+    .replace(/\bnatural light/gi, "lumiere naturelle")
+    .replace(/\bcozy /gi, "chaleureux ")
+    .replace(/\bcomparison /gi, "comparaison ")
+    .replace(/\bbefore and after/gi, "avant et apres")
+    .replace(/\bstep[- ]by[- ]step/gi, "etape par etape")
+    .replace(/\btools /gi, "outils ")
+    .replace(/\bwith /gi, "avec ")
+    .replace(/\band /gi, "et ")
+    .replace(/\bin a /gi, "dans un ")
+    .replace(/\bon a /gi, "sur un ")
+    .trim()
 
-const ALT_SECTION_TEMPLATES = [
-  (kw: string, h: string) => `${h} en rapport avec ${kw}`,
-  (kw: string, h: string) => `${h} : conseils sur ${kw}`,
-  (kw: string, h: string) => `${h} pour mieux comprendre ${kw}`,
-  (kw: string, h: string) => `${h} et ${kw} expliques en detail`,
-  (kw: string, h: string) => `Illustration de ${h.toLowerCase()} dans le contexte de ${kw}`,
-];
+  // Capitalize first letter
+  text = text.charAt(0).toUpperCase() + text.slice(1)
 
-const ALT_SECTION_NO_HEADING_TEMPLATES = [
-  (kw: string) => `Illustration detaillee sur ${kw}`,
-  (kw: string) => `Exemple concret en lien avec ${kw}`,
-  (kw: string) => `Visuel explicatif sur ${kw}`,
-];
+  return text
+}
 
 /**
- * Generate descriptive alt text for an image — always in French, SEO-optimized.
+ * Generate descriptive alt text for an image — describes what's IN the image.
  *
  * Strategy:
- * - Always in French (image_prompt_hint is English for the AI image generator, never used in alt)
- * - Includes the keyword naturally for SEO
- * - Uses heading context for section images
- * - Varied templates to avoid repetitive patterns
+ * - PRIORITY 1: Use imagePromptHint (translated to French) — it describes the actual scene
+ * - PRIORITY 2: Use heading context as fallback
+ * - Keyword is NOT force-injected — only included if it naturally fits the description
  * - Max 125 characters
+ *
+ * Google recommends alt text that describes the image content, not keyword stuffing.
+ * A good alt text helps visually impaired users understand what the image shows.
  */
 export function generateAltText(
   keyword: string,
@@ -118,25 +139,21 @@ export function generateAltText(
   imagePromptHint?: string | null,
   sectionIndex?: number
 ): string {
-  const kw = keyword.toLowerCase();
+  void sectionIndex; // unused now but kept for API compat
   let alt: string;
 
-  if (imageType === "hero") {
-    const idx = (sectionIndex || 0) % ALT_HERO_TEMPLATES.length;
-    alt = ALT_HERO_TEMPLATES[idx](kw);
+  if (imagePromptHint && imagePromptHint.trim().length > 10) {
+    // Best case: we know what the image actually shows
+    alt = translatePromptToFrenchAlt(imagePromptHint);
+  } else if (imageType === "hero") {
+    // Hero without prompt hint: generic but descriptive
+    alt = `Illustration sur le theme ${keyword.toLowerCase()}`;
   } else if (heading) {
-    // Clean heading: remove trailing punctuation and normalize
+    // Section image: describe based on heading context
     const cleanHeading = heading.replace(/[?!.:]+$/, "").trim();
-    const idx = (sectionIndex || 0) % ALT_SECTION_TEMPLATES.length;
-    // If heading already contains the keyword, use a simpler format
-    if (cleanHeading.toLowerCase().includes(kw)) {
-      alt = `${capitalize(cleanHeading)} : illustration et conseils`;
-    } else {
-      alt = ALT_SECTION_TEMPLATES[idx](kw, capitalize(cleanHeading));
-    }
+    alt = `Illustration : ${cleanHeading.toLowerCase()}`;
   } else {
-    const idx = (sectionIndex || 0) % ALT_SECTION_NO_HEADING_TEMPLATES.length;
-    alt = ALT_SECTION_NO_HEADING_TEMPLATES[idx](kw);
+    alt = `Illustration complementaire sur ${keyword.toLowerCase()}`;
   }
 
   // Truncate at last space within limit
