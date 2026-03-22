@@ -296,11 +296,12 @@ ${plainPrevious}
     user += `\n\n## RESUME CUMULATIF DE L'ARTICLE (toutes les sections deja ecrites)
 ${articleDigest}
 ---
-REGLE ANTI-REDITE ABSOLUE :
+REGLE ANTI-REDITE ABSOLUE (CRITIQUE — une redite = echec de la section) :
 - Chaque idee, exemple, chiffre, conseil ou formulation listee ci-dessus est DEJA dans l'article
-- Tu ne dois JAMAIS repeter, reformuler ou paraphraser ces elements
+- Tu ne dois JAMAIS repeter, reformuler ou paraphraser ces elements — meme avec des mots differents
+- Si un concept a ete explique (ex: "qualite reflex"), ne le re-explique PAS, fais-y reference en 3 mots max et passe a autre chose
 - Apporte des idees NOUVELLES, des angles DIFFERENTS, des informations COMPLEMENTAIRES
-- Si tu n'as rien de nouveau a dire sur un point, PASSE AU SUIVANT`
+- Si tu n'as rien de nouveau a dire sur un point, PASSE AU SUIVANT — mieux vaut un bloc plus court que repetitif`
   }
 
   // Add nuggets to integrate
@@ -462,13 +463,14 @@ Pour les produits SANS lien d'affiliation, NE PAS generer de CTA.`
     }
   }
 
-  user += `\n\n## 3 REGLES STRICTES
+  user += `\n\n## 4 REGLES STRICTES
 **REGLE 1 — TRANSITION** : La premiere phrase doit creer un pont naturel avec la section precedente. Pas de "Voyons maintenant", mais une transition logique qui montre pourquoi on passe a ce nouveau point.
 **REGLE 2 — ZERO REDITE** : Ne repete AUCUN argument, exemple, chiffre ou conseil deja present dans les sections precedentes (voir le plan et le texte de la section precedente). Si un point a deja ete traite, passe-le. Apporte uniquement des idees NOUVELLES.
 **REGLE 3 — PAS DE CONCLUSION** : Ne conclus PAS cette section. Pas de phrase de synthese en fin de section ("En resume...", "Ainsi...", "En definitive..."). La derniere phrase doit rester dans le vif du sujet ou ouvrir vers la section suivante.
+**REGLE 4 — DENSITE MAXIMALE** : Chaque phrase doit apporter une information NOUVELLE ou une valeur concrete. Supprime mentalement toute phrase qui ne fait que "remplir" ou reformuler ce qui a deja ete dit dans le meme bloc. Un paragraphe de 2-3 lignes percutantes vaut mieux qu'un paragraphe de 6 lignes dilue. Objectif : zero phrase inutile.
 
 ## RAPPEL
-- Objectif minimum : ~${block.word_count} mots (ecris plus si le sujet le merite, ne coupe pas artificiellement)
+- Objectif : ~${block.word_count} mots — c'est une CIBLE, pas un minimum. Si tu peux transmettre toute l'info en moins de mots, FAIS-LE. Un bloc concis et dense est meilleur qu'un bloc long et dilue.
 - Type de bloc : ${block.type}${block.format_hint ? ` (format: ${block.format_hint})` : ''}
 - Retourne UNIQUEMENT du HTML propre
 - Ecris en tant que ${persona.name} (${persona.role})

@@ -807,15 +807,15 @@ async function executeWriteBlock(
     .join('\n')
 
   // Build cumulative digest of ALL previously written sections to prevent repetition
+  // Increased from 500 to 800 chars per block for better anti-repetition coverage
   let articleDigest: string | undefined
   const writtenBefore = contentBlocks
     .slice(0, blockIndex)
     .filter((b: ContentBlock) => b.content_html && (b.status === 'written' || b.status === 'approved'))
-  if (writtenBefore.length >= 2) {
-    // Extract key ideas from each section: heading + plain text summary (500 chars max each)
+  if (writtenBefore.length >= 1) {
     const digestParts = writtenBefore.map((b: ContentBlock) => {
       const plain = (b.content_html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-      const summary = plain.slice(0, 500) + (plain.length > 500 ? '...' : '')
+      const summary = plain.slice(0, 800) + (plain.length > 800 ? '...' : '')
       return `- [${b.heading || 'Intro'}] ${summary}`
     })
     articleDigest = digestParts.join('\n')
@@ -2041,67 +2041,52 @@ function convertHtmlToGutenbergBlocks(html: string): string {
   // If already contains Gutenberg block comments, return as-is
   if (html.includes('<!-- wp:')) return html
 
-  const blocks: string[] = []
+  // UNIFIED APPROACH: wrap entire section content in a SINGLE wp:html block
+  // This prevents WordPress from fragmenting content into 3-4 separate "custom HTML" blocks
+  // that require "recovery attempts". One section = one editable block.
+  //
+  // Exception: standalone <figure> images are converted to native wp:image blocks
+  // for better WordPress media library integration.
 
-  // Split HTML into top-level elements
-  // We parse by matching top-level tags: <p>, <ul>, <ol>, <figure>, <table>, <div>, <blockquote>, <details>
-  const elementRegex = /(<(?:p|ul|ol|figure|table|div|blockquote|details|section|h[1-6])\b[\s\S]*?(?:<\/(?:p|ul|ol|figure|table|div|blockquote|details|section|h[1-6])>|\/>))/gi
-
-  let lastIndex = 0
-  let match: RegExpExecArray | null
-
-  while ((match = elementRegex.exec(html)) !== null) {
-    // Capture any text between elements (rare but possible)
-    if (match.index > lastIndex) {
-      const between = html.slice(lastIndex, match.index).trim()
-      if (between) {
-        blocks.push(`<!-- wp:html -->\n${between}\n<!-- /wp:html -->`)
-      }
-    }
-
-    const el = match[1]
-    const tagMatch = el.match(/^<(\w+)/)
-    const tag = tagMatch?.[1]?.toLowerCase() || ''
-
-    switch (tag) {
-      case 'p':
-        blocks.push(`<!-- wp:paragraph -->\n${el}\n<!-- /wp:paragraph -->`)
-        break
-      case 'ul':
-        blocks.push(`<!-- wp:list -->\n${el}\n<!-- /wp:list -->`)
-        break
-      case 'ol':
-        blocks.push(`<!-- wp:list {"ordered":true} -->\n${el}\n<!-- /wp:list -->`)
-        break
-      case 'figure':
-        blocks.push(`<!-- wp:image -->\n${el}\n<!-- /wp:image -->`)
-        break
-      case 'blockquote':
-        blocks.push(`<!-- wp:quote -->\n${el}\n<!-- /wp:quote -->`)
-        break
-      case 'h2':
-        blocks.push(`<!-- wp:heading -->\n${el}\n<!-- /wp:heading -->`)
-        break
-      case 'h3':
-        blocks.push(`<!-- wp:heading {"level":3} -->\n${el}\n<!-- /wp:heading -->`)
-        break
-      case 'h4':
-        blocks.push(`<!-- wp:heading {"level":4} -->\n${el}\n<!-- /wp:heading -->`)
-        break
-      case 'table':
-      case 'div':
-      case 'details':
-      case 'section':
-      default:
-        // Tables, callouts, FAQ, and complex HTML → wp:html block (fully editable)
-        blocks.push(`<!-- wp:html -->\n${el}\n<!-- /wp:html -->`)
-        break
-    }
-
-    lastIndex = match.index + match[0].length
+  // Check if content contains a <figure> with <img> — split around it
+  const figureRegex = /<figure[^>]*>[\s\S]*?<\/figure>/gi
+  const figures: { index: number; length: number; html: string }[] = []
+  let figMatch: RegExpExecArray | null
+  while ((figMatch = figureRegex.exec(html)) !== null) {
+    figures.push({ index: figMatch.index, length: figMatch[0].length, html: figMatch[0] })
   }
 
-  // Remaining content after last match
+  // If no figures, wrap everything in a single wp:html block
+  if (figures.length === 0) {
+    return `<!-- wp:html -->\n${html}\n<!-- /wp:html -->`
+  }
+
+  // Split content around figures: text before → wp:html, figure → wp:image, text after → wp:html
+  const blocks: string[] = []
+  let lastIndex = 0
+
+  for (const fig of figures) {
+    // Content before this figure
+    const before = html.slice(lastIndex, fig.index).trim()
+    if (before) {
+      blocks.push(`<!-- wp:html -->\n${before}\n<!-- /wp:html -->`)
+    }
+
+    // Convert <figure> to native wp:image block (strip <figure> wrapper, keep <img>)
+    const imgMatch = fig.html.match(/<img[^>]+>/i)
+    if (imgMatch) {
+      // Use native wp:image with the img tag — no <figure> wrapper needed
+      const imgTag = imgMatch[0]
+      blocks.push(`<!-- wp:image -->\n<figure class="wp-block-image">${imgTag}</figure>\n<!-- /wp:image -->`)
+    } else {
+      // No img found in figure, keep as html block
+      blocks.push(`<!-- wp:html -->\n${fig.html}\n<!-- /wp:html -->`)
+    }
+
+    lastIndex = fig.index + fig.length
+  }
+
+  // Remaining content after last figure
   const remaining = html.slice(lastIndex).trim()
   if (remaining) {
     blocks.push(`<!-- wp:html -->\n${remaining}\n<!-- /wp:html -->`)
