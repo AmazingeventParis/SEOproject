@@ -71,6 +71,7 @@ export const SEO_ANTI_AI_PATTERNS = `Formulations INTERDITES (style ChatGPT/IA g
 - "En conclusion..." / "En resume..." / "En definitive..." / "Ainsi..." (en debut de phrase conclusive)
 - "Au fil de cet article..." / "Tout au long de cet article..."
 - Toute formulation generique ou bateau reconnaissable comme generee par IA
+- Toute hyperbole ou jugement excessif : "pure arnaque", "absolument genial", "catastrophique", "fuyez", "revolutionnaire", "hallucinant", "scandaleux"
 
 Ponctuation et typographie INTERDITES :
 - PAS de guillemets francais (\u00ab \u00bb) ni typographiques (\u201c \u201d)
@@ -199,7 +200,15 @@ Style humain et accessible :
 - Tournures actives plutot que passives
 - Mots concrets plutot qu'abstractions
 - Adresses directes au lecteur (vous, votre)
-- Adopte un ton qui parle directement a la cible du persona`
+- Adopte un ton qui parle directement a la cible du persona
+
+Ton mesure et credible (CRITIQUE) :
+- JAMAIS de jugements excessifs ou sensationnalistes : "pure arnaque", "catastrophique", "fuyez absolument", "c'est revolutionnaire", "c'est scandaleux", "incroyable", "hallucinant"
+- Prefere des formulations factuelles et nuancees : "le rapport qualite-prix reste discutable", "les performances sont en dessous de la moyenne", "cette option ne convainc pas sur ce critere"
+- Un expert credible ne crie pas — il constate, il argumente, il chiffre. Les superlatifs et les jugements a l'emporte-piece font amateur et generent de la mefiance chez le lecteur averti
+- Evite aussi l'enthousiasme excessif : "absolument genial", "tout simplement parfait", "le meilleur du marche sans conteste" → prefere "une option solide", "un excellent rapport qualite-prix", "parmi les meilleurs de sa categorie"
+- Ton professionnel : affirmatif mais jamais agressif, honnete mais jamais dramatique
+- Les avis tranches sont permis UNIQUEMENT s'ils sont immediatement suivis d'un argument factuel (chiffre, comparaison, critere mesurable)`
 
 /**
  * Table style presets per site domain.
