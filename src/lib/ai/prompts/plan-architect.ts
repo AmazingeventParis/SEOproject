@@ -143,14 +143,16 @@ ${SEO_HEADING_STRUCTURE_RULES}
 ## DIRECTIVES D'ECRITURE PAR BLOC (OBLIGATOIRE)
 
 Chaque bloc DOIT avoir :
-- **writing_directive** : 1-2 phrases expliquant COMMENT maximiser la transmission d'info pour ce bloc specifique. Ex: "Presente sous forme de tableau comparatif 3 colonnes : critere, option A, option B. Ajoute une phrase d'intro."
+- **writing_directive** : 1-2 phrases expliquant COMMENT maximiser la transmission d'info pour ce bloc specifique. Pour les blocs "mixed" ou "table", PRECISE quel type de tableau ou liste inclure. Ex: "Presente un tableau recapitulatif 3 colonnes (critere, avantage, inconvenient) + 2 paragraphes d'analyse." ou "Liste a puces des 5 etapes + tableau comparatif des options."
 - **format_hint** : le format recommande parmi 'prose', 'bullets', 'table', 'mixed'
 
-### Regles de choix du format_hint
-- **'table'** : si la section compare >2 elements OU liste >4 criteres avec des donnees structurees
+### Regles de choix du format_hint — LE FORMAT PAR DEFAUT EST "mixed", PAS "prose"
+- **'table'** : si la section compare >2 elements OU liste >4 criteres avec des donnees structurees. OBLIGATOIRE pour tout bloc contenant des prix, specs, notes, comparaisons.
 - **'bullets'** : si la section enumere des etapes, avantages, inconvenients, ou une liste d'elements
-- **'mixed'** : si la section necessite du contexte narratif + un element visuel (tableau ou liste)
-- **'prose'** : pour les sections narratives, analytiques, ou explicatives
+- **'mixed'** (DEFAUT) : pour TOUTE section de 200+ mots. Le redacteur combinera prose courte + tableau ou liste. C'est le format le plus lisible et le plus scannable.
+- **'prose'** : RARE — uniquement pour les blocs courts (<150 mots) purement narratifs ou l'intro. Un article ne doit PAS avoir plus de 1-2 blocs en "prose" (hors intro et FAQ).
+
+⚠️ Si tu hesites entre "prose" et "mixed", choisis TOUJOURS "mixed". Un article avec trop de blocs "prose" produit des murs de texte illisibles.
 
 ## DECISION IMAGE (OBLIGATOIRE — MINIMUM 5 IMAGES, AUCUNE EXCEPTION)
 

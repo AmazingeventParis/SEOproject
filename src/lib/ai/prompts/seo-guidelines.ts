@@ -192,7 +192,12 @@ export const SEO_WRITING_STYLE_RULES = `- Ecris dans un style naturel, fluide et
 - Pas de formulations generiques ou bateaux
 - Pas de repetitions excessives, pas de style monotone
 - Zero fluff : chaque phrase doit apporter de l'information ou de la valeur. Supprime tout remplissage.
-- RYTHME VISUEL : alterne prose courte → liste a puces → prose → tableau → prose. Le lecteur ne doit JAMAIS voir un bloc de texte compact de plus de 6 lignes sans respiration visuelle.
+- RYTHME VISUEL OBLIGATOIRE — ZERO MUR DE TEXTE :
+  * Alterne SYSTEMATIQUEMENT : prose courte (2-3 lignes) → liste a puces OU tableau → prose courte → element visuel. Le lecteur ne doit JAMAIS voir plus de 4 lignes de prose continue sans respiration visuelle.
+  * REGLE DES 150 MOTS : tout passage de prose depassant 150 mots DOIT etre coupe par une liste a puces (<ul>/<ol>) ou un tableau recapitulatif. Pas d'exception.
+  * TABLEAUX OBLIGATOIRES : chaque article de 1500+ mots doit contenir au MINIMUM 2 tableaux HTML (comparatif, recapitulatif, criteres, specs...). Les tableaux sont le format le plus scannable pour le lecteur presse.
+  * LISTES A PUCES : des que tu enumeres 3+ elements (avantages, etapes, criteres, conseils), utilise une liste <ul> ou <ol> avec <strong> sur le point cle. JAMAIS de liste "cachee" dans un paragraphe de prose.
+  * Le lecteur doit pouvoir SCANNER la page en 10 secondes et comprendre les points cles grace aux elements visuels (tableaux, listes, mots en gras).
 
 Style humain et accessible :
 - Ecris comme un humain expert qui parle a un autre humain
