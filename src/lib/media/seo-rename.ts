@@ -77,56 +77,12 @@ export function generateSeoFilename(
 }
 
 /**
- * Translate an English image prompt hint to a natural French alt description.
- * Maps common English image description terms to French equivalents.
- */
-function translatePromptToFrenchAlt(promptHint: string): string {
-  let text = promptHint
-    .toLowerCase()
-    // Common English → French translations for image descriptions
-    .replace(/\beditorial photo (of |showing )?/gi, "photo de ")
-    .replace(/\bphotograph (of |showing )?/gi, "photo de ")
-    .replace(/\bclose-up (of |on )?/gi, "gros plan sur ")
-    .replace(/\baerial view (of )?/gi, "vue aerienne de ")
-    .replace(/\boverhead (view |shot )?(of )?/gi, "vue de dessus de ")
-    .replace(/\bwide shot (of )?/gi, "plan large de ")
-    .replace(/\bperson /gi, "personne ")
-    .replace(/\bpeople /gi, "personnes ")
-    .replace(/\bwoman /gi, "femme ")
-    .replace(/\bman /gi, "homme ")
-    .replace(/\bhome /gi, "maison ")
-    .replace(/\bhouse /gi, "maison ")
-    .replace(/\bgarden /gi, "jardin ")
-    .replace(/\bkitchen /gi, "cuisine ")
-    .replace(/\bbathroom /gi, "salle de bain ")
-    .replace(/\bworker /gi, "artisan ")
-    .replace(/\binstalling /gi, "installant ")
-    .replace(/\bmodern /gi, "moderne ")
-    .replace(/\bnatural light/gi, "lumiere naturelle")
-    .replace(/\bcozy /gi, "chaleureux ")
-    .replace(/\bcomparison /gi, "comparaison ")
-    .replace(/\bbefore and after/gi, "avant et apres")
-    .replace(/\bstep[- ]by[- ]step/gi, "etape par etape")
-    .replace(/\btools /gi, "outils ")
-    .replace(/\bwith /gi, "avec ")
-    .replace(/\band /gi, "et ")
-    .replace(/\bin a /gi, "dans un ")
-    .replace(/\bon a /gi, "sur un ")
-    .trim()
-
-  // Capitalize first letter
-  text = text.charAt(0).toUpperCase() + text.slice(1)
-
-  return text
-}
-
-/**
- * Generate descriptive alt text for an image — describes what's IN the image.
+ * Generate descriptive alt text for an image — describes the VISIBLE scene.
  *
  * Strategy:
- * - PRIORITY 1: Use imagePromptHint (translated to French) — it describes the actual scene
- * - PRIORITY 2: Use heading context as fallback
- * - Keyword is NOT force-injected — only included if it naturally fits the description
+ * - imagePromptHint is IGNORED (it's an English prompt for Fal.ai, not a description)
+ * - Alt text is built from the heading context in clean French
+ * - Describes what a person would SEE in the image, not keywords
  * - Max 125 characters
  *
  * Google recommends alt text that describes the image content, not keyword stuffing.
@@ -136,37 +92,48 @@ export function generateAltText(
   keyword: string,
   heading: string | null,
   imageType: "hero" | "section",
-  imagePromptHint?: string | null,
+  _imagePromptHint?: string | null,
   sectionIndex?: number
 ): string {
-  void sectionIndex; // unused now but kept for API compat
-  let alt: string;
+  void _imagePromptHint; // intentionally ignored — English AI prompt, not a visual description
 
-  if (imagePromptHint && imagePromptHint.trim().length > 10) {
-    // Best case: we know what the image actually shows
-    alt = translatePromptToFrenchAlt(imagePromptHint);
-  } else if (imageType === "hero") {
-    // Hero without prompt hint: generic but descriptive
-    alt = `Illustration sur le theme ${keyword.toLowerCase()}`;
-  } else if (heading) {
-    // Section image: describe based on heading context
-    const cleanHeading = heading.replace(/[?!.:]+$/, "").trim();
-    alt = `Illustration : ${cleanHeading.toLowerCase()}`;
-  } else {
-    alt = `Illustration complementaire sur ${keyword.toLowerCase()}`;
+  if (imageType === "hero") {
+    // Hero: simple descriptive alt based on keyword
+    return truncateAlt(`Photo illustrant ${keyword.toLowerCase()}`);
   }
 
-  // Truncate at last space within limit
-  if (alt.length > MAX_ALT_LENGTH) {
-    const truncated = alt.slice(0, MAX_ALT_LENGTH);
-    const lastSpace = truncated.lastIndexOf(" ");
-    if (lastSpace > MAX_ALT_LENGTH * 0.5) {
-      return truncated.slice(0, lastSpace);
-    }
-    return truncated;
+  if (heading) {
+    // Section image: describe the visual scene based on heading topic
+    const cleanHeading = heading
+      .replace(/[?!.:…]+$/g, "")
+      .replace(/^\d+[\s.):-]+/, "") // remove leading numbers "3. " "4) "
+      .trim();
+
+    // Vary the alt text pattern based on section index to avoid repetition
+    const idx = sectionIndex ?? 0;
+    const patterns = [
+      (h: string) => `${h}`,
+      (h: string) => `Illustration : ${h.toLowerCase()}`,
+      (h: string) => `Photo representant ${h.toLowerCase()}`,
+      (h: string) => `Vue detaillee : ${h.toLowerCase()}`,
+      (h: string) => `${h} en image`,
+    ];
+    const pattern = patterns[idx % patterns.length];
+    return truncateAlt(pattern(cleanHeading));
   }
 
-  return alt;
+  return truncateAlt(`Illustration complementaire sur ${keyword.toLowerCase()}`);
+}
+
+/** Truncate alt text at the last space within the 125-char limit */
+function truncateAlt(alt: string): string {
+  if (alt.length <= MAX_ALT_LENGTH) return alt;
+  const truncated = alt.slice(0, MAX_ALT_LENGTH);
+  const lastSpace = truncated.lastIndexOf(" ");
+  if (lastSpace > MAX_ALT_LENGTH * 0.5) {
+    return truncated.slice(0, lastSpace);
+  }
+  return truncated;
 }
 
 /**
