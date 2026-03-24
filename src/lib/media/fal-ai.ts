@@ -50,6 +50,11 @@ function isContentPolicyError(error: unknown): boolean {
   return msg.includes('Unprocessable') || msg.includes('422') || msg.includes('content policy');
 }
 
+function isForbiddenError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return msg.includes('Forbidden') || msg.includes('forbidden') || msg.includes('403') || msg.includes('Unauthorized') || msg.includes('401');
+}
+
 // ---- Anti-text & realism directives (appended to every prompt) ----
 const REALISM_SUFFIX = [
   "Ultra realistic photograph taken with a Canon EOS R5, 35mm lens, f/2.8 aperture.",
@@ -109,6 +114,12 @@ export async function generateImage(
     if (isContentPolicyError(error)) {
       const keywordMatch = prompt.match(/about "([^"]+)"/);
       throw new ContentPolicyError(keywordMatch?.[1] || 'inconnu');
+    }
+    // On 403/401 (API key invalid, expired, or missing), throw clear error
+    if (isForbiddenError(error)) {
+      throw new Error(
+        `Cle API Fal.ai invalide ou expiree (403 Forbidden). Verifiez FAL_KEY dans les variables d'environnement ou dans seo_config.`
+      );
     }
     if (error instanceof Error) {
       throw new Error(
