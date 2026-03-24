@@ -779,8 +779,7 @@ async function executeWriteBlock(
   const internalLinkTargets = block.internal_link_targets || []
   const siteDomain = article.seo_sites?.domain
 
-  // Authority link injection: in a H2 block (non-FAQ), NEVER in the intro or first H2
-  // Rule: backlinks must appear AFTER the first H2 (i.e. from the 2nd H2 onward)
+  // Authority link injection: any block AFTER the first H2 (never in intro or first H2)
   const selectedAuth = article.selected_authority_link as SelectedAuthorityLink | null
   const alreadyPlaced = contentBlocks
     .slice(0, blockIndex)
@@ -788,7 +787,8 @@ async function executeWriteBlock(
   const h2CountBefore = contentBlocks
     .slice(0, blockIndex)
     .filter(b => b.type === 'h2').length
-  const shouldInjectAuth = selectedAuth && block.type === 'h2' && !alreadyPlaced && h2CountBefore >= 1
+  const isAfterFirstH2 = h2CountBefore >= 1 || (block.type === 'h2' && h2CountBefore >= 1)
+  const shouldInjectAuth = selectedAuth && !alreadyPlaced && isAfterFirstH2 && block.type !== 'faq'
 
   // Get the content of the immediately preceding written block for coherence
   let previousBlockContent: string | undefined
