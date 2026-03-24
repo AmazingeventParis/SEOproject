@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import {
   RefreshCw,
   Search,
@@ -26,6 +27,7 @@ import {
   TrendingDown,
   Target,
   Zap,
+  Pencil,
 } from "lucide-react";
 
 interface Site {
@@ -108,6 +110,7 @@ export default function RevampPage() {
   const [analyzing, setAnalyzing] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedCandidate, setExpandedCandidate] = useState<number | null>(null);
+  const [candidateKeywords, setCandidateKeywords] = useState<Record<number, string>>({});
 
   useEffect(() => {
     fetch("/api/sites")
@@ -144,7 +147,14 @@ export default function RevampPage() {
       const res = await fetch(`/api/revamp/candidates?siteId=${selectedSiteId}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setCandidates(data.candidates || []);
+      const newCandidates = data.candidates || [];
+      setCandidates(newCandidates);
+      // Pre-fill keyword field with GSC best keyword (editable by user)
+      const prefilled: Record<number, string> = {};
+      for (const c of newCandidates) {
+        prefilled[c.wpPostId] = c.bestKeyword || "";
+      }
+      setCandidateKeywords(prev => ({ ...prev, ...prefilled }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -153,6 +163,11 @@ export default function RevampPage() {
   };
 
   const analyzeCandidate = async (candidate: RevampCandidate) => {
+    const manualKeyword = candidateKeywords[candidate.wpPostId]?.trim();
+    if (!manualKeyword) {
+      setError("Veuillez saisir le mot-cle principal avant de lancer l'analyse.");
+      return;
+    }
     setAnalyzing(candidate.wpPostId);
     setError(null);
     try {
@@ -162,7 +177,7 @@ export default function RevampPage() {
         body: JSON.stringify({
           siteId: selectedSiteId,
           wpPostId: candidate.wpPostId,
-          keyword: candidate.bestKeyword || undefined,
+          keyword: manualKeyword,
         }),
       });
       const data = await res.json();
@@ -355,22 +370,48 @@ export default function RevampPage() {
                           </a>
                         </div>
 
-                        {/* Top Keywords */}
+                        {/* Editable keyword field */}
+                        <div>
+                          <h4 className="text-sm font-semibold mb-2 flex items-center gap-1">
+                            <Pencil className="h-4 w-4" /> Mot-cle principal (obligatoire)
+                          </h4>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={candidateKeywords[candidate.wpPostId] || ""}
+                              onChange={(e) => setCandidateKeywords(prev => ({ ...prev, [candidate.wpPostId]: e.target.value }))}
+                              placeholder="Saisissez le mot-cle principal..."
+                              className="max-w-md"
+                            />
+                            {!candidateKeywords[candidate.wpPostId]?.trim() && (
+                              <span className="text-xs text-red-500">Requis</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">Cliquez sur un mot-cle ci-dessous pour le selectionner, ou saisissez le votre.</p>
+                        </div>
+
+                        {/* Top Keywords (clickable to select) */}
                         {candidate.topKeywords.length > 0 && (
                           <div>
                             <h4 className="text-sm font-semibold mb-2 flex items-center gap-1">
-                              <Target className="h-4 w-4" /> Mots-cles principaux
+                              <Target className="h-4 w-4" /> Mots-cles GSC (cliquez pour selectionner)
                             </h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
-                              {candidate.topKeywords.map((kw, i) => (
-                                <div key={i} className="flex items-center gap-3 text-sm py-1 px-2 rounded bg-background">
-                                  <span className="text-muted-foreground w-4">{i + 1}.</span>
-                                  <span className="flex-1 font-medium truncate">{kw.query}</span>
-                                  <span className="text-muted-foreground text-xs">{kw.impressions} imp.</span>
-                                  <span className="text-muted-foreground text-xs">pos {kw.position.toFixed(1)}</span>
-                                  <span className="text-muted-foreground text-xs">CTR {(kw.ctr * 100).toFixed(1)}%</span>
-                                </div>
-                              ))}
+                              {candidate.topKeywords.map((kw, i) => {
+                                const isSelected = candidateKeywords[candidate.wpPostId] === kw.query;
+                                return (
+                                  <div
+                                    key={i}
+                                    className={`flex items-center gap-3 text-sm py-1 px-2 rounded cursor-pointer transition-colors ${isSelected ? "bg-primary/10 ring-1 ring-primary" : "bg-background hover:bg-muted"}`}
+                                    onClick={() => setCandidateKeywords(prev => ({ ...prev, [candidate.wpPostId]: kw.query }))}
+                                  >
+                                    <span className="text-muted-foreground w-4">{i + 1}.</span>
+                                    <span className="flex-1 font-medium truncate">{kw.query}</span>
+                                    <span className="text-muted-foreground text-xs">{kw.impressions} imp.</span>
+                                    <span className="text-muted-foreground text-xs">pos {kw.position.toFixed(1)}</span>
+                                    <span className="text-muted-foreground text-xs">CTR {(kw.ctr * 100).toFixed(1)}%</span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
