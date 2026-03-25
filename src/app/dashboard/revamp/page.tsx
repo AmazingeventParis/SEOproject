@@ -348,15 +348,23 @@ export default function RevampPage() {
                         </div>
                       </div>
 
-                      {/* Action */}
-                      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {/* Keyword + Action */}
+                      <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                         {alreadyRevamped ? (
                           <Badge variant="secondary"><CheckCircle2 className="mr-1 h-3 w-3" />Deja analyse</Badge>
                         ) : (
-                          <Button variant="default" size="sm" onClick={() => analyzeCandidate(candidate)} disabled={isAnalyzing}>
-                            {isAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                            Analyser
-                          </Button>
+                          <>
+                            <Input
+                              value={candidateKeywords[candidate.wpPostId] || ""}
+                              onChange={(e) => setCandidateKeywords(prev => ({ ...prev, [candidate.wpPostId]: e.target.value }))}
+                              placeholder="Mot-cle..."
+                              className="w-[200px] h-8 text-sm"
+                            />
+                            <Button variant="default" size="sm" onClick={() => analyzeCandidate(candidate)} disabled={isAnalyzing || !candidateKeywords[candidate.wpPostId]?.trim()}>
+                              {isAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                              Analyser
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -370,26 +378,7 @@ export default function RevampPage() {
                           </a>
                         </div>
 
-                        {/* Editable keyword field */}
-                        <div>
-                          <h4 className="text-sm font-semibold mb-2 flex items-center gap-1">
-                            <Pencil className="h-4 w-4" /> Mot-cle principal (obligatoire)
-                          </h4>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              value={candidateKeywords[candidate.wpPostId] || ""}
-                              onChange={(e) => setCandidateKeywords(prev => ({ ...prev, [candidate.wpPostId]: e.target.value }))}
-                              placeholder="Saisissez le mot-cle principal..."
-                              className="max-w-md"
-                            />
-                            {!candidateKeywords[candidate.wpPostId]?.trim() && (
-                              <span className="text-xs text-red-500">Requis</span>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">Cliquez sur un mot-cle ci-dessous pour le selectionner, ou saisissez le votre.</p>
-                        </div>
-
-                        {/* Top Keywords (clickable to select) */}
+                        {/* Top Keywords (clickable to select as main keyword) */}
                         {candidate.topKeywords.length > 0 && (
                           <div>
                             <h4 className="text-sm font-semibold mb-2 flex items-center gap-1">
