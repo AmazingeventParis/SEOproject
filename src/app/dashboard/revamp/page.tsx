@@ -27,7 +27,6 @@ import {
   TrendingDown,
   Target,
   Zap,
-  Pencil,
 } from "lucide-react";
 
 interface Site {
