@@ -25,6 +25,7 @@ import { createPost, updatePost, uploadMedia, findBestCategory, findOrCreateTags
 import { analyzeKeywordDensity } from '@/lib/seo/keyword-analysis'
 import { buildCritiquePrompt, validateCritiqueResult } from '@/lib/ai/prompts/critique'
 import { buildOptimizeBlocksPrompt } from '@/lib/ai/prompts/optimize-blocks'
+import { checkNuggetIntegration, type NuggetCheckDetail, type NuggetIntegrationResult } from './quality-checks'
 
 /**
  * Extract and parse JSON from AI response text.
@@ -1483,6 +1484,58 @@ async function executeSeo(
   const blocksWithNuggets = contentBlocks.filter(b => b.nugget_ids && b.nugget_ids.length > 0).length
   const nuggetDensity = contentBlocks.length > 0 ? blocksWithNuggets / contentBlocks.length : 0
 
+  // 4b. Verify nugget integration — check assigned nuggets are actually in written text
+  let nuggetIntegration: NuggetIntegrationResult | null = null
+  const allNuggetIds = contentBlocks
+    .flatMap(b => b.nugget_ids || [])
+    .filter((id, i, arr) => arr.indexOf(id) === i) // dedupe
+
+  if (allNuggetIds.length > 0) {
+    const { data: nuggets } = await supabase
+      .from('seo_nuggets')
+      .select('id, content')
+      .in('id', allNuggetIds)
+
+    if (nuggets && nuggets.length > 0) {
+      const nuggetMap = new Map(nuggets.map(n => [n.id, n.content]))
+      const details: NuggetCheckDetail[] = []
+
+      for (let bi = 0; bi < contentBlocks.length; bi++) {
+        const block = contentBlocks[bi]
+        const blockNuggetIds = block.nugget_ids || []
+        if (blockNuggetIds.length === 0 || !block.content_html) continue
+
+        for (const nid of blockNuggetIds) {
+          const nuggetContent = nuggetMap.get(nid)
+          if (!nuggetContent) continue
+
+          const { integrated, matchScore } = checkNuggetIntegration(block.content_html, nuggetContent)
+          details.push({
+            blockIndex: bi,
+            heading: block.heading || null,
+            nuggetId: nid,
+            status: integrated ? 'integrated' : 'ignored',
+            matchScore,
+          })
+        }
+      }
+
+      const totalAssigned = details.length
+      const totalIntegrated = details.filter(d => d.status === 'integrated').length
+      const totalIgnored = totalAssigned - totalIntegrated
+
+      nuggetIntegration = {
+        totalAssigned,
+        totalIntegrated,
+        totalIgnored,
+        integrationRate: totalAssigned > 0 ? Math.round((totalIntegrated / totalAssigned) * 100) : 100,
+        details,
+      }
+
+      console.log(`[seo] Nugget integration: ${totalIntegrated}/${totalAssigned} integrated (${nuggetIntegration.integrationRate}%), ${totalIgnored} ignored`)
+    }
+  }
+
   // 5. SEO Audit — sub-step A: programmatic heading verification
   const headingIssues: string[] = []
   const headingBlocks = updatedBlocks.filter(
@@ -1954,6 +2007,7 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
     ...(optimizationResult ? { optimization: optimizationResult } : {}),
     ...(personaConsistency ? { personaConsistency } : {}),
     ...(condensedCount > 0 ? { condensation: { blocksCondensed: condensedCount, reason: 'Blocs du dernier tiers trop longs (>350 mots)' } } : {}),
+    ...(nuggetIntegration ? { nuggetIntegration } : {}),
   }
 
   // 6. Update article
@@ -1995,6 +2049,12 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
         personaConsistency: personaConsistency ? {
           score: personaConsistency.score,
           driftsCount: personaConsistency.drifts.length,
+        } : null,
+        nuggetIntegration: nuggetIntegration ? {
+          totalAssigned: nuggetIntegration.totalAssigned,
+          totalIntegrated: nuggetIntegration.totalIntegrated,
+          totalIgnored: nuggetIntegration.totalIgnored,
+          integrationRate: nuggetIntegration.integrationRate,
         } : null,
       },
     },
