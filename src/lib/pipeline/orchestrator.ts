@@ -391,22 +391,26 @@ async function executePlan(
 ): Promise<PipelineRunResult> {
   const supabase = getServerClient()
 
-  // Fetch nuggets for this site, ranked by keyword relevance
+  // Fetch nuggets for this site, ranked by keyword relevance + recency
   const { data: rawNuggets } = await supabase
     .from('seo_nuggets')
-    .select('id, content, tags, source_type')
+    .select('id, content, tags, source_type, created_at')
     .or(`site_id.eq.${article.site_id},site_id.is.null`)
     .limit(50)
 
-  // Score nuggets by keyword relevance and take top 20
+  // Score nuggets by keyword relevance + recency boost and take top 20
   const kwWords = article.keyword.toLowerCase().split(/\s+/)
+  const nuggetRefYear = new Date().getFullYear()
   const nuggets = (rawNuggets || [])
     .map(n => {
       const content = (n.content || '').toLowerCase()
       const tags = (n.tags || []).map((t: string) => t.toLowerCase())
       const tagScore = kwWords.filter(w => tags.some((t: string) => t.includes(w))).length * 3
       const contentScore = kwWords.filter(w => content.includes(w)).length
-      return { ...n, _relevance: tagScore + contentScore }
+      // Recency boost: nuggets from current year get +5, last year +2
+      const nuggetYear = n.created_at ? new Date(n.created_at).getFullYear() : 0
+      const recencyBoost = nuggetYear === nuggetRefYear ? 5 : nuggetYear === nuggetRefYear - 1 ? 2 : 0
+      return { ...n, _relevance: tagScore + contentScore + recencyBoost }
     })
     .sort((a, b) => b._relevance - a._relevance)
     .slice(0, 20)
@@ -728,20 +732,21 @@ async function executeWriteBlock(
   }
 
   if (matchedNuggets.length === 0) {
-    // Fallback: fetch site nuggets and rank by keyword relevance
+    // Fallback: fetch site nuggets and rank by keyword relevance + recency
     const { data: allNuggets } = await supabase
       .from('seo_nuggets')
-      .select('id, content, tags')
+      .select('id, content, tags, created_at')
       .or(`site_id.eq.${article.site_id},site_id.is.null`)
       .limit(50)
 
     if (allNuggets && allNuggets.length > 0) {
       const keywordWords = article.keyword.toLowerCase().split(/\s+/).filter(w => w.length > 3)
       const headingWords = (block.heading || '').toLowerCase().split(/\s+/).filter(w => w.length > 3)
+      const fallbackCurrentYear = new Date().getFullYear()
 
-      // Score each nugget by tag + content overlap with keyword/heading
+      // Score each nugget by tag + content overlap with keyword/heading + recency
       // Keyword words get higher weight (5 pts) vs heading words (2 pts)
-      const scored = (allNuggets as { id: string; content: string; tags: string[] }[])
+      const scored = (allNuggets as { id: string; content: string; tags: string[]; created_at?: string }[])
         .filter(n => !usedNuggetIds.has(n.id))
         .map(n => {
           let score = 0
@@ -757,6 +762,10 @@ async function executeWriteBlock(
             if (tagStr.includes(word)) score += 2
             if (contentStr.includes(word)) score += 1
           }
+          // Recency boost: recent nuggets have fresher data (stats, facts)
+          const nYear = n.created_at ? new Date(n.created_at).getFullYear() : 0
+          if (nYear === fallbackCurrentYear) score += 5
+          else if (nYear === fallbackCurrentYear - 1) score += 2
           return { ...n, score }
         })
 
@@ -766,7 +775,7 @@ async function executeWriteBlock(
         .sort((a, b) => b.score - a.score)
         .slice(0, 2)
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        .map(({ score: _s, ...n }) => n)
+        .map(({ score: _s, created_at: _c, ...n }) => n)
     }
   }
 

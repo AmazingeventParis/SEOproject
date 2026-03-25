@@ -89,10 +89,78 @@ export async function POST(
     }
   }
 
+  // Fetch nuggets for this site, scored by keyword relevance + recency
+  const { data: siteNuggets } = await supabase
+    .from('seo_nuggets')
+    .select('id, content, tags, created_at')
+    .or(`site_id.eq.${revamp.site_id},site_id.is.null`)
+    .limit(50)
+
+  const currentYear = new Date().getFullYear()
+  const kwWordsForNuggets = revamp.original_keyword.toLowerCase().split(/\s+/).filter((w: string) => w.length >= 3)
+  const scoredNuggets = (siteNuggets || []).map(n => {
+    let score = 0
+    const tagStr = (n.tags || []).join(' ').toLowerCase()
+    const contentStr = n.content.toLowerCase()
+    for (const w of kwWordsForNuggets) {
+      if (tagStr.includes(w)) score += 5
+      if (contentStr.includes(w)) score += 2
+    }
+    // Recency boost: recent nuggets have up-to-date data (stats, facts, quotes)
+    const nYear = n.created_at ? new Date(n.created_at).getFullYear() : 0
+    if (nYear === currentYear) score += 5
+    else if (nYear === currentYear - 1) score += 2
+    return { id: n.id, content: n.content, tags: n.tags, score }
+  })
+    .filter(n => n.score >= 4)
+    .sort((a, b) => b.score - a.score)
+
   // Enrich blocks with internal_link_targets for the writer
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const newBlocks = (revamp.new_blocks || []) as any[]
-  const enrichedBlocks = newBlocks.map((block, idx) => {
+
+  // Assign nuggets to pending blocks (rewrite + new sections)
+  // Each nugget assigned to at most 1 block, max 2 nuggets per block
+  const usedNuggetIds = new Set<string>()
+  const pendingBlockIndices = newBlocks
+    .map((b, i) => b.status === 'pending' ? i : -1)
+    .filter(i => i >= 0)
+
+  for (const idx of pendingBlockIndices) {
+    const block = newBlocks[idx]
+    const headingWords = (block.heading || '').toLowerCase().split(/\s+/).filter((w: string) => w.length >= 3)
+    // Score nuggets for this specific block heading + general keyword
+    const blockScored = scoredNuggets
+      .filter(n => !usedNuggetIds.has(n.id))
+      .map(n => {
+        let blockScore = n.score
+        const tagStr = (n.tags || []).join(' ').toLowerCase()
+        const contentStr = n.content.toLowerCase()
+        for (const w of headingWords) {
+          if (tagStr.includes(w)) blockScore += 3
+          if (contentStr.includes(w)) blockScore += 1
+        }
+        return { ...n, blockScore }
+      })
+      .filter(n => n.blockScore >= 6)
+      .sort((a, b) => b.blockScore - a.blockScore)
+      .slice(0, 2) // max 2 nuggets per block
+
+    if (blockScored.length > 0) {
+      newBlocks[idx] = {
+        ...block,
+        nugget_ids: blockScored.map(n => n.id),
+      }
+      for (const n of blockScored) usedNuggetIds.add(n.id)
+    }
+  }
+
+  if (usedNuggetIds.size > 0) {
+    console.log(`[revamp-approve] Assigned ${usedNuggetIds.size} nuggets across ${pendingBlockIndices.length} pending blocks`)
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const enrichedBlocks = newBlocks.map((block: any, idx: number) => {
     // Distribute internal links across pending blocks
     if (block.status === 'pending' && internalLinks.length > 0) {
       const linksPerBlock = Math.ceil(internalLinks.length / newBlocks.filter(b => b.status === 'pending').length)
