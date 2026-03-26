@@ -21,7 +21,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent } from "@/components/ui/card";
 import {
+  BarChart3,
+  CheckCircle2,
+  Clock,
   Eye,
   Gem,
   Link,
@@ -40,8 +44,9 @@ import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 
 // Nugget with joined site info
-interface NuggetWithSite extends Nugget {
+interface NuggetWithSite extends Omit<Nugget, 'site_ids'> {
   seo_sites: { name: string; domain: string } | null;
+  site_ids?: string[];
 }
 
 const SOURCE_TYPE_OPTIONS = [
@@ -64,9 +69,19 @@ function getSourceLabel(sourceType: string) {
   return option?.label ?? sourceType;
 }
 
+interface NuggetStats {
+  total: number;
+  freshness: { thisYear: number; lastYear: number; older: number };
+  multiSite: number;
+  noSite: number;
+  usage: { used: number; unused: number; usageRate: number };
+  integration: { totalAssigned: number; totalIntegrated: number; integrationRate: number };
+}
+
 export default function NuggetsPage() {
   const [nuggets, setNuggets] = useState<NuggetWithSite[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
+  const [stats, setStats] = useState<NuggetStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [youtubeDialogOpen, setYoutubeDialogOpen] = useState(false);
@@ -114,9 +129,17 @@ export default function NuggetsPage() {
     setLoading(false);
   }, [filterSiteId, filterSourceType, filterSearch, toast]);
 
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await fetch("/api/nuggets/stats");
+      if (res.ok) setStats(await res.json());
+    } catch { /* silent */ }
+  }, []);
+
   useEffect(() => {
     fetchSites();
-  }, [fetchSites]);
+    fetchStats();
+  }, [fetchSites, fetchStats]);
 
   useEffect(() => {
     fetchNuggets();
@@ -127,8 +150,10 @@ export default function NuggetsPage() {
     setDialogOpen(true);
   }
 
-  function handleEdit(nugget: Nugget) {
-    setEditingNugget(nugget);
+  function handleEdit(nugget: NuggetWithSite) {
+    // Ensure site_ids is set for the dialog (backward compat)
+    const withSiteIds = { ...nugget, site_ids: nugget.site_ids || (nugget.site_id ? [nugget.site_id] : []) } as Nugget;
+    setEditingNugget(withSiteIds);
     setDialogOpen(true);
   }
 
@@ -228,6 +253,58 @@ export default function NuggetsPage() {
         </Select>
       </div>
 
+      {/* Stats */}
+      {stats && stats.total > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card>
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                <Gem className="h-4 w-4" /> Total
+              </div>
+              <div className="text-2xl font-bold">{stats.total}</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {stats.freshness.thisYear} cette annee · {stats.freshness.older > 0 ? `${stats.freshness.older} ancien${stats.freshness.older > 1 ? 's' : ''}` : 'tous recents'}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                <BarChart3 className="h-4 w-4" /> Utilises
+              </div>
+              <div className="text-2xl font-bold">{stats.usage.usageRate}%</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {stats.usage.used}/{stats.total} dans des articles
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                <CheckCircle2 className="h-4 w-4" /> Integration
+              </div>
+              <div className={`text-2xl font-bold ${stats.integration.integrationRate >= 70 ? 'text-green-600' : stats.integration.integrationRate >= 40 ? 'text-yellow-600' : 'text-red-600'}`}>
+                {stats.integration.integrationRate}%
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {stats.integration.totalIntegrated}/{stats.integration.totalAssigned} reellement integres
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                <Clock className="h-4 w-4" /> Fraicheur
+              </div>
+              <div className="text-2xl font-bold text-blue-600">{stats.freshness.thisYear}</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {stats.multiSite > 0 ? `${stats.multiSite} multi-sites` : 'aucun multi-site'} · {stats.usage.unused > 0 ? `${stats.usage.unused} inutilise${stats.usage.unused > 1 ? 's' : ''}` : 'tous utilises'}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -268,11 +345,15 @@ export default function NuggetsPage() {
                     <Badge variant="outline" className="text-xs">
                       {getSourceLabel(nugget.source_type)}
                     </Badge>
-                    {nugget.seo_sites && (
+                    {nugget.site_ids && nugget.site_ids.length > 1 ? (
+                      <Badge variant="secondary" className="text-xs">
+                        {nugget.site_ids.length} sites
+                      </Badge>
+                    ) : nugget.seo_sites ? (
                       <Badge variant="secondary" className="text-xs">
                         {nugget.seo_sites.name}
                       </Badge>
-                    )}
+                    ) : null}
                     {nugget.tags.map((tag) => (
                       <Badge key={tag} variant="secondary" className="text-xs font-normal">
                         {tag}
@@ -319,14 +400,14 @@ export default function NuggetsPage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         nugget={editingNugget}
-        onSuccess={fetchNuggets}
+        onSuccess={() => { fetchNuggets(); fetchStats(); }}
       />
 
       {/* YouTube import dialog */}
       <YoutubeImportDialog
         open={youtubeDialogOpen}
         onOpenChange={setYoutubeDialogOpen}
-        onSuccess={fetchNuggets}
+        onSuccess={() => { fetchNuggets(); fetchStats(); }}
       />
     </div>
   );

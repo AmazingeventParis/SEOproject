@@ -52,7 +52,7 @@ export function NuggetForm({ nugget, onSubmit, submitLabel = "Enregistrer" }: Nu
     source_type: nugget?.source_type ?? "note",
     source_ref: nugget?.source_ref ?? "",
     site_id: nugget?.site_id ?? "",
-    site_ids: nugget?.site_id ? [nugget.site_id] : [],
+    site_ids: (nugget as Record<string, unknown>)?.site_ids as string[] ?? (nugget?.site_id ? [nugget.site_id] : []),
     persona_id: nugget?.persona_id ?? "",
     tags: nugget?.tags ?? [],
   });
@@ -214,7 +214,7 @@ export function NuggetForm({ nugget, onSubmit, submitLabel = "Enregistrer" }: Nu
         )}
         {formData.site_ids.length > 1 && (
           <p className="text-xs text-muted-foreground">
-            Le nugget sera duplique pour les {formData.site_ids.length} sites selectionnes.
+            Le nugget sera disponible pour les {formData.site_ids.length} sites selectionnes.
           </p>
         )}
       </div>

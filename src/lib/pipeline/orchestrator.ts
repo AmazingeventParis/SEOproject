@@ -395,7 +395,7 @@ async function executePlan(
   const { data: rawNuggets } = await supabase
     .from('seo_nuggets')
     .select('id, content, tags, source_type, created_at')
-    .or(`site_id.eq.${article.site_id},site_id.is.null`)
+    .or(`site_ids.cs.{${article.site_id}},site_id.eq.${article.site_id},site_id.is.null`)
     .limit(50)
 
   // Score nuggets by keyword relevance + recency boost and take top 20
@@ -736,7 +736,7 @@ async function executeWriteBlock(
     const { data: allNuggets } = await supabase
       .from('seo_nuggets')
       .select('id, content, tags, created_at')
-      .or(`site_id.eq.${article.site_id},site_id.is.null`)
+      .or(`site_ids.cs.{${article.site_id}},site_id.eq.${article.site_id},site_id.is.null`)
       .limit(50)
 
     if (allNuggets && allNuggets.length > 0) {
@@ -778,6 +778,14 @@ async function executeWriteBlock(
         .map(({ score: _s, created_at: _c, ...n }) => n)
     }
   }
+
+  // Override with mandatory nuggets if provided (from auto-rewrite in SEO step)
+  if (input?.mandatoryNuggets) {
+    matchedNuggets = input.mandatoryNuggets as { id: string; content: string; tags: string[] }[]
+  }
+
+  // Override writing directive if provided (for mandatory nugget rewrite)
+  const effectiveDirective = (input?.mandatoryDirective as string) || block.writing_directive
 
   const persona = article.seo_personas as { name: string; role: string; tone_description: string | null; bio: string | null; avatar_reference_url: string | null; writing_style_examples: Record<string, unknown>[] } | null
   const previousHeadings = contentBlocks
@@ -843,10 +851,13 @@ async function executeWriteBlock(
       type: block.type,
       heading: block.heading ?? null,
       word_count: block.word_count,
-      writing_directive: block.writing_directive,
+      writing_directive: effectiveDirective,
       format_hint: block.format_hint,
     },
-    nuggets: matchedNuggets.map(n => ({ id: n.id, content: n.content, tags: n.tags })),
+    nuggets: matchedNuggets.map(n => ({
+      id: n.id, content: n.content, tags: n.tags,
+      context: block.nugget_context?.[n.id] || undefined,
+    })),
     previousHeadings,
     previousBlockContent,
     articleDigest,
@@ -1542,6 +1553,93 @@ async function executeSeo(
       }
 
       console.log(`[seo] Nugget integration: ${totalIntegrated}/${totalAssigned} integrated (${nuggetIntegration.integrationRate}%), ${totalIgnored} ignored`)
+
+      // 4c. Auto-rewrite blocks with ignored nuggets (max 2 blocks)
+      if (totalIgnored > 0 && nuggetIntegration.integrationRate < 50) {
+        const ignoredByBlock = new Map<number, string[]>()
+        for (const d of details) {
+          if (d.status === 'ignored') {
+            const arr = ignoredByBlock.get(d.blockIndex) || []
+            arr.push(d.nuggetId)
+            ignoredByBlock.set(d.blockIndex, arr)
+          }
+        }
+
+        let rewriteCount = 0
+        const ignoredEntries = Array.from(ignoredByBlock.entries())
+        for (const [bi, ignoredIds] of ignoredEntries) {
+          if (rewriteCount >= 2) break
+          const block = contentBlocks[bi]
+          if (!block || block.status !== 'written') continue
+
+          // Fetch the ignored nuggets content
+          const { data: ignoredNuggets } = await supabase
+            .from('seo_nuggets')
+            .select('id, content, tags')
+            .in('id', ignoredIds)
+
+          if (!ignoredNuggets || ignoredNuggets.length === 0) continue
+
+          console.log(`[seo] Re-writing block ${bi} "${block.heading}" with ${ignoredNuggets.length} mandatory nuggets`)
+
+          // Append mandatory nugget directive to the existing writing_directive
+          const mandatoryDirective = `${block.writing_directive || ''}\n\nATTENTION — NUGGETS OBLIGATOIRES : Les nuggets suivants DOIVENT etre integres dans cette section. Ils contiennent des donnees a jour et verifiees. Reformule-les et integre-les naturellement dans le texte existant.`
+
+          try {
+            const rewriteResult = await executeStep(article.id, 'write_block', {
+              blockIndex: bi,
+              usedNuggetIds: [],
+              mandatoryNuggets: ignoredNuggets.map(n => ({ id: n.id, content: n.content, tags: n.tags || [] })),
+              mandatoryDirective,
+            })
+            if (rewriteResult.success) {
+              rewriteCount++
+              // Re-check integration on rewritten block
+              const { data: refreshedArticle } = await supabase
+                .from('seo_articles')
+                .select('content_blocks')
+                .eq('id', article.id)
+                .single()
+              if (refreshedArticle?.content_blocks) {
+                const refreshedBlocks = refreshedArticle.content_blocks as ContentBlock[]
+                if (refreshedBlocks[bi]) {
+                  contentBlocks[bi] = refreshedBlocks[bi]
+                  updatedBlocks[bi] = refreshedBlocks[bi]
+                }
+              }
+            }
+          } catch (err) {
+            console.error(`[seo] Failed to re-write block ${bi}:`, err)
+          }
+        }
+
+        if (rewriteCount > 0) {
+          console.log(`[seo] Re-wrote ${rewriteCount} blocks with mandatory nuggets`)
+          // Update nugget integration stats after rewrites
+          const newDetails: NuggetCheckDetail[] = []
+          for (let bi2 = 0; bi2 < contentBlocks.length; bi2++) {
+            const b2 = contentBlocks[bi2]
+            const bNuggetIds = b2.nugget_ids || []
+            if (bNuggetIds.length === 0 || !b2.content_html) continue
+            for (const nid of bNuggetIds) {
+              const nc = nuggetMap.get(nid)
+              if (!nc) continue
+              const { integrated, matchScore } = checkNuggetIntegration(b2.content_html, nc)
+              newDetails.push({ blockIndex: bi2, heading: b2.heading || null, nuggetId: nid, status: integrated ? 'integrated' : 'ignored', matchScore })
+            }
+          }
+          const newTotal = newDetails.length
+          const newIntegrated = newDetails.filter(d => d.status === 'integrated').length
+          nuggetIntegration = {
+            totalAssigned: newTotal,
+            totalIntegrated: newIntegrated,
+            totalIgnored: newTotal - newIntegrated,
+            integrationRate: newTotal > 0 ? Math.round((newIntegrated / newTotal) * 100) : 100,
+            details: newDetails,
+          }
+          console.log(`[seo] Post-rewrite nugget integration: ${newIntegrated}/${newTotal} (${nuggetIntegration.integrationRate}%)`)
+        }
+      }
     }
   }
 

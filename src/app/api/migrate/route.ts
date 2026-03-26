@@ -2,38 +2,12 @@ import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
 const MIGRATION_SQL = `
--- 004-products: Product comparison tables
-CREATE TABLE IF NOT EXISTS seo_comparison_criteria (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  article_id uuid NOT NULL REFERENCES seo_articles(id) ON DELETE CASCADE,
-  name text NOT NULL,
-  unit text,
-  sort_order integer DEFAULT 0,
-  created_at timestamptz DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_seo_comparison_criteria_article_id ON seo_comparison_criteria(article_id);
+-- 005-nuggets-multi-site: Add site_ids array for multi-site nuggets
+ALTER TABLE seo_nuggets ADD COLUMN IF NOT EXISTS site_ids text[] DEFAULT ARRAY[]::text[];
 
-CREATE TABLE IF NOT EXISTS seo_products (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  article_id uuid NOT NULL REFERENCES seo_articles(id) ON DELETE CASCADE,
-  name text NOT NULL,
-  brand text,
-  price numeric(10,2),
-  price_label text,
-  image_url text,
-  affiliate_url text,
-  affiliate_enabled boolean DEFAULT false,
-  rating numeric(3,1),
-  rating_scale integer DEFAULT 10,
-  verdict text,
-  pros text[] DEFAULT ARRAY[]::text[],
-  cons text[] DEFAULT ARRAY[]::text[],
-  specs jsonb DEFAULT '[]'::jsonb,
-  sort_order integer DEFAULT 0,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_seo_products_article_id ON seo_products(article_id);
+-- Migrate existing site_id into site_ids for all nuggets that have a site_id
+UPDATE seo_nuggets SET site_ids = ARRAY[site_id::text]
+  WHERE site_id IS NOT NULL AND (site_ids IS NULL OR site_ids = ARRAY[]::text[]);
 `;
 
 // POST /api/migrate — Run pending schema migrations

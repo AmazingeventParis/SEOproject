@@ -93,7 +93,7 @@ export async function POST(
   const { data: siteNuggets } = await supabase
     .from('seo_nuggets')
     .select('id, content, tags, created_at')
-    .or(`site_id.eq.${revamp.site_id},site_id.is.null`)
+    .or(`site_ids.cs.{${revamp.site_id}},site_id.eq.${revamp.site_id},site_id.is.null`)
     .limit(50)
 
   const currentYear = new Date().getFullYear()

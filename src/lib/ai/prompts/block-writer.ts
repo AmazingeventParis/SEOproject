@@ -37,7 +37,7 @@ interface BlockWriterParams {
     writing_directive?: string
     format_hint?: 'prose' | 'bullets' | 'table' | 'mixed'
   }
-  nuggets: { id: string; content: string; tags: string[] }[]
+  nuggets: { id: string; content: string; tags: string[]; context?: string }[]
   previousHeadings: string[]
   previousBlockContent?: string
   articleDigest?: string
@@ -313,6 +313,9 @@ Les nuggets suivants doivent etre integres naturellement dans ce bloc :`
       user += `\n\n### Nugget [${nugget.id}]`
       user += `\nTags: ${nugget.tags.join(', ') || 'aucun'}`
       user += `\nContenu: "${nugget.content}"`
+      if (nugget.context) {
+        user += `\nContexte d'integration: ${nugget.context}`
+      }
     }
 
     user += `\n\nREGLES D'INTEGRATION DES NUGGETS :

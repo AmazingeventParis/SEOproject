@@ -9,6 +9,7 @@ const createNuggetSchema = z.object({
   }),
   source_ref: z.string().nullable().optional(),
   site_id: z.string().uuid("site_id doit etre un UUID valide").nullable().optional(),
+  site_ids: z.array(z.string().uuid()).optional(),
   persona_id: z.string().uuid("persona_id doit etre un UUID valide").nullable().optional(),
   tags: z.array(z.string()).optional(),
 });
@@ -30,7 +31,8 @@ export async function GET(request: NextRequest) {
     .limit(100);
 
   if (siteId) {
-    query = query.eq("site_id", siteId);
+    // Filter: nuggets belonging to this site (via site_ids array OR legacy site_id)
+    query = query.or(`site_ids.cs.{${siteId}},site_id.eq.${siteId}`);
   }
 
   if (tags) {
@@ -60,7 +62,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(data);
 }
 
-// POST /api/nuggets - Create a new nugget
+// POST /api/nuggets - Create a new nugget (single, multi-site)
 export async function POST(request: NextRequest) {
   const supabase = getServerClient();
 
@@ -82,10 +84,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Build site_ids from either site_ids array or legacy site_id
+  const siteIds = parsed.data.site_ids?.length
+    ? parsed.data.site_ids
+    : parsed.data.site_id
+      ? [parsed.data.site_id]
+      : [];
+
+  const insertData = {
+    content: parsed.data.content,
+    source_type: parsed.data.source_type,
+    source_ref: parsed.data.source_ref ?? null,
+    site_id: siteIds[0] ?? null, // backward compat: first site as primary
+    site_ids: siteIds,
+    persona_id: parsed.data.persona_id ?? null,
+    tags: parsed.data.tags ?? [],
+  };
+
   const { data, error } = await supabase
     .from("seo_nuggets")
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .insert(parsed.data as any)
+    .insert(insertData as any)
     .select("*, seo_sites!seo_nuggets_site_id_fkey(name, domain)")
     .single();
 

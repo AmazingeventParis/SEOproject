@@ -8,6 +8,7 @@ const updateNuggetSchema = z.object({
   source_type: z.enum(["vocal", "tweet", "note", "url", "observation", "youtube"]).optional(),
   source_ref: z.string().nullable().optional(),
   site_id: z.string().uuid().nullable().optional(),
+  site_ids: z.array(z.string().uuid()).optional(),
   persona_id: z.string().uuid().nullable().optional(),
   tags: z.array(z.string()).optional(),
 });
@@ -70,9 +71,16 @@ export async function PATCH(
     );
   }
 
+  // Sync site_id from site_ids if provided
+  const updateData = { ...parsed.data } as Record<string, unknown>;
+  if (parsed.data.site_ids) {
+    updateData.site_ids = parsed.data.site_ids;
+    updateData.site_id = parsed.data.site_ids[0] ?? null;
+  }
+
   const { data, error } = await supabase
     .from("seo_nuggets")
-    .update(parsed.data as NuggetUpdate)
+    .update(updateData as NuggetUpdate)
     .eq("id", params.nuggetId)
     .select("*, seo_sites!seo_nuggets_site_id_fkey(name, domain)")
     .single();

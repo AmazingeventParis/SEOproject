@@ -226,9 +226,12 @@ Le word_count doit DIMINUER de section en section (pas necessairement de facon l
 ${SEO_FAQ_RULES}
 - Blocs "list" pour les elements enumeratifs
 
-## NUGGETS (contenus authentiques du persona)
+## NUGGETS (contenus authentiques du persona — donnees verifiees et a jour)
 - Assigne les nuggets pertinents via nugget_ids
+- Pour CHAQUE nugget assigne, ajoute une explication dans "nugget_context" (objet cle=nugget_id, valeur=raison)
+- Exemple: "nugget_context": {"uuid-123": "Chiffre recent a utiliser pour appuyer l'argument sur les couts"}
 - Ne force pas les nuggets non pertinents
+- Les nuggets recents contiennent des donnees a jour (stats, prix, reglementations) — PRIORISE-LES
 
 ## ANALYSE CONCURRENTIELLE (si disponible)
 - Couvre TOUS les H2 communs des concurrents — mais reformule-les pour etre MEILLEURS (plus specifiques, avec mot-cle, avec qualificateur chiffre)
@@ -307,6 +310,7 @@ Tu DOIS retourner UNIQUEMENT un objet JSON valide, sans texte avant ou apres, sa
       "heading": "Titre de la section (pour h2, h3, h4, faq) ou null",
       "content_html": "",
       "nugget_ids": ["ids des nuggets"],
+      "nugget_context": {"nugget-id-1": "Raison d'integration: quel aspect du nugget utiliser et pourquoi"},
       "word_count": 350,
       "status": "pending",
       "writing_directive": "Directive d'ecriture specifique pour ce bloc",

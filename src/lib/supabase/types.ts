@@ -116,6 +116,7 @@ export interface ContentBlock {
   heading?: string
   content_html: string
   nugget_ids: string[]
+  nugget_context?: Record<string, string> // nugget_id → why it should be integrated
   word_count: number
   model_used?: string
   status: 'pending' | 'written' | 'approved'
@@ -284,6 +285,7 @@ export type Database = {
         Row: {
           id: string
           site_id: string | null
+          site_ids: string[]
           persona_id: string | null
           content: string
           source_type: 'vocal' | 'tweet' | 'note' | 'url' | 'observation' | 'youtube'
@@ -294,6 +296,7 @@ export type Database = {
         Insert: {
           id?: string
           site_id?: string | null
+          site_ids?: string[]
           persona_id?: string | null
           content: string
           source_type: 'vocal' | 'tweet' | 'note' | 'url' | 'observation' | 'youtube'
@@ -304,6 +307,7 @@ export type Database = {
         Update: {
           id?: string
           site_id?: string | null
+          site_ids?: string[]
           persona_id?: string | null
           content?: string
           source_type?: 'vocal' | 'tweet' | 'note' | 'url' | 'observation' | 'youtube'
