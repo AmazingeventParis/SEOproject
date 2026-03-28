@@ -30,10 +30,11 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
   },
   write_block: {
     provider: 'google',
-    model: 'gemini-3.1-pro-preview',
+    model: 'gemini-3.1-flash-preview',
     maxTokens: 8192,
     temperature: 0.7,
     topP: 0.8,
+    thinkingLevel: 'LOW',
   },
   critique: {
     provider: 'google',
@@ -144,6 +145,7 @@ const FALLBACK_MODEL: Record<string, { provider: AIProvider; model: string }> = 
   'gpt-4o': { provider: 'google', model: 'gemini-3-flash-preview' },
   'gpt-4o-mini': { provider: 'google', model: 'gemini-3-flash-preview' },
   'gemini-3.1-pro-preview': { provider: 'google', model: 'gemini-3-flash-preview' },
+  'gemini-3.1-flash-preview': { provider: 'google', model: 'gemini-3.1-pro-preview' },
   'gemini-3-flash-preview': { provider: 'google', model: 'gemini-3.1-pro-preview' },
 }
 
@@ -182,7 +184,7 @@ function callProvider(
   }
   if (config.provider === 'anthropic') return callClaude(opts)
   if (config.provider === 'openai') return callOpenAI(opts)
-  return callGemini({ ...opts, jsonMode: config.jsonMode, topP: config.topP })
+  return callGemini({ ...opts, jsonMode: config.jsonMode, topP: config.topP, thinkingLevel: config.thinkingLevel })
 }
 
 /**

@@ -1,12 +1,14 @@
 import { NextRequest } from "next/server";
 import { getServerClient } from "@/lib/supabase/client";
-import { executeStep } from "@/lib/pipeline/orchestrator";
+import { executeStep, preGenerateArticleImages } from "@/lib/pipeline/orchestrator";
 import { modelIdToOverride } from "@/lib/ai/router";
 import type { ContentBlock, TitleSuggestion, ArticleStatus } from "@/lib/supabase/types";
-import type { PipelineRunResult } from "@/lib/pipeline/types";
 import { checkKeyIdeasCoverage } from "@/lib/pipeline/quality-checks";
 
 export const maxDuration = 600; // 10 minutes for full pipeline
+
+// Write blocks in parallel batches of 3 for ~3x speedup
+const WRITE_BATCH_SIZE = 3;
 
 interface RouteContext {
   params: { articleId: string };
@@ -32,6 +34,10 @@ function sendSSE(
  *
  * Full pipeline automation: analyze → plan → auto-select title → write-all → media → seo
  * Streams SSE events for each step's progress.
+ *
+ * Optimizations:
+ * - Blocks are written in parallel batches of 3 (Gemini 3.1 Flash + LOW thinking)
+ * - Image generation starts concurrently with block writing
  *
  * Body (optional):
  *   { model?: string, autoSelectTitle?: number }
@@ -115,6 +121,8 @@ export async function POST(
       });
 
       let aborted = false;
+      // Promise for concurrent image pre-generation (axe 5)
+      let imagePregenPromise: Promise<Awaited<ReturnType<typeof preGenerateArticleImages>>> | null = null;
 
       for (let stepIdx = 0; stepIdx < steps.length; stepIdx++) {
         if (aborted) break;
@@ -149,6 +157,12 @@ export async function POST(
               }
               currentStatus = "planning";
               sendSSE(controller, encoder, "step_done", { step, output: result.output });
+
+              // Start image pre-generation concurrently (will run during title selection + writing)
+              imagePregenPromise = preGenerateArticleImages(articleId).catch(err => {
+                console.warn('[autopilot] Image pre-generation failed:', err instanceof Error ? err.message : err);
+                return [];
+              });
               break;
             }
 
@@ -202,7 +216,7 @@ export async function POST(
             }
 
             case "write": {
-              // Write all pending blocks sequentially with nugget tracking
+              // Write all pending blocks in parallel batches with nugget tracking
               const { data: writeArticle } = await supabase
                 .from("seo_articles")
                 .select("content_blocks")
@@ -223,31 +237,69 @@ export async function POST(
               let written = 0;
               let errors = 0;
               const usedNuggetIds: string[] = [];
+              let progressCounter = 0;
 
-              for (let i = 0; i < pendingIndices.length; i++) {
-                const blockIndex = pendingIndices[i];
-                try {
-                  const result: PipelineRunResult = await executeStep(
-                    articleId,
-                    "write_block",
-                    { blockIndex, usedNuggetIds, ...modelOverride }
-                  );
-                  if (result.success) {
+              // Process blocks in parallel batches
+              for (let batchStart = 0; batchStart < pendingIndices.length; batchStart += WRITE_BATCH_SIZE) {
+                const batchIndices = pendingIndices.slice(batchStart, batchStart + WRITE_BATCH_SIZE);
+
+                // Run batch in parallel with skipSave
+                const batchResults = await Promise.allSettled(
+                  batchIndices.map(blockIndex =>
+                    executeStep(articleId, "write_block", {
+                      blockIndex,
+                      usedNuggetIds: [...usedNuggetIds],
+                      skipSave: true,
+                      ...modelOverride,
+                    })
+                  )
+                );
+
+                // Read fresh blocks from DB for merging
+                const { data: freshBlocks } = await supabase
+                  .from("seo_articles")
+                  .select("content_blocks")
+                  .eq("id", articleId)
+                  .single();
+
+                const blocks = [...((freshBlocks?.content_blocks || []) as ContentBlock[])];
+
+                // Process batch results
+                for (let j = 0; j < batchResults.length; j++) {
+                  const result = batchResults[j];
+                  const blockIndex = batchIndices[j];
+
+                  if (result.status === "fulfilled" && result.value.success) {
                     written++;
-                    const nuggetIds = (result.output?.nuggetIdsUsed as string[]) || [];
+                    const output = result.value.output;
+                    const nuggetIds = (output?.nuggetIdsUsed as string[]) || [];
                     usedNuggetIds.push(...nuggetIds);
+
+                    blocks[blockIndex] = {
+                      ...blocks[blockIndex],
+                      content_html: output?.processedHtml as string,
+                      status: "written" as const,
+                      model_used: result.value.modelUsed,
+                      word_count: output?.wordCount as number,
+                    };
                   } else {
                     errors++;
                   }
-                } catch {
-                  errors++;
+
+                  progressCounter++;
+                  sendSSE(controller, encoder, "write_progress", {
+                    current: progressCounter,
+                    total: pendingIndices.length,
+                    blockIndex,
+                  });
                 }
 
-                sendSSE(controller, encoder, "write_progress", {
-                  current: i + 1,
-                  total: pendingIndices.length,
-                  blockIndex,
-                });
+                // Save merged blocks after batch
+                const totalWords = blocks.reduce((sum, b) => sum + ((b as ContentBlock).word_count || 0), 0);
+                await supabase
+                  .from("seo_articles")
+                  .update({ content_blocks: blocks, word_count: totalWords, status: "writing" })
+                  .eq("id", articleId);
               }
 
               // Key ideas coverage check
@@ -284,7 +336,21 @@ export async function POST(
             }
 
             case "media": {
-              const result = await executeStep(articleId, "media");
+              // Use pre-generated images if available (from concurrent generation during writing)
+              let mediaInput: Record<string, unknown> | undefined;
+              if (imagePregenPromise) {
+                try {
+                  const pregenImages = await imagePregenPromise;
+                  if (pregenImages.length > 0) {
+                    mediaInput = { preGeneratedImages: pregenImages };
+                  }
+                } catch {
+                  // Pre-generation failed, fall back to normal media step
+                }
+                imagePregenPromise = null;
+              }
+
+              const result = await executeStep(articleId, "media", mediaInput);
               if (!result.success) {
                 sendSSE(controller, encoder, "step_error", { step, error: result.error });
                 aborted = true;

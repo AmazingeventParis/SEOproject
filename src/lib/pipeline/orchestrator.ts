@@ -193,7 +193,7 @@ export async function executeStep(
         result = await executeWriteBlock(article as ArticleWithRelations, input, modelOverride)
         break
       case 'media':
-        result = await executeMedia(article as ArticleWithRelations)
+        result = await executeMedia(article as ArticleWithRelations, input)
         break
       case 'seo':
         result = await executeSeo(article as ArticleWithRelations)
@@ -969,6 +969,27 @@ async function executeWriteBlock(
   // Repair any truncated HTML tags before saving
   processedHtml = repairTruncatedHtml(processedHtml)
 
+  const wordCount = countWords(processedHtml)
+
+  // skipSave mode: return result without DB write (for batch/parallel writing)
+  if (input?.skipSave) {
+    return {
+      success: true,
+      runId: '',
+      output: {
+        blockIndex,
+        blockType: block.type,
+        wordCount,
+        processedHtml,
+        nuggetIdsUsed: matchedNuggets.map(n => n.id),
+      },
+      tokensIn: aiResponse.tokensIn,
+      tokensOut: aiResponse.tokensOut,
+      costUsd: estimateCost(aiResponse.tokensIn, aiResponse.tokensOut, aiResponse.model),
+      modelUsed: aiResponse.model,
+    }
+  }
+
   // Update the specific block
   const updatedBlocks = [...contentBlocks]
   updatedBlocks[blockIndex] = {
@@ -976,7 +997,7 @@ async function executeWriteBlock(
     content_html: processedHtml,
     status: 'written' as const,
     model_used: aiResponse.model,
-    word_count: countWords(processedHtml),
+    word_count: wordCount,
   }
 
   // Calculate total word count
@@ -999,7 +1020,7 @@ async function executeWriteBlock(
     output: {
       blockIndex,
       blockType: block.type,
-      wordCount: countWords(aiResponse.content),
+      wordCount,
       writtenBlocks: writtenCount,
       totalBlocks: updatedBlocks.length,
       nuggetIdsUsed: matchedNuggets.map(n => n.id),
@@ -1015,8 +1036,16 @@ async function executeWriteBlock(
 
 async function executeMedia(
   article: ArticleWithRelations,
+  input?: Record<string, unknown>,
 ): Promise<PipelineRunResult> {
   const supabase = getServerClient()
+
+  // If pre-generated images are provided (from parallel execution), use them directly
+  const pregenImages = input?.preGeneratedImages as PreGeneratedImage[] | undefined
+  if (pregenImages && pregenImages.length > 0) {
+    return injectPreGeneratedImages(article, pregenImages)
+  }
+
   const contentBlocks = (article.content_blocks || []) as ContentBlock[]
   const uploadedImages: { blockIndex: number; url: string; mediaId: number }[] = []
 
@@ -1280,6 +1309,287 @@ async function executeMedia(
       heroMediaId,
       imagesGenerated: uploadedImages.length,
       uploadedImages,
+    },
+  }
+}
+
+// ---- Pre-generate images (for parallel execution with writing) ----
+
+export interface PreGeneratedImage {
+  blockIndex: number
+  isImageBlock: boolean
+  wpUrl: string
+  mediaId: number
+  altText: string
+  imgTitle: string
+  width: number
+  height: number
+  heading: string | null
+  heroMediaId?: number
+}
+
+/**
+ * Pre-generate all article images (hero + sections) without touching content_blocks.
+ * Returns image data that can later be injected via executeMedia({ preGeneratedImages }).
+ * This allows image generation to run concurrently with block writing.
+ */
+export async function preGenerateArticleImages(articleId: string): Promise<PreGeneratedImage[]> {
+  const supabase = getServerClient()
+  const { data: article } = await supabase
+    .from('seo_articles')
+    .select('id, keyword, title, site_id, content_blocks')
+    .eq('id', articleId)
+    .single()
+
+  if (!article) return []
+
+  const contentBlocks = (article.content_blocks || []) as ContentBlock[]
+  const results: PreGeneratedImage[] = []
+
+  // 1. Generate hero image
+  try {
+    const heroResult = await generateHeroImage(article.keyword, article.title || article.keyword)
+    const heroBuffer = await fetch(heroResult.url).then(r => r.arrayBuffer())
+    const optimized = await optimizeForWeb(Buffer.from(heroBuffer))
+    const filename = generateSeoFilename(article.keyword, null, 'hero')
+    const altText = generateAltText(article.keyword, null, 'hero')
+
+    const wpMedia = await uploadMedia(article.site_id, {
+      buffer: optimized.buffer,
+      filename,
+      altText,
+      title: `${article.title || article.keyword} - Image principale`,
+      caption: altText,
+    })
+
+    // Save hero image URL immediately (doesn't conflict with writing)
+    await supabase
+      .from('seo_articles')
+      .update({ hero_image_url: wpMedia.url })
+      .eq('id', article.id)
+
+    results.push({
+      blockIndex: -1, // special: hero image
+      isImageBlock: false,
+      wpUrl: wpMedia.url,
+      mediaId: wpMedia.mediaId,
+      altText,
+      imgTitle: `${article.title || article.keyword} - Image principale`,
+      width: optimized.width,
+      height: optimized.height,
+      heading: null,
+      heroMediaId: wpMedia.mediaId,
+    })
+  } catch (error) {
+    if (error instanceof ContentPolicyError) {
+      console.warn(`[media-pregen] ${error.message} — skip all images`)
+      return []
+    }
+    const msg = error instanceof Error ? error.message : String(error)
+    if (!msg.includes('non configure') && !msg.includes('FAL_KEY')) {
+      console.warn('[media-pregen] Hero image failed:', msg)
+    }
+  }
+
+  // 2. Determine which blocks need images (same logic as executeMedia)
+  const MIN_SECTION_IMAGES = 5
+  const MAX_IMAGES = 8
+  const heroGenerated = results.length > 0
+  const maxSectionImages = MAX_IMAGES - (heroGenerated ? 1 : 0)
+
+  const updatedBlocks = [...contentBlocks]
+
+  // Force image on first H2
+  const firstH2Idx = updatedBlocks.findIndex((b) => b.type === 'h2')
+  if (firstH2Idx !== -1 && !updatedBlocks[firstH2Idx].generate_image) {
+    updatedBlocks[firstH2Idx] = { ...updatedBlocks[firstH2Idx], generate_image: true }
+    if (!updatedBlocks[firstH2Idx].image_prompt_hint) {
+      updatedBlocks[firstH2Idx] = {
+        ...updatedBlocks[firstH2Idx],
+        image_prompt_hint: `Editorial photo illustrating ${article.keyword}, professional style`,
+      }
+    }
+  }
+
+  // Ensure minimum section images
+  function hasContentImage(html: string): boolean {
+    if (!html) return false
+    const withoutAvatars = html.replace(/<img[^>]*border-radius:\s*50%[^>]*>/gi, '')
+    return withoutAvatars.includes('<img')
+  }
+
+  const currentImageCount = updatedBlocks.filter(
+    (b) => (b.generate_image === true && (b.type === 'h2' || b.type === 'h3')) || b.type === 'image'
+  ).length
+  if (currentImageCount < MIN_SECTION_IMAGES) {
+    const eligibleIndices = updatedBlocks
+      .map((b, i) => ({ b, i }))
+      .filter(({ b }) =>
+        (b.type === 'h2' || b.type === 'h3') &&
+        !b.generate_image &&
+        b.type !== 'faq' as string &&
+        !hasContentImage(b.content_html || '')
+      )
+      .map(({ i }) => i)
+
+    const needed = MIN_SECTION_IMAGES - currentImageCount
+    const toForce = eligibleIndices.length <= needed
+      ? eligibleIndices
+      : Array.from({ length: needed }, (_, s) =>
+          eligibleIndices[Math.round(s * (eligibleIndices.length - 1) / (needed - 1))]
+        )
+
+    for (const idx of toForce) {
+      updatedBlocks[idx] = {
+        ...updatedBlocks[idx],
+        generate_image: true,
+        image_prompt_hint: updatedBlocks[idx].image_prompt_hint ||
+          `Editorial photo illustrating ${updatedBlocks[idx].heading || article.keyword}, professional style`,
+      }
+    }
+  }
+
+  // Collect candidates
+  const candidates: number[] = []
+  for (let i = 0; i < updatedBlocks.length; i++) {
+    const block = updatedBlocks[i]
+    const isImageBlock = block.type === 'image' && !hasContentImage(block.content_html || '')
+    const isH2WithImage = (block.type === 'h2' || block.type === 'h3') && block.generate_image === true && !hasContentImage(block.content_html || '')
+    if (isImageBlock || isH2WithImage) candidates.push(i)
+  }
+
+  let selectedIndices: Set<number>
+  if (candidates.length <= maxSectionImages) {
+    selectedIndices = new Set(candidates)
+  } else {
+    selectedIndices = new Set<number>()
+    for (let s = 0; s < maxSectionImages; s++) {
+      const idx = Math.round(s * (candidates.length - 1) / (maxSectionImages - 1))
+      selectedIndices.add(candidates[idx])
+    }
+  }
+
+  // 3. Generate section images in parallel
+  const selectedList = Array.from(selectedIndices)
+  const imageResults = await Promise.allSettled(
+    selectedList.map(async (blockIdx, s) => {
+      const block = updatedBlocks[blockIdx]
+      const isImageBlock = block.type === 'image' && !hasContentImage(block.content_html || '')
+
+      // Section context for image prompt (from plan, not from written content)
+      let sectionContent = block.content_html || ''
+      if (block.type === 'h2') {
+        for (let j = blockIdx + 1; j < updatedBlocks.length; j++) {
+          if (updatedBlocks[j].type === 'h2') break
+          if (updatedBlocks[j].content_html) sectionContent += ' ' + updatedBlocks[j].content_html
+        }
+      }
+
+      const prompt = buildImagePrompt(article.keyword, block.heading || '', sectionContent, block.image_prompt_hint, article.title || article.keyword)
+      const imageResult = await generateImage(prompt, { aspectRatio: "16:9" })
+      const imgBuffer = await fetch(imageResult.url).then(r => r.arrayBuffer())
+      const optimized = await optimizeForWeb(Buffer.from(imgBuffer))
+      const filename = generateSeoFilename(article.keyword, block.heading || null, 'section')
+      const altText = generateAltText(article.keyword, block.heading || null, 'section', block.image_prompt_hint, s)
+      const imgTitle = generateImageTitle(article.keyword, block.heading || null, 'section')
+
+      const wpMedia = await uploadMedia(article.site_id, {
+        buffer: optimized.buffer,
+        filename,
+        altText,
+        title: imgTitle,
+        caption: altText,
+      })
+
+      return {
+        blockIndex: blockIdx,
+        isImageBlock,
+        wpUrl: wpMedia.url,
+        mediaId: wpMedia.mediaId,
+        altText,
+        imgTitle,
+        width: optimized.width,
+        height: optimized.height,
+        heading: block.heading || null,
+      } as PreGeneratedImage
+    })
+  )
+
+  // Check content policy hit
+  const policyHit = imageResults.find(r => r.status === 'rejected' && r.reason instanceof ContentPolicyError)
+  if (policyHit) {
+    console.warn(`[media-pregen] Content policy hit — returning hero only`)
+    return results // just hero if generated
+  }
+
+  for (const r of imageResults) {
+    if (r.status === 'fulfilled') results.push(r.value)
+  }
+
+  return results
+}
+
+/**
+ * Inject pre-generated images into content_blocks (after writing is complete).
+ */
+async function injectPreGeneratedImages(
+  article: ArticleWithRelations,
+  images: PreGeneratedImage[],
+): Promise<PipelineRunResult> {
+  const supabase = getServerClient()
+
+  // Re-read fresh content_blocks (writing may have updated them)
+  const { data: freshArticle } = await supabase
+    .from('seo_articles')
+    .select('content_blocks')
+    .eq('id', article.id)
+    .single()
+
+  const contentBlocks = [...((freshArticle?.content_blocks || article.content_blocks || []) as ContentBlock[])]
+  const uploadedImages: { blockIndex: number; url: string; mediaId: number }[] = []
+  let heroMediaId: number | undefined
+
+  for (const img of images) {
+    if (img.blockIndex === -1) {
+      // Hero image — already saved hero_image_url during pre-generation
+      heroMediaId = img.heroMediaId
+      continue
+    }
+
+    const block = contentBlocks[img.blockIndex]
+    if (!block) continue
+
+    if (img.isImageBlock) {
+      contentBlocks[img.blockIndex] = {
+        ...block,
+        content_html: `<figure><img src="${img.wpUrl}" alt="${img.altText}" title="${img.imgTitle}" width="${img.width}" height="${img.height}" loading="lazy" />${img.heading ? `<figcaption>${img.heading}</figcaption>` : ''}</figure>`,
+        status: 'written' as const,
+      }
+    } else {
+      const imageHtml = `<figure class="section-image"><img src="${img.wpUrl}" alt="${img.altText}" title="${img.imgTitle}" width="${img.width}" height="${img.height}" loading="lazy" /></figure>`
+      contentBlocks[img.blockIndex] = {
+        ...block,
+        content_html: imageHtml + (block.content_html || ''),
+      }
+    }
+
+    uploadedImages.push({ blockIndex: img.blockIndex, url: img.wpUrl, mediaId: img.mediaId })
+  }
+
+  // Save updated blocks
+  await supabase
+    .from('seo_articles')
+    .update({ content_blocks: contentBlocks })
+    .eq('id', article.id)
+
+  return {
+    success: true,
+    runId: '',
+    output: {
+      heroMediaId,
+      imagesGenerated: uploadedImages.length,
+      uploadedImages,
+      preGenerated: true,
     },
   }
 }

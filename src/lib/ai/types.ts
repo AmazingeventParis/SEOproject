@@ -52,4 +52,5 @@ export interface ModelConfig {
   temperature: number
   jsonMode?: boolean
   topP?: number
+  thinkingLevel?: string  // Override Gemini thinking level: 'LOW' | 'MEDIUM' | 'HIGH'
 }
