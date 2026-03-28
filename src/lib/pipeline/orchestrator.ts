@@ -26,6 +26,7 @@ import { analyzeKeywordDensity } from '@/lib/seo/keyword-analysis'
 import { buildCritiquePrompt, validateCritiqueResult } from '@/lib/ai/prompts/critique'
 import { buildOptimizeBlocksPrompt } from '@/lib/ai/prompts/optimize-blocks'
 import { checkNuggetIntegration, type NuggetCheckDetail, type NuggetIntegrationResult } from './quality-checks'
+import { convertHtmlToGutenbergBlocks } from './gutenberg'
 
 /**
  * Extract and parse JSON from AI response text.
@@ -2206,65 +2207,7 @@ const WP_TABLE_CSS = `<style>
  * Convert raw HTML to Gutenberg block comments so each element is editable in WP editor.
  * Splits content into: paragraphs, lists, tables, figures, blockquotes, custom HTML.
  */
-function convertHtmlToGutenbergBlocks(html: string): string {
-  if (!html.trim()) return ''
-
-  // If already contains Gutenberg block comments, return as-is
-  if (html.includes('<!-- wp:')) return html
-
-  // UNIFIED APPROACH: wrap entire section content in a SINGLE wp:html block
-  // This prevents WordPress from fragmenting content into 3-4 separate "custom HTML" blocks
-  // that require "recovery attempts". One section = one editable block.
-  //
-  // Exception: standalone <figure> images are converted to native wp:image blocks
-  // for better WordPress media library integration.
-
-  // Check if content contains a <figure> with <img> — split around it
-  const figureRegex = /<figure[^>]*>[\s\S]*?<\/figure>/gi
-  const figures: { index: number; length: number; html: string }[] = []
-  let figMatch: RegExpExecArray | null
-  while ((figMatch = figureRegex.exec(html)) !== null) {
-    figures.push({ index: figMatch.index, length: figMatch[0].length, html: figMatch[0] })
-  }
-
-  // If no figures, wrap everything in a single wp:html block
-  if (figures.length === 0) {
-    return `<!-- wp:html -->\n${html}\n<!-- /wp:html -->`
-  }
-
-  // Split content around figures: text before → wp:html, figure → wp:image, text after → wp:html
-  const blocks: string[] = []
-  let lastIndex = 0
-
-  for (const fig of figures) {
-    // Content before this figure
-    const before = html.slice(lastIndex, fig.index).trim()
-    if (before) {
-      blocks.push(`<!-- wp:html -->\n${before}\n<!-- /wp:html -->`)
-    }
-
-    // Convert <figure> to native wp:image block (strip <figure> wrapper, keep <img>)
-    const imgMatch = fig.html.match(/<img[^>]+>/i)
-    if (imgMatch) {
-      // Use native wp:image with the img tag — no <figure> wrapper needed
-      const imgTag = imgMatch[0]
-      blocks.push(`<!-- wp:image -->\n<figure class="wp-block-image">${imgTag}</figure>\n<!-- /wp:image -->`)
-    } else {
-      // No img found in figure, keep as html block
-      blocks.push(`<!-- wp:html -->\n${fig.html}\n<!-- /wp:html -->`)
-    }
-
-    lastIndex = fig.index + fig.length
-  }
-
-  // Remaining content after last figure
-  const remaining = html.slice(lastIndex).trim()
-  if (remaining) {
-    blocks.push(`<!-- wp:html -->\n${remaining}\n<!-- /wp:html -->`)
-  }
-
-  return blocks.join('\n\n')
-}
+// convertHtmlToGutenbergBlocks and splitHtmlTopLevel moved to ./gutenberg.ts
 
 /**
  * Replace .table-container / bare <table> with inline-styled wrapper for WordPress.

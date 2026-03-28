@@ -8,6 +8,7 @@ import { executeStep } from '@/lib/pipeline/orchestrator'
 import type { ContentBlock } from '@/lib/supabase/types'
 import type { RevampAudit } from './types'
 import type { PipelineRunResult } from '@/lib/pipeline/types'
+import { convertHtmlToGutenbergBlocks } from '@/lib/pipeline/gutenberg'
 
 /**
  * Build the new content_blocks array from the audit plan.
@@ -237,7 +238,7 @@ export async function pushToWordPress(
       const tag = b.type === 'h3' ? 'h3' : b.type === 'h4' ? 'h4' : 'h2'
       // Add spacing before heading sections (not before the first block)
       if (b.heading && !isFirst) {
-        htmlParts.push('<div style="margin-top:50px" aria-hidden="true"></div>')
+        htmlParts.push('<!-- wp:spacer {"height":"50px"} -->\n<div style="height:50px" aria-hidden="true" class="wp-block-spacer"></div>\n<!-- /wp:spacer -->')
       }
       const heading = b.heading ? `<${tag}>${b.heading}</${tag}>\n` : ''
       htmlParts.push(heading + b.content_html)
@@ -252,11 +253,10 @@ export async function pushToWordPress(
       .eq('id', revampId)
   }
 
-  // Clean up any Gutenberg spacer blocks — they render full-width on Elementor themes
-  // Replace with simple CSS margin divs
+  // Normalize old margin divs to Gutenberg spacers
   contentHtml = contentHtml
-    .replace(/<!--\s*wp:spacer[\s\S]*?<!--\s*\/wp:spacer\s*-->/gi, '<div style="margin-top:50px" aria-hidden="true"></div>')
-    .replace(/<div[^>]*class="wp-block-spacer"[^>]*><\/div>/gi, '')
+    .replace(/<div\s+style="margin-top:\s*50px"[^>]*><\/div>/gi,
+      '<!-- wp:spacer {"height":"50px"} -->\n<div style="height:50px" aria-hidden="true" class="wp-block-spacer"></div>\n<!-- /wp:spacer -->')
 
   // Strip Elementor widget wrapper divs from content (kept blocks may contain old Elementor markup)
   // These wrappers break layout when Elementor edit mode is disabled
@@ -324,6 +324,9 @@ export async function pushToWordPress(
       }
     }
   }
+
+  // Convert content to native Gutenberg blocks for easy editing in WordPress
+  contentHtml = convertHtmlToGutenbergBlocks(contentHtml)
 
   // Import WordPress client
   const { updatePost } = await import('@/lib/wordpress/client')
