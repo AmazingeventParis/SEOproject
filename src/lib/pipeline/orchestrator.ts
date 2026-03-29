@@ -28,6 +28,19 @@ import { buildOptimizeBlocksPrompt } from '@/lib/ai/prompts/optimize-blocks'
 import { checkNuggetIntegration, type NuggetCheckDetail, type NuggetIntegrationResult } from './quality-checks'
 import { convertHtmlToGutenbergBlocks } from './gutenberg'
 import { checkBrokenLinks, type LinkCheckSummary } from '@/lib/seo/link-checker'
+import {
+  analyzeSemanticCoverage,
+  generateMissingTermSuggestions,
+  validateEntityCoverage,
+  tokenizeArticleContent,
+  detectSemanticCannibalization,
+  buildEntityExtractionPrompt,
+  type SemanticCoverageResult,
+  type EntityExtractionResult,
+  type SemanticCannibalizationResult,
+  type MissingTermSuggestion,
+  type ExtractedEntity,
+} from '@/lib/seo/semantic-analysis'
 
 /**
  * Extract and parse JSON from AI response text.
@@ -322,6 +335,32 @@ async function executeAnalyze(
           semanticAnalysis = extractJSON(aiResponse.content)
         } catch {
           // Gemini analysis failed — continue without it
+        }
+
+        // 2b. NLP Entity extraction from competitor content
+        try {
+          const competitorTexts = competitorContent.pages
+            .filter(p => p.scrapeSuccess && p.markdown)
+            .map(p => p.markdown!)
+          if (competitorTexts.length > 0) {
+            const entityPrompt = buildEntityExtractionPrompt(article.keyword, competitorTexts)
+            const entityResponse = await routeAI(
+              'analyze_competitor_content',
+              [{ role: 'user', content: entityPrompt }]
+            )
+            competitorTokensIn += entityResponse.tokensIn
+            competitorTokensOut += entityResponse.tokensOut
+            competitorCostUsd += estimateCost(entityResponse.tokensIn, entityResponse.tokensOut, entityResponse.model)
+
+            const entityResult = extractJSON<{ entities: ExtractedEntity[] }>(entityResponse.content)
+            if (entityResult?.entities && Array.isArray(entityResult.entities)) {
+              if (!semanticAnalysis) semanticAnalysis = {}
+              ;(semanticAnalysis as Record<string, unknown>).entities = entityResult.entities
+              console.log(`[analyze] Extracted ${entityResult.entities.length} NLP entities from competitors`)
+            }
+          }
+        } catch {
+          // Entity extraction failed — continue without it
         }
       }
     }
@@ -2032,6 +2071,28 @@ async function executeSeo(
     keywordInIntro = first100Words.includes(article.keyword.toLowerCase())
   }
 
+  // 5b-bis. Pre-compute semantic coverage for use in critique (Axes 1, 3, 4)
+  let earlySemanticMissing: string[] = []
+  let earlyEntityMissing: string[] = []
+  try {
+    const existingSerpForSemantic = (article.serp_data || {}) as Record<string, unknown>
+    const compData = existingSerpForSemantic.competitorContent as { tfidfKeywords?: { term: string; tfidf: number; df: number }[] } | undefined
+    const semData = existingSerpForSemantic.semanticAnalysis as { semanticField?: string[]; entities?: ExtractedEntity[] } | undefined
+    const tfidf = compData?.tfidfKeywords || []
+    const semField = semData?.semanticField || []
+
+    if (tfidf.length > 0 || semField.length > 0) {
+      const earlyCoverage = analyzeSemanticCoverage(updatedBlocks, tfidf, semField)
+      earlySemanticMissing = [...earlyCoverage.tfidfMissing.slice(0, 10), ...earlyCoverage.semanticMissing.slice(0, 5)]
+    }
+    if (semData?.entities && semData.entities.length > 0) {
+      const earlyEntities = validateEntityCoverage(semData.entities, updatedBlocks)
+      earlyEntityMissing = earlyEntities.entitiesMissing.slice(0, 10)
+    }
+  } catch {
+    // Non-critical — continue without semantic data in critique
+  }
+
   // 5c. SEO Audit — sub-step C: AI critique
   let critiqueResult = null
   try {
@@ -2060,6 +2121,8 @@ async function executeSeo(
           tone_description: persona.tone_description,
           bio: persona.bio,
         },
+        missingSemanticTerms: earlySemanticMissing.length > 0 ? earlySemanticMissing : undefined,
+        missingEntities: earlyEntityMissing.length > 0 ? earlyEntityMissing : undefined,
       })
 
       const critiqueResponse = await routeAI('critique', [
@@ -2427,6 +2490,74 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
     console.warn('[seo-audit] Broken link check failed, skipping:', err)
   }
 
+  // 5g. SEO Audit — sub-step G: semantic coverage validation (Axes 1, 3, 4)
+  let semanticCoverage: SemanticCoverageResult | null = null
+  let missingTermSuggestions: MissingTermSuggestion[] = []
+  let entityCoverage: EntityExtractionResult | null = null
+  let semanticCannibalization: SemanticCannibalizationResult | null = null
+
+  try {
+    const existingSerpForSemantic = (article.serp_data || {}) as Record<string, unknown>
+    const competitorData = existingSerpForSemantic.competitorContent as { tfidfKeywords?: { term: string; tfidf: number; df: number }[] } | undefined
+    const semanticData = existingSerpForSemantic.semanticAnalysis as { semanticField?: string[]; entities?: ExtractedEntity[] } | undefined
+
+    const tfidfKeywords = competitorData?.tfidfKeywords || []
+    const semanticField = semanticData?.semanticField || []
+
+    if (tfidfKeywords.length > 0 || semanticField.length > 0) {
+      // Axe 1 + 3: Semantic coverage score
+      semanticCoverage = analyzeSemanticCoverage(updatedBlocks, tfidfKeywords, semanticField)
+      console.log(`[seo-audit] Semantic coverage: TF-IDF ${semanticCoverage.tfidfCoverage}%, Semantic Field ${semanticCoverage.semanticFieldCoverage}%, Global ${semanticCoverage.globalScore}%`)
+
+      // Axe 4: Missing term suggestions
+      if (semanticCoverage.tfidfMissing.length > 0 || semanticCoverage.semanticMissing.length > 0) {
+        missingTermSuggestions = generateMissingTermSuggestions(semanticCoverage, tfidfKeywords, updatedBlocks)
+        console.log(`[seo-audit] ${missingTermSuggestions.length} missing terms with injection suggestions`)
+      }
+
+      // Axe 2: Entity coverage validation
+      const entities = semanticData?.entities
+      if (entities && entities.length > 0) {
+        entityCoverage = validateEntityCoverage(entities, updatedBlocks)
+        console.log(`[seo-audit] Entity coverage: ${entityCoverage.entitiesPresent.length}/${entities.length} entities present (${entityCoverage.coverageScore}%)`)
+      }
+
+      // Axe 5: Semantic cannibalization check (same silo)
+      if (article.silo_id) {
+        try {
+          const { data: siloArticles } = await supabase
+            .from('seo_articles')
+            .select('id, title, keyword, serp_data, content_blocks')
+            .eq('silo_id', article.silo_id)
+            .neq('id', article.id)
+            .in('status', ['written', 'reviewing', 'published', 'refresh_needed'] as ArticleStatus[])
+            .limit(20)
+
+          if (siloArticles && siloArticles.length > 0) {
+            const currentTerms = tokenizeArticleContent(updatedBlocks)
+            semanticCannibalization = detectSemanticCannibalization(
+              currentTerms,
+              siloArticles.map(a => ({
+                id: a.id,
+                title: a.title,
+                keyword: a.keyword,
+                serp_data: a.serp_data as Record<string, unknown> | null,
+                content_blocks: a.content_blocks as ContentBlock[] | null,
+              })),
+            )
+            if (semanticCannibalization.hasConflict) {
+              console.warn(`[seo-audit] Semantic cannibalization detected with ${semanticCannibalization.conflicts.length} article(s): ${semanticCannibalization.conflicts.map(c => `"${c.articleKeyword}" (${c.overlapScore}%)`).join(', ')}`)
+            }
+          }
+        } catch (err) {
+          console.warn('[seo-audit] Semantic cannibalization check failed:', err)
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[seo-audit] Semantic coverage analysis failed:', err)
+  }
+
   // Build seo_audit object
   const seoAudit = {
     auditedAt: new Date().toISOString(),
@@ -2447,6 +2578,45 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
     ...(condensedCount > 0 ? { condensation: { blocksCondensed: condensedCount, reason: 'Blocs du dernier tiers trop longs (>350 mots)' } } : {}),
     ...(nuggetIntegration ? { nuggetIntegration } : {}),
     ...(brokenLinksResult ? { brokenLinks: brokenLinksResult } : {}),
+    ...(semanticCoverage ? {
+      semanticCoverage: {
+        globalScore: semanticCoverage.globalScore,
+        tfidfCoverage: semanticCoverage.tfidfCoverage,
+        semanticFieldCoverage: semanticCoverage.semanticFieldCoverage,
+        tfidfPresent: semanticCoverage.tfidfPresent,
+        tfidfMissing: semanticCoverage.tfidfMissing,
+        semanticPresent: semanticCoverage.semanticPresent,
+        semanticMissing: semanticCoverage.semanticMissing,
+      },
+    } : {}),
+    ...(missingTermSuggestions.length > 0 ? {
+      missingTerms: missingTermSuggestions.map(s => ({
+        term: s.term,
+        importance: s.importance,
+        suggestedBlockIndex: s.suggestedBlockIndex,
+        reason: s.reason,
+      })),
+    } : {}),
+    ...(entityCoverage ? {
+      entityCoverage: {
+        coverageScore: entityCoverage.coverageScore,
+        entitiesPresent: entityCoverage.entitiesPresent,
+        entitiesMissing: entityCoverage.entitiesMissing,
+        totalEntities: entityCoverage.competitorEntities.length,
+      },
+    } : {}),
+    ...(semanticCannibalization?.hasConflict ? {
+      semanticCannibalization: {
+        hasConflict: true,
+        conflicts: semanticCannibalization.conflicts.map(c => ({
+          articleId: c.articleId,
+          articleTitle: c.articleTitle,
+          articleKeyword: c.articleKeyword,
+          overlapScore: c.overlapScore,
+          sharedTerms: c.sharedTerms.slice(0, 10),
+        })),
+      },
+    } : {}),
   }
 
   // 6. Update article
@@ -2499,6 +2669,25 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
           total: brokenLinksResult.totalLinks,
           broken: brokenLinksResult.brokenLinks,
           ok: brokenLinksResult.okLinks,
+        } : null,
+        semanticCoverage: semanticCoverage ? {
+          globalScore: semanticCoverage.globalScore,
+          tfidfCoverage: semanticCoverage.tfidfCoverage,
+          semanticFieldCoverage: semanticCoverage.semanticFieldCoverage,
+          missingTermsCount: missingTermSuggestions.length,
+          highPriorityMissing: missingTermSuggestions.filter(s => s.importance === 'high').length,
+        } : null,
+        entityCoverage: entityCoverage ? {
+          coverageScore: entityCoverage.coverageScore,
+          present: entityCoverage.entitiesPresent.length,
+          missing: entityCoverage.entitiesMissing.length,
+        } : null,
+        semanticCannibalization: semanticCannibalization?.hasConflict ? {
+          conflictCount: semanticCannibalization.conflicts.length,
+          topConflict: semanticCannibalization.conflicts[0] ? {
+            keyword: semanticCannibalization.conflicts[0].articleKeyword,
+            overlap: semanticCannibalization.conflicts[0].overlapScore,
+          } : null,
         } : null,
       },
     },

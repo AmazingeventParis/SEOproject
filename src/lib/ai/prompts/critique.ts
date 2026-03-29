@@ -25,6 +25,10 @@ interface CritiqueParams {
     tone_description: string | null
     bio: string | null
   }
+  /** Missing TF-IDF/semantic terms to flag in the critique */
+  missingSemanticTerms?: string[]
+  /** Missing NLP entities to flag in the critique */
+  missingEntities?: string[]
 }
 
 interface CritiquePrompt {
@@ -149,7 +153,21 @@ Retourne UNIQUEMENT un objet JSON valide, sans texte avant ou apres, sans bloc d
   let user = `## ARTICLE A EVALUER
 
 ### Mot-cle principal : "${keyword}"
-### Titre : "${title}"${searchIntent ? `\n### Intention de recherche : ${searchIntent}` : ''}
+### Titre : "${title}"${searchIntent ? `\n### Intention de recherche : ${searchIntent}` : ''}${
+  params.missingSemanticTerms && params.missingSemanticTerms.length > 0
+    ? `\n\n### TERMES SEMANTIQUES MANQUANTS (detectes algorithmiquement)
+Les termes TF-IDF et champ semantique suivants sont utilises par les concurrents mais ABSENTS de cet article :
+${params.missingSemanticTerms.slice(0, 15).map(t => `- ${t}`).join('\n')}
+→ PENALISE le score SEO si ces termes importants ne sont pas integres.`
+    : ''
+}${
+  params.missingEntities && params.missingEntities.length > 0
+    ? `\n\n### ENTITES NLP MANQUANTES (detectees chez les concurrents)
+Les entites suivantes sont mentionnees par les concurrents mais absentes de cet article :
+${params.missingEntities.slice(0, 10).map(t => `- ${t}`).join('\n')}
+→ PENALISE le score E-E-A-T si des entites cles du domaine manquent.`
+    : ''
+}
 
 ### Persona / Auteur attendu
 - Nom : ${persona.name}
