@@ -28,6 +28,7 @@ import { buildOptimizeBlocksPrompt } from '@/lib/ai/prompts/optimize-blocks'
 import { checkNuggetIntegration, type NuggetCheckDetail, type NuggetIntegrationResult } from './quality-checks'
 import { convertHtmlToGutenbergBlocks } from './gutenberg'
 import { checkBrokenLinks, type LinkCheckSummary } from '@/lib/seo/link-checker'
+import { analyzeReadability, type ReadabilityResult } from '@/lib/seo/readability'
 import {
   analyzeSemanticCoverage,
   generateMissingTermSuggestions,
@@ -1317,14 +1318,18 @@ async function executeMedia(
     const { blockIndex, isImageBlock, wpMedia, altText, imgTitle, optimized } = result.value
     const block = updatedBlocks[blockIndex]
 
+    // First section image gets fetchpriority="high" (above-the-fold LCP), rest get loading="lazy"
+    const isFirstImg = uploadedImages.length === 0
+    const imgLoadAttr = isFirstImg ? 'fetchpriority="high"' : 'loading="lazy"'
+
     if (isImageBlock) {
       updatedBlocks[blockIndex] = {
         ...block,
-        content_html: `<figure><img src="${wpMedia.url}" alt="${altText}" title="${imgTitle}" width="${optimized.width}" height="${optimized.height}" loading="lazy" />${block.heading ? `<figcaption>${block.heading}</figcaption>` : ''}</figure>`,
+        content_html: `<figure><img src="${wpMedia.url}" alt="${altText}" title="${imgTitle}" width="${optimized.width}" height="${optimized.height}" ${imgLoadAttr} />${block.heading ? `<figcaption>${block.heading}</figcaption>` : ''}</figure>`,
         status: 'written' as const,
       }
     } else {
-      const imageHtml = `<figure class="section-image"><img src="${wpMedia.url}" alt="${altText}" title="${imgTitle}" width="${optimized.width}" height="${optimized.height}" loading="lazy" /></figure>`
+      const imageHtml = `<figure class="section-image"><img src="${wpMedia.url}" alt="${altText}" title="${imgTitle}" width="${optimized.width}" height="${optimized.height}" ${imgLoadAttr} /></figure>`
       updatedBlocks[blockIndex] = {
         ...block,
         content_html: imageHtml + (block.content_html || ''),
@@ -1599,14 +1604,18 @@ async function injectPreGeneratedImages(
     const block = contentBlocks[img.blockIndex]
     if (!block) continue
 
+    // First section image gets fetchpriority="high" (above-the-fold), rest get loading="lazy"
+    const isFirstSectionImage = uploadedImages.length === 0
+    const loadingAttr = isFirstSectionImage ? 'fetchpriority="high"' : 'loading="lazy"'
+
     if (img.isImageBlock) {
       contentBlocks[img.blockIndex] = {
         ...block,
-        content_html: `<figure><img src="${img.wpUrl}" alt="${img.altText}" title="${img.imgTitle}" width="${img.width}" height="${img.height}" loading="lazy" />${img.heading ? `<figcaption>${img.heading}</figcaption>` : ''}</figure>`,
+        content_html: `<figure><img src="${img.wpUrl}" alt="${img.altText}" title="${img.imgTitle}" width="${img.width}" height="${img.height}" ${loadingAttr} />${img.heading ? `<figcaption>${img.heading}</figcaption>` : ''}</figure>`,
         status: 'written' as const,
       }
     } else {
-      const imageHtml = `<figure class="section-image"><img src="${img.wpUrl}" alt="${img.altText}" title="${img.imgTitle}" width="${img.width}" height="${img.height}" loading="lazy" /></figure>`
+      const imageHtml = `<figure class="section-image"><img src="${img.wpUrl}" alt="${img.altText}" title="${img.imgTitle}" width="${img.width}" height="${img.height}" ${loadingAttr} /></figure>`
       contentBlocks[img.blockIndex] = {
         ...block,
         content_html: imageHtml + (block.content_html || ''),
@@ -2071,7 +2080,16 @@ async function executeSeo(
     keywordInIntro = first100Words.includes(article.keyword.toLowerCase())
   }
 
-  // 5b-bis. Pre-compute semantic coverage for use in critique (Axes 1, 3, 4)
+  // 5b-bis. Readability scoring (algorithmic)
+  let readabilityResult: ReadabilityResult | null = null
+  try {
+    readabilityResult = analyzeReadability(updatedBlocks)
+    console.log(`[seo-audit] Readability score: ${readabilityResult.score}/100 (avg sentence: ${readabilityResult.avgSentenceLength} words, visual density: ${readabilityResult.visualDensity})`)
+  } catch (err) {
+    console.warn('[seo-audit] Readability analysis failed:', err)
+  }
+
+  // 5b-ter. Pre-compute semantic coverage for use in critique (Axes 1, 3, 4)
   let earlySemanticMissing: string[] = []
   let earlyEntityMissing: string[] = []
   try {
@@ -2572,6 +2590,18 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
       status: keywordDensityResult.status,
     },
     keywordInIntro,
+    ...(readabilityResult ? {
+      readability: {
+        score: readabilityResult.score,
+        avgSentenceLength: readabilityResult.avgSentenceLength,
+        longSentenceRatio: readabilityResult.longSentenceRatio,
+        avgParagraphLength: readabilityResult.avgParagraphLength,
+        visualElements: readabilityResult.visualElements,
+        visualDensity: readabilityResult.visualDensity,
+        maxConsecutiveProse: readabilityResult.maxConsecutiveProse,
+        issues: readabilityResult.issues,
+      },
+    } : {}),
     ...(critiqueResult ? { critique: critiqueResult } : {}),
     ...(optimizationResult ? { optimization: optimizationResult } : {}),
     ...(personaConsistency ? { personaConsistency } : {}),
@@ -2669,6 +2699,11 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
           total: brokenLinksResult.totalLinks,
           broken: brokenLinksResult.brokenLinks,
           ok: brokenLinksResult.okLinks,
+        } : null,
+        readability: readabilityResult ? {
+          score: readabilityResult.score,
+          avgSentenceLength: readabilityResult.avgSentenceLength,
+          issuesCount: readabilityResult.issues.length,
         } : null,
         semanticCoverage: semanticCoverage ? {
           globalScore: semanticCoverage.globalScore,
@@ -2958,7 +2993,7 @@ async function executePublish(
     // Tag assignment is optional
   }
 
-  // 5. Build SEO meta for Yoast/Rank Math + Elementor cleanup
+  // 5. Build SEO meta for Yoast/Rank Math + Open Graph + Elementor cleanup
   const seoMeta: Record<string, unknown> = {}
   if (article.seo_title) {
     seoMeta._yoast_wpseo_title = article.seo_title
@@ -2972,6 +3007,46 @@ async function executePublish(
     seoMeta._yoast_wpseo_focuskw = article.keyword
     seoMeta.rank_math_focus_keyword = article.keyword
   }
+
+  // Open Graph + Twitter Cards meta
+  const ogTitle = article.seo_title || article.title || article.keyword
+  const ogDescription = article.meta_description || ''
+  const heroImageUrl = (article as Record<string, unknown>).hero_image_url as string | undefined
+  const siteDomainClean = site?.domain?.replace(/^https?:\/\//, '').replace(/\/+$/, '') || ''
+  const articleUrl = article.wp_url || (article.slug ? `https://${siteDomainClean}/${article.slug}` : '')
+
+  // Yoast OG fields
+  seoMeta._yoast_wpseo_opengraph_title = ogTitle
+  seoMeta._yoast_wpseo_opengraph_description = ogDescription
+  if (heroImageUrl) {
+    seoMeta._yoast_wpseo_opengraph_image = heroImageUrl
+  }
+  // Yoast Twitter fields
+  seoMeta._yoast_wpseo_twitter_title = ogTitle
+  seoMeta._yoast_wpseo_twitter_description = ogDescription
+  if (heroImageUrl) {
+    seoMeta._yoast_wpseo_twitter_image = heroImageUrl
+  }
+
+  // Rank Math OG fields
+  seoMeta.rank_math_facebook_title = ogTitle
+  seoMeta.rank_math_facebook_description = ogDescription
+  if (heroImageUrl) {
+    seoMeta.rank_math_facebook_image = heroImageUrl
+  }
+  seoMeta.rank_math_twitter_title = ogTitle
+  seoMeta.rank_math_twitter_description = ogDescription
+  if (heroImageUrl) {
+    seoMeta.rank_math_twitter_image = heroImageUrl
+  }
+  seoMeta.rank_math_twitter_card_type = 'summary_large_image'
+
+  // Canonical URL
+  if (articleUrl) {
+    seoMeta._yoast_wpseo_canonical = articleUrl
+    seoMeta.rank_math_canonical_url = articleUrl
+  }
+
   // Disable Elementor edit mode on existing posts so WP renders post_content
   // instead of _elementor_data (which may contain old/stale Elementor content)
   if (article.wp_post_id) {

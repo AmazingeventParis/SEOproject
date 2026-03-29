@@ -36,6 +36,7 @@ interface BlockWriterParams {
     word_count: number
     writing_directive?: string
     format_hint?: 'prose' | 'bullets' | 'table' | 'mixed'
+    featured_snippet_type?: 'definition' | 'list' | 'table' | 'steps' | 'none'
   }
   nuggets: { id: string; content: string; tags: string[]; context?: string }[]
   previousHeadings: string[]
@@ -223,7 +224,15 @@ ${searchIntent && INTENT_STRATEGIES[searchIntent]?.writing ? `## STRATEGIE D'ECR
 ${INTENT_STRATEGIES[searchIntent].writing}
 Cette strategie PRIME sur les regles generales en cas de conflit.
 
-` : ''}## REGLES STRICTES
+` : ''}## FEATURED SNIPPET (POSITION ZERO)
+Si ce bloc cible un featured snippet, la PREMIERE chose que tu ecris doit etre la reponse directe :
+- **definition** : 1 paragraphe <p> de 40-50 mots qui repond directement a la question du H2. Phrase complete, autonome, comprehensible seule. PUIS developpe normalement.
+- **list** : une liste <ol> ou <ul> de 5-8 items avec <strong> sur le point cle. Chaque item = 1 ligne. PUIS developpe chaque point.
+- **table** : un tableau HTML comparatif avec headers clairs. 3-5 colonnes max. PUIS ajoute du contexte en prose.
+- **steps** : une liste numerotee <ol> avec chaque etape en <strong>. Format "Etape N : [Action]". PUIS developpe chaque etape.
+- **none** : pas de ciblage snippet, ecris normalement.
+
+## REGLES STRICTES
 - Retourne UNIQUEMENT du HTML propre, sans markdown, sans blocs de code
 - Le nombre de mots indique est un OBJECTIF MINIMUM STRICT. Tu DOIS ecrire au moins ce nombre de mots. Ecris plus si le sujet le merite, mais JAMAIS moins. Un bloc de 250 mots qui n'en produit que 120 est une ERREUR GRAVE. Ne t'arrete PAS tant que tu n'as pas atteint l'objectif minimum.
 - N'invente PAS de statistiques ou de chiffres - sois honnete
@@ -254,7 +263,7 @@ Ecris le contenu d'un bloc pour l'article intitule : "${articleTitle}"
 ## BLOC A REDIGER
 - Type : ${block.type}
 - Titre de la section : ${block.heading || '(pas de titre - bloc de contenu libre)'}
-- Nombre de mots cible : ${block.word_count} mots${searchIntent ? `\n- Intention de recherche : ${searchIntent}` : ''}
+- Nombre de mots cible : ${block.word_count} mots${searchIntent ? `\n- Intention de recherche : ${searchIntent}` : ''}${block.featured_snippet_type && block.featured_snippet_type !== 'none' ? `\n- **FEATURED SNIPPET CIBLE : ${block.featured_snippet_type}** — COMMENCE par la reponse directe (voir regles ci-dessus)` : ''}
 
 ## CONTEXTE - Sections precedentes de l'article
 L'article contient deja les sections suivantes avant ce bloc :`

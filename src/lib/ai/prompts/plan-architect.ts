@@ -252,6 +252,23 @@ Format par entree :
 - "suggested_anchor_context" = indication sur COMMENT integrer le lien naturellement
 - L'ancre finale sera decidee par le redacteur — donne juste le contexte d'insertion
 
+## OPTIMISATION FEATURED SNIPPETS (POSITION ZERO GOOGLE)
+
+Chaque H2 est une opportunite de featured snippet. Pour MAXIMISER les chances d'obtenir la position zero :
+
+### Detection du type de snippet probable
+Analyse les PAA et les resultats SERP. Le premier H2 DOIT cibler un snippet :
+- **Definition** : si le mot-cle commence par "qu'est-ce que", "definition", "c'est quoi" → la section doit COMMENCER par une reponse directe en 40-50 mots sous forme de paragraphe concis
+- **Liste** : si le mot-cle contient "meilleurs", "top", "liste", "etapes", "comment" → la section doit COMMENCER par une <ol> ou <ul> numerotee avec 5-8 items
+- **Tableau** : si le mot-cle contient "comparatif", "vs", "prix", "difference" → la section doit COMMENCER par un tableau comparatif clair
+- **Etapes** : si le mot-cle contient "comment", "guide", "tuto" → la section doit suivre un format etape-par-etape numerote
+
+### Regle d'implementation
+Pour chaque bloc H2, ajoute un champ **"featured_snippet_type"** : "definition" | "list" | "table" | "steps" | "none"
+- Au moins 1 bloc H2 (idealement le premier) DOIT avoir un featured_snippet_type != "none"
+- La writing_directive DOIT preciser : "COMMENCER par [type de reponse directe] en [X] mots avant de developper"
+- La reponse directe doit etre AUTONOME (comprehensible sans lire le reste)
+
 ## SUGGESTIONS DE TITRE H1 (OBLIGATOIRE)
 
 Tu DOIS proposer exactement 3 variantes de titre H1, chacune avec une strategie differente :
@@ -318,6 +335,7 @@ Tu DOIS retourner UNIQUEMENT un objet JSON valide, sans texte avant ou apres, sa
       "generate_image": true,
       "image_prompt_hint": "Editorial photo showing...",
       "key_ideas": ["Idee 1 exclusive a cette section", "Idee 2", "Idee 3"],
+      "featured_snippet_type": "definition | list | table | steps | none",
       "internal_link_targets": [
         {
           "target_slug": "slug-de-larticle-cible",
