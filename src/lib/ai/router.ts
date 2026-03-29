@@ -357,6 +357,7 @@ const COST_PER_1K_TOKENS: Record<string, { input: number; output: number }> = {
   'claude-sonnet-4-20250514': { input: 0.003, output: 0.015 },
   'claude-haiku-4-5-20251001': { input: 0.001, output: 0.005 },
   'gemini-3.1-pro-preview': { input: 0.002, output: 0.012 },
+  'gemini-3.1-flash-preview': { input: 0.0005, output: 0.003 },
   'gemini-3-flash-preview': { input: 0.0005, output: 0.003 },
   'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
   'gpt-4o': { input: 0.0025, output: 0.01 },

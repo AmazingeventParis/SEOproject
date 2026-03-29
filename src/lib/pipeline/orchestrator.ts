@@ -27,6 +27,7 @@ import { buildCritiquePrompt, validateCritiqueResult } from '@/lib/ai/prompts/cr
 import { buildOptimizeBlocksPrompt } from '@/lib/ai/prompts/optimize-blocks'
 import { checkNuggetIntegration, type NuggetCheckDetail, type NuggetIntegrationResult } from './quality-checks'
 import { convertHtmlToGutenbergBlocks } from './gutenberg'
+import { checkBrokenLinks, type LinkCheckSummary } from '@/lib/seo/link-checker'
 
 /**
  * Extract and parse JSON from AI response text.
@@ -2407,6 +2408,25 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
     }
   }
 
+  // 5f. SEO Audit — sub-step F: broken link verification
+  let brokenLinksResult: LinkCheckSummary | null = null
+  try {
+    const blocksForLinkCheck = updatedBlocks
+      .filter(b => b.content_html && b.status !== 'pending')
+      .map(b => ({ content_html: b.content_html, type: b.type, status: b.status || 'written' }))
+    const siteDomain = site?.domain || ''
+    if (blocksForLinkCheck.length > 0 && siteDomain) {
+      brokenLinksResult = await checkBrokenLinks(blocksForLinkCheck, siteDomain)
+      if (brokenLinksResult.brokenLinks > 0) {
+        console.warn(`[seo-audit] ${brokenLinksResult.brokenLinks} lien(s) casse(s) detecte(s) sur ${brokenLinksResult.totalLinks} verifies`)
+      } else {
+        console.log(`[seo-audit] ${brokenLinksResult.totalLinks} liens verifies, aucun casse`)
+      }
+    }
+  } catch (err) {
+    console.warn('[seo-audit] Broken link check failed, skipping:', err)
+  }
+
   // Build seo_audit object
   const seoAudit = {
     auditedAt: new Date().toISOString(),
@@ -2426,6 +2446,7 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
     ...(personaConsistency ? { personaConsistency } : {}),
     ...(condensedCount > 0 ? { condensation: { blocksCondensed: condensedCount, reason: 'Blocs du dernier tiers trop longs (>350 mots)' } } : {}),
     ...(nuggetIntegration ? { nuggetIntegration } : {}),
+    ...(brokenLinksResult ? { brokenLinks: brokenLinksResult } : {}),
   }
 
   // 6. Update article
@@ -2473,6 +2494,11 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
           totalIntegrated: nuggetIntegration.totalIntegrated,
           totalIgnored: nuggetIntegration.totalIgnored,
           integrationRate: nuggetIntegration.integrationRate,
+        } : null,
+        brokenLinks: brokenLinksResult ? {
+          total: brokenLinksResult.totalLinks,
+          broken: brokenLinksResult.brokenLinks,
+          ok: brokenLinksResult.okLinks,
         } : null,
       },
     },
@@ -2814,6 +2840,37 @@ async function executePublish(
     })
     .eq('id', article.id)
 
+  // 8. Request Google indexing (fire-and-forget, non-blocking)
+  let indexingRequested = false
+  try {
+    const { requestIndexing } = await import('@/lib/seo/indexing-api')
+    const indexResult = await requestIndexing(wpUrl, 'URL_UPDATED')
+    indexingRequested = indexResult.success
+    if (indexResult.success) {
+      console.log(`[publish] Google Indexing API notifie pour ${wpUrl}`)
+    } else {
+      console.warn(`[publish] Indexing API echec: ${indexResult.error}`)
+    }
+    // Store in serp_data
+    const existingSerpData = (article.serp_data || {}) as Record<string, unknown>
+    const indexingHistory = (existingSerpData.indexing_requests || []) as Record<string, unknown>[]
+    indexingHistory.push({
+      requestedAt: now,
+      url: wpUrl,
+      success: indexResult.success,
+      notifyTime: indexResult.notifyTime || null,
+      error: indexResult.error || null,
+      trigger: 'auto-publish',
+    })
+    if (indexingHistory.length > 10) indexingHistory.splice(0, indexingHistory.length - 10)
+    await supabase
+      .from('seo_articles')
+      .update({ serp_data: { ...existingSerpData, indexing_requests: indexingHistory } })
+      .eq('id', article.id)
+  } catch (err) {
+    console.warn('[publish] Google Indexing request failed (non-blocking):', err)
+  }
+
   return {
     success: true,
     runId: '',
@@ -2825,6 +2882,7 @@ async function executePublish(
       excerpt: excerpt.slice(0, 100) + '...',
       category: site?.niche || null,
       seoMeta: hasSeoMeta ? Object.keys(seoMeta) : [],
+      indexingRequested,
     },
   }
 }
