@@ -51,7 +51,8 @@ export async function POST(
       article.site_id,
       article.keyword,
       article.title || article.keyword,
-      article.wp_post_id!
+      article.wp_post_id!,
+      article.wp_url!
     )
 
     if (candidates.length === 0) {

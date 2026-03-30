@@ -17,6 +17,7 @@ export type AITask =
   | 'evaluate_authority_links'   // Evaluate authority link candidates -> Gemini Flash
   | 'extract_nuggets'            // Extract knowledge nuggets from transcript -> Gemini Flash
   | 'generate_backlink_sentences' // Generate transition sentences for reverse backlinks -> Gemini Flash
+  | 'generate_backlink_anchor'    // Find natural anchor text in existing paragraph -> Gemini Flash
   | 'generate_table'              // Convert selected text into a responsive HTML table -> Gemini Flash
   | 'optimize_blocks'             // Auto-optimize content blocks based on critique issues -> Gemini Pro
   | 'check_persona_consistency'   // Check persona voice consistency across blocks -> Gemini Flash
