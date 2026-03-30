@@ -6,35 +6,54 @@ import {
   FileText,
   PenLine,
   Globe,
-  Gem,
   Loader2,
   DollarSign,
   RefreshCw,
-  Compass,
   ArrowRight,
+  Rocket,
+  AlertTriangle,
+  CheckCircle2,
+  Plus,
+  Layers,
+  TrendingUp,
+  Zap,
+  BarChart3,
 } from "lucide-react";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import type { ArticleStatus } from "@/lib/supabase/types";
 import { StatusBadge } from "@/components/articles/status-badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 
-interface DashboardStats {
-  publishedCount: number;
-  writingCount: number;
-  refreshNeededCount: number;
-  sitesCount: number;
-  nuggetsCount: number;
-  discoverNewCount: number;
-  monthlyCost: number;
+interface DashboardData {
+  counts: {
+    published: number;
+    pipeline: number;
+    refreshNeeded: number;
+    draftWp: number;
+    sites: number;
+  };
+  cost: {
+    monthTotal: number;
+    budget: number;
+    budgetPercent: number;
+    avgPerArticle: number;
+    tokensIn: number;
+    tokensOut: number;
+    successRate: number;
+    totalRuns: number;
+  };
+  top3Articles: { id: string; keyword: string; cost: number }[];
   recentArticles: {
     id: string;
     keyword: string;
@@ -48,159 +67,45 @@ interface DashboardStats {
     status: string;
     updated_at: string;
   }[];
+  draftWpList: {
+    id: string;
+    keyword: string;
+    title: string | null;
+    wp_url: string | null;
+  }[];
 }
 
+const EMPTY_DATA: DashboardData = {
+  counts: { published: 0, pipeline: 0, refreshNeeded: 0, draftWp: 0, sites: 0 },
+  cost: { monthTotal: 0, budget: 50, budgetPercent: 0, avgPerArticle: 0, tokensIn: 0, tokensOut: 0, successRate: 100, totalRuns: 0 },
+  top3Articles: [],
+  recentArticles: [],
+  activeArticles: [],
+  draftWpList: [],
+};
+
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats>({
-    publishedCount: 0,
-    writingCount: 0,
-    refreshNeededCount: 0,
-    sitesCount: 0,
-    nuggetsCount: 0,
-    discoverNewCount: 0,
-    monthlyCost: 0,
-    recentArticles: [],
-    activeArticles: [],
-  });
+  const [data, setData] = useState<DashboardData>(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchStats = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [sitesRes, articlesRes, nuggetsRes, discoverRes, analyticsRes] =
-        await Promise.all([
-          fetch("/api/sites"),
-          fetch("/api/articles"),
-          fetch("/api/nuggets"),
-          fetch("/api/discover?status=new"),
-          fetch("/api/analytics?period=month"),
-        ]);
-
-      let sitesCount = 0;
-      let publishedCount = 0;
-      let writingCount = 0;
-      let refreshNeededCount = 0;
-      let nuggetsCount = 0;
-      let discoverNewCount = 0;
-      let monthlyCost = 0;
-      let recentArticles: DashboardStats["recentArticles"] = [];
-      let activeArticles: DashboardStats["activeArticles"] = [];
-
-      if (sitesRes.ok) {
-        const sites = await sitesRes.json();
-        sitesCount = Array.isArray(sites)
-          ? sites.filter((s: { active?: boolean }) => s.active !== false).length
-          : 0;
+      const res = await fetch("/api/dashboard");
+      if (res.ok) {
+        setData(await res.json());
       }
-
-      if (articlesRes.ok) {
-        const articles = await articlesRes.json();
-        if (Array.isArray(articles)) {
-          const activeStatuses = [
-            "analyzing",
-            "planning",
-            "writing",
-            "media",
-            "seo_check",
-            "reviewing",
-            "publishing",
-          ];
-          publishedCount = articles.filter(
-            (a: { status: string }) => a.status === "published"
-          ).length;
-          writingCount = articles.filter((a: { status: string }) =>
-            activeStatuses.includes(a.status)
-          ).length;
-          refreshNeededCount = articles.filter(
-            (a: { status: string }) => a.status === "refresh_needed"
-          ).length;
-
-          // Recent articles (last 5 by updated_at)
-          recentArticles = articles
-            .sort(
-              (
-                a: { updated_at: string },
-                b: { updated_at: string }
-              ) =>
-                new Date(b.updated_at).getTime() -
-                new Date(a.updated_at).getTime()
-            )
-            .slice(0, 5)
-            .map(
-              (a: {
-                id: string;
-                keyword: string;
-                title: string | null;
-                status: string;
-                updated_at: string;
-              }) => ({
-                id: a.id,
-                keyword: a.keyword,
-                title: a.title,
-                status: a.status,
-                updated_at: a.updated_at,
-              })
-            );
-
-          // Active pipeline articles
-          activeArticles = articles
-            .filter((a: { status: string }) =>
-              activeStatuses.includes(a.status)
-            )
-            .slice(0, 10)
-            .map(
-              (a: {
-                id: string;
-                keyword: string;
-                status: string;
-                updated_at: string;
-              }) => ({
-                id: a.id,
-                keyword: a.keyword,
-                status: a.status,
-                updated_at: a.updated_at,
-              })
-            );
-        }
-      }
-
-      if (nuggetsRes.ok) {
-        const nuggets = await nuggetsRes.json();
-        nuggetsCount = Array.isArray(nuggets) ? nuggets.length : 0;
-      }
-
-      if (discoverRes.ok) {
-        const discover = await discoverRes.json();
-        discoverNewCount = Array.isArray(discover) ? discover.length : 0;
-      }
-
-      if (analyticsRes.ok) {
-        const analytics = await analyticsRes.json();
-        monthlyCost = analytics?.summary?.totalCostUsd ?? 0;
-      }
-
-      setStats({
-        publishedCount,
-        writingCount,
-        refreshNeededCount,
-        sitesCount,
-        nuggetsCount,
-        discoverNewCount,
-        monthlyCost,
-        recentArticles,
-        activeArticles,
-      });
     } catch {
-      // Keep default zeros
+      // keep defaults
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+    fetchData();
+  }, [fetchData]);
 
   async function handleRefreshScan() {
     try {
@@ -217,8 +122,8 @@ export default function DashboardPage() {
           body: JSON.stringify({ site_id: site.id, auto_mark: true }),
         });
         if (res.ok) {
-          const data = await res.json();
-          totalMarked += data.marked || 0;
+          const d = await res.json();
+          totalMarked += d.marked || 0;
         }
       }
 
@@ -226,102 +131,285 @@ export default function DashboardPage() {
         title: "Scan termine",
         description: `${totalMarked} article(s) marque(s) pour mise a jour.`,
       });
-      fetchStats();
+      fetchData();
     } catch {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
-        description: "Impossible de lancer le scan.",
-      });
+      toast({ variant: "destructive", title: "Erreur", description: "Impossible de lancer le scan." });
     }
   }
 
-  const statCards = [
-    {
-      title: "Articles publies",
-      value: stats.publishedCount,
-      icon: FileText,
-      description: "Total des articles publies",
-    },
-    {
-      title: "En cours",
-      value: stats.writingCount,
-      icon: PenLine,
-      description: "Articles dans le pipeline",
-    },
-    {
-      title: "Sites actifs",
-      value: stats.sitesCount,
-      icon: Globe,
-      description: "Sites WordPress connectes",
-    },
-    {
-      title: "Nuggets",
-      value: stats.nuggetsCount,
-      icon: Gem,
-      description: "Nuggets disponibles",
-    },
-    {
-      title: "Cout du mois",
-      value: `$${stats.monthlyCost.toFixed(2)}`,
-      icon: DollarSign,
-      description: "Depenses IA ce mois",
-    },
-    {
-      title: "A rafraichir",
-      value: stats.refreshNeededCount,
-      icon: RefreshCw,
-      description: "Articles a mettre a jour",
-    },
-    {
-      title: "Discover",
-      value: stats.discoverNewCount,
-      icon: Compass,
-      description: "Nouveaux sujets",
-    },
-  ];
+  const Loader = () => <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />;
+
+  const budgetColor =
+    data.cost.budgetPercent >= 80
+      ? "text-red-600"
+      : data.cost.budgetPercent >= 50
+        ? "text-amber-600"
+        : "text-emerald-600";
+
+  const budgetBarColor =
+    data.cost.budgetPercent >= 80
+      ? "[&>div]:bg-red-500"
+      : data.cost.budgetPercent >= 50
+        ? "[&>div]:bg-amber-500"
+        : "[&>div]:bg-emerald-500";
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Vue d&apos;ensemble
-          </h2>
-          <p className="text-muted-foreground">
-            Bienvenue dans SEO Content Studio.
-          </p>
+          <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
+          <p className="text-muted-foreground">Vue d&apos;ensemble de votre production SEO</p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefreshScan}>
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Scanner les refreshs
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleRefreshScan}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Scanner refreshs
+          </Button>
+        </div>
       </div>
 
-      {/* Stats grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {statCards.map((stat) => (
-          <Card key={stat.title}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                {stat.title}
-              </CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              ) : (
-                <div className="text-2xl font-bold">{stat.value}</div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {stat.description}
+      {/* Quick Actions */}
+      <div className="flex gap-3 flex-wrap">
+        <Link href="/dashboard/articles/new">
+          <Button size="sm">
+            <Plus className="mr-2 h-4 w-4" />
+            Nouvel article
+          </Button>
+        </Link>
+        <Link href="/dashboard/articles/batch">
+          <Button variant="outline" size="sm">
+            <Layers className="mr-2 h-4 w-4" />
+            Batch
+          </Button>
+        </Link>
+        <Link href="/dashboard/analytics">
+          <Button variant="outline" size="sm">
+            <BarChart3 className="mr-2 h-4 w-4" />
+            Analytics
+          </Button>
+        </Link>
+      </div>
+
+      {/* Alert: articles en brouillon WP */}
+      {data.counts.draftWp > 0 && (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardContent className="py-3 flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800">
+                {data.counts.draftWp} article{data.counts.draftWp > 1 ? "s" : ""} en brouillon WordPress
               </p>
-            </CardContent>
-          </Card>
-        ))}
+              <p className="text-xs text-amber-600">
+                Publie{data.counts.draftWp > 1 ? "s" : ""} dans le pipeline mais pas encore en ligne. Cliquez &quot;Mettre en ligne + Indexer&quot; pour les activer.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stats row */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Articles publies */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Articles publies</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {loading ? <Loader /> : <div className="text-2xl font-bold">{data.counts.published}</div>}
+            <p className="text-xs text-muted-foreground">Total publie sur WordPress</p>
+          </CardContent>
+        </Card>
+
+        {/* Pipeline en cours */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">En cours</CardTitle>
+            <PenLine className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {loading ? <Loader /> : <div className="text-2xl font-bold">{data.counts.pipeline}</div>}
+            <p className="text-xs text-muted-foreground">Articles dans le pipeline</p>
+          </CardContent>
+        </Card>
+
+        {/* Sites actifs */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Sites actifs</CardTitle>
+            <Globe className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {loading ? <Loader /> : <div className="text-2xl font-bold">{data.counts.sites}</div>}
+            <p className="text-xs text-muted-foreground">WordPress connectes</p>
+          </CardContent>
+        </Card>
+
+        {/* A rafraichir */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">A rafraichir</CardTitle>
+            <RefreshCw className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {loading ? <Loader /> : (
+              <div className="text-2xl font-bold">
+                {data.counts.refreshNeeded}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">Articles a mettre a jour</p>
+          </CardContent>
+        </Card>
       </div>
 
+      {/* Cost + Performance row */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Cout du mois */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <DollarSign className="h-4 w-4" />
+              Cout du mois
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {loading ? <Loader /> : (
+              <>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-3xl font-bold ${budgetColor}`}>
+                    ${data.cost.monthTotal.toFixed(2)}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    / ${data.cost.budget}
+                  </span>
+                </div>
+                <Progress value={Math.min(data.cost.budgetPercent, 100)} className={`h-2 ${budgetBarColor}`} />
+                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                  <div>
+                    <span className="font-medium text-foreground">${data.cost.avgPerArticle.toFixed(2)}</span> / article
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">{data.cost.totalRuns}</span> runs ce mois
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Taux de reussite */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Zap className="h-4 w-4" />
+              Taux de reussite pipeline
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {loading ? <Loader /> : (
+              <>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-3xl font-bold ${data.cost.successRate >= 90 ? "text-emerald-600" : data.cost.successRate >= 70 ? "text-amber-600" : "text-red-600"}`}>
+                    {data.cost.successRate}%
+                  </span>
+                  {data.cost.successRate >= 90 && (
+                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {data.cost.totalRuns > 0
+                    ? `${Math.round((data.cost.successRate / 100) * data.cost.totalRuns)} succes sur ${data.cost.totalRuns} runs`
+                    : "Aucun run ce mois"
+                  }
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                  <div>
+                    <span className="font-medium text-foreground">{(data.cost.tokensIn / 1000).toFixed(0)}k</span> tokens in
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">{(data.cost.tokensOut / 1000).toFixed(0)}k</span> tokens out
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Top 3 articles les plus chers */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Top 3 articles les plus chers
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading ? <Loader /> : data.top3Articles.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucun cout enregistre</p>
+            ) : (
+              <div className="space-y-2.5">
+                {data.top3Articles.map((article, i) => (
+                  <Link
+                    key={article.id}
+                    href={`/dashboard/articles/${article.id}`}
+                    className="flex items-center justify-between gap-2 group"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-bold text-muted-foreground w-4">{i + 1}.</span>
+                      <span className="text-sm truncate group-hover:text-primary transition-colors">
+                        {article.keyword}
+                      </span>
+                    </div>
+                    <Badge variant="outline" className="shrink-0 font-mono">
+                      ${article.cost.toFixed(2)}
+                    </Badge>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Draft WP articles */}
+      {data.draftWpList.length > 0 && (
+        <Card className="border-amber-200">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Rocket className="h-4 w-4 text-amber-600" />
+                A mettre en ligne
+              </CardTitle>
+              <CardDescription>Articles publies dans le pipeline, encore en brouillon WordPress</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {data.draftWpList.map((article) => (
+                <Link
+                  key={article.id}
+                  href={`/dashboard/articles/${article.id}`}
+                  className="flex items-center justify-between gap-2 rounded-lg p-2 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{article.keyword}</p>
+                    {article.title && (
+                      <p className="text-xs text-muted-foreground truncate">{article.title}</p>
+                    )}
+                  </div>
+                  <Button size="sm" variant="outline" className="shrink-0 text-amber-600 border-amber-300 hover:bg-amber-50">
+                    <Rocket className="mr-1.5 h-3.5 w-3.5" />
+                    Mettre en ligne
+                  </Button>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Bottom row: Recent + Pipeline */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recent articles */}
         <Card>
@@ -335,37 +423,26 @@ export default function DashboardPage() {
             </Link>
           </CardHeader>
           <CardContent>
-            {loading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            ) : stats.recentArticles.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Aucun article pour le moment.
-              </p>
+            {loading ? <Loader /> : data.recentArticles.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucun article pour le moment.</p>
             ) : (
-              <div className="space-y-3">
-                {stats.recentArticles.map((article) => (
+              <div className="space-y-2">
+                {data.recentArticles.map((article) => (
                   <Link
                     key={article.id}
                     href={`/dashboard/articles/${article.id}`}
                     className="flex items-center justify-between gap-2 rounded-lg p-2 hover:bg-muted/50 transition-colors"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">
-                        {article.keyword}
-                      </p>
+                      <p className="text-sm font-medium truncate">{article.keyword}</p>
                       {article.title && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          {article.title}
-                        </p>
+                        <p className="text-xs text-muted-foreground truncate">{article.title}</p>
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <StatusBadge status={article.status as ArticleStatus} />
                       <span className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(article.updated_at), {
-                          addSuffix: true,
-                          locale: fr,
-                        })}
+                        {formatDistanceToNow(new Date(article.updated_at), { addSuffix: true, locale: fr })}
                       </span>
                     </div>
                   </Link>
@@ -381,30 +458,21 @@ export default function DashboardPage() {
             <CardTitle className="text-base">Pipeline en cours</CardTitle>
           </CardHeader>
           <CardContent>
-            {loading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            ) : stats.activeArticles.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Aucun article en cours de traitement.
-              </p>
+            {loading ? <Loader /> : data.activeArticles.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucun article en cours de traitement.</p>
             ) : (
-              <div className="space-y-3">
-                {stats.activeArticles.map((article) => (
+              <div className="space-y-2">
+                {data.activeArticles.map((article) => (
                   <Link
                     key={article.id}
                     href={`/dashboard/articles/${article.id}`}
                     className="flex items-center justify-between gap-2 rounded-lg p-2 hover:bg-muted/50 transition-colors"
                   >
-                    <p className="text-sm font-medium truncate min-w-0 flex-1">
-                      {article.keyword}
-                    </p>
+                    <p className="text-sm font-medium truncate min-w-0 flex-1">{article.keyword}</p>
                     <div className="flex items-center gap-2 shrink-0">
                       <StatusBadge status={article.status as ArticleStatus} />
                       <Badge variant="outline" className="text-xs">
-                        {formatDistanceToNow(new Date(article.updated_at), {
-                          addSuffix: true,
-                          locale: fr,
-                        })}
+                        {formatDistanceToNow(new Date(article.updated_at), { addSuffix: true, locale: fr })}
                       </Badge>
                     </div>
                   </Link>
