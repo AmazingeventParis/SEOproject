@@ -80,9 +80,9 @@ export function generateSeoFilename(
  * Generate descriptive alt text for an image — describes the VISIBLE scene.
  *
  * Strategy:
- * - imagePromptHint is IGNORED (it's an English prompt for Fal.ai, not a description)
- * - Alt text is built from the heading context in clean French
- * - Describes what a person would SEE in the image, not keywords
+ * - Uses imagePromptHint (Fal.ai prompt) to describe the actual image content
+ * - Translates key visual elements from English hint to natural French
+ * - Integrates keyword naturally, not as keyword stuffing
  * - Max 125 characters
  *
  * Google recommends alt text that describes the image content, not keyword stuffing.
@@ -92,24 +92,31 @@ export function generateAltText(
   keyword: string,
   heading: string | null,
   imageType: "hero" | "section",
-  _imagePromptHint?: string | null,
+  imagePromptHint?: string | null,
   sectionIndex?: number
 ): string {
-  void _imagePromptHint; // intentionally ignored — English AI prompt, not a visual description
+  // If we have an image prompt hint, use it to describe the actual visual content
+  if (imagePromptHint && imagePromptHint.length > 10) {
+    const description = translatePromptHintToAlt(imagePromptHint, keyword, heading, imageType, sectionIndex)
+    if (description) return truncateAlt(description)
+  }
 
+  // Fallback: generate from heading/keyword context
   if (imageType === "hero") {
-    // Hero: simple descriptive alt based on keyword
-    return truncateAlt(`Photo illustrant ${keyword.toLowerCase()}`);
+    const heroFallbacks = [
+      `Photo illustrant ${keyword.toLowerCase()}`,
+      `Image representant le concept de ${keyword.toLowerCase()}`,
+      `Visuel principal sur ${keyword.toLowerCase()}`,
+    ]
+    return truncateAlt(heroFallbacks[(sectionIndex ?? 0) % heroFallbacks.length])
   }
 
   if (heading) {
-    // Section image: describe the visual scene based on heading topic
     const cleanHeading = heading
       .replace(/[?!.:…]+$/g, "")
-      .replace(/^\d+[\s.):-]+/, "") // remove leading numbers "3. " "4) "
+      .replace(/^\d+[\s.):-]+/, "")
       .trim();
 
-    // Vary the alt text pattern based on section index to avoid repetition
     const idx = sectionIndex ?? 0;
     const patterns = [
       (h: string) => `${h}`,
@@ -118,11 +125,140 @@ export function generateAltText(
       (h: string) => `Vue detaillee : ${h.toLowerCase()}`,
       (h: string) => `${h} en image`,
     ];
-    const pattern = patterns[idx % patterns.length];
-    return truncateAlt(pattern(cleanHeading));
+    return truncateAlt(patterns[idx % patterns.length](cleanHeading));
   }
 
   return truncateAlt(`Illustration complementaire sur ${keyword.toLowerCase()}`);
+}
+
+/**
+ * Translate an English Fal.ai image prompt hint into a natural French alt text.
+ * Extracts the visual scene description and adapts it to French.
+ */
+function translatePromptHintToAlt(
+  hint: string,
+  keyword: string,
+  heading: string | null,
+  imageType: "hero" | "section",
+  sectionIndex?: number
+): string | null {
+  // Common English→French visual vocabulary
+  const translations: Record<string, string> = {
+    // Scene elements
+    "person": "personne", "people": "personnes", "woman": "femme", "man": "homme",
+    "professional": "professionnel", "expert": "expert", "team": "equipe",
+    "office": "bureau", "workspace": "espace de travail", "desk": "bureau",
+    "computer": "ordinateur", "laptop": "ordinateur portable", "screen": "ecran",
+    "phone": "telephone", "smartphone": "smartphone",
+    "chart": "graphique", "graph": "graphique", "dashboard": "tableau de bord",
+    "document": "document", "paper": "papier", "notebook": "carnet",
+    "meeting": "reunion", "conference": "conference", "presentation": "presentation",
+    "hand": "main", "hands": "mains", "finger": "doigt",
+    // Actions
+    "working": "travaillant", "typing": "tapant", "writing": "ecrivant",
+    "reading": "lisant", "analyzing": "analysant", "discussing": "discutant",
+    "looking": "regardant", "showing": "montrant", "holding": "tenant",
+    "pointing": "pointant", "using": "utilisant", "sitting": "assis",
+    // Objects
+    "house": "maison", "building": "batiment", "home": "maison",
+    "car": "voiture", "money": "argent", "coins": "pieces", "cash": "especes",
+    "key": "cle", "keys": "cles", "lock": "serrure", "door": "porte",
+    "garden": "jardin", "plant": "plante", "tree": "arbre", "flower": "fleur",
+    "book": "livre", "books": "livres", "pen": "stylo",
+    "tool": "outil", "tools": "outils", "hammer": "marteau",
+    "camera": "appareil photo", "light": "lumiere", "window": "fenetre",
+    "table": "table", "chair": "chaise", "kitchen": "cuisine",
+    "food": "nourriture", "coffee": "cafe", "water": "eau",
+    // Settings
+    "modern": "moderne", "bright": "lumineux", "clean": "epure",
+    "natural": "naturel", "warm": "chaleureux", "cozy": "confortable",
+    "outdoor": "exterieur", "indoor": "interieur",
+    "background": "arriere-plan", "foreground": "premier plan",
+    "close-up": "gros plan", "closeup": "gros plan", "aerial": "vue aerienne",
+    // Colors & style
+    "white": "blanc", "blue": "bleu", "green": "vert", "red": "rouge",
+    "colorful": "colore", "minimalist": "minimaliste",
+    "photorealistic": "", "realistic": "", "high quality": "", "detailed": "",
+    "4k": "", "hd": "", "stock photo": "", "editorial": "",
+  }
+
+  // Clean the hint: remove technical/style directives
+  let cleaned = hint
+    .replace(/\b(photorealistic|ultra realistic|high quality|highly detailed|4k|8k|hd|stock photo|editorial style|professional photo(graphy)?|cinematic|bokeh|shallow depth of field|soft lighting|natural lighting|studio lighting|dramatic lighting)\b/gi, '')
+    .replace(/,\s*,/g, ',')
+    .replace(/^\s*,|,\s*$/g, '')
+    .trim()
+
+  if (cleaned.length < 5) return null
+
+  // Extract key visual elements from the hint
+  const words = cleaned.toLowerCase().split(/[\s,]+/).filter(w => w.length > 2)
+  const frenchParts: string[] = []
+  const usedTranslations = new Set<string>()
+
+  // Try to translate known terms
+  for (const [en, fr] of Object.entries(translations)) {
+    if (!fr) continue // skip empty (style terms)
+    if (cleaned.toLowerCase().includes(en) && !usedTranslations.has(fr)) {
+      frenchParts.push(fr)
+      usedTranslations.add(fr)
+      if (frenchParts.length >= 4) break // keep it concise
+    }
+  }
+
+  const idx = sectionIndex ?? 0
+
+  // Build natural alt text from translated elements
+  if (frenchParts.length >= 2) {
+    const keywordLower = keyword.toLowerCase()
+    const sceneDescription = frenchParts.slice(0, 3).join(', ')
+
+    if (imageType === "hero") {
+      const heroPatterns = [
+        `${capitalize(frenchParts[0])} et ${frenchParts[1]} illustrant ${keywordLower}`,
+        `Scene avec ${sceneDescription} en lien avec ${keywordLower}`,
+        `${capitalize(sceneDescription)} pour illustrer ${keywordLower}`,
+      ]
+      return heroPatterns[idx % heroPatterns.length]
+    }
+
+    // Section: combine scene + heading context
+    const cleanHeading = heading
+      ? heading.replace(/[?!.:…]+$/g, "").replace(/^\d+[\s.):-]+/, "").trim().toLowerCase()
+      : null
+
+    if (cleanHeading) {
+      const sectionPatterns = [
+        `${capitalize(frenchParts[0])} et ${frenchParts.slice(1, 3).join(', ')} pour ${cleanHeading}`,
+        `Scene montrant ${sceneDescription} en rapport avec ${cleanHeading}`,
+        `${capitalize(sceneDescription)} illustrant ${cleanHeading}`,
+        `Photo de ${frenchParts[0]} avec ${frenchParts[1]} pour ${cleanHeading}`,
+        `${capitalize(cleanHeading)} : ${frenchParts[0]} et ${frenchParts[1]}`,
+      ]
+      return sectionPatterns[idx % sectionPatterns.length]
+    }
+
+    const noHeadingPatterns = [
+      `${capitalize(sceneDescription)} en lien avec ${keywordLower}`,
+      `Photo montrant ${frenchParts[0]} et ${frenchParts[1]} pour ${keywordLower}`,
+      `Scene avec ${sceneDescription} sur le theme ${keywordLower}`,
+    ]
+    return noHeadingPatterns[idx % noHeadingPatterns.length]
+  }
+
+  // Not enough translated terms — use the raw hint as best-effort description
+  // Take the first meaningful phrase from the hint
+  const firstPhrase = cleaned.split(/[,.]/).filter(p => p.trim().length > 5)[0]?.trim()
+  if (firstPhrase && firstPhrase.length > 10) {
+    const shortPhrase = firstPhrase.length > 60 ? firstPhrase.slice(0, 60).replace(/\s+\S*$/, '') : firstPhrase
+    if (heading) {
+      const cleanHeading = heading.replace(/[?!.:…]+$/g, "").replace(/^\d+[\s.):-]+/, "").trim().toLowerCase()
+      return `${capitalize(shortPhrase)} pour ${cleanHeading}`
+    }
+    return `${capitalize(shortPhrase)} pour ${keyword.toLowerCase()}`
+  }
+
+  return null // fallback to heading-based alt
 }
 
 /** Truncate alt text at the last space within the 125-char limit */
