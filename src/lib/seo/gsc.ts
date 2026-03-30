@@ -4,6 +4,8 @@
 // API: https://developers.google.com/webmaster-tools/v1/api_reference
 // ============================================================
 
+import { getGscCredentials } from './gsc-credentials'
+
 // ---- Types ----
 
 export interface GSCRow {
@@ -47,24 +49,10 @@ function getDateDaysAgo(days: number): string {
 
 /**
  * Create a JWT token for Google Service Account authentication.
- * This is a simplified implementation - for production, consider using
- * the google-auth-library package.
- *
- * Required env vars:
- * - GSC_CLIENT_EMAIL: Service account email
- * - GSC_PRIVATE_KEY: PEM private key (with \n escaped)
+ * Reads credentials from DB (Settings) with env var fallback.
  */
 async function getAccessToken(): Promise<string> {
-  const clientEmail = process.env.GSC_CLIENT_EMAIL
-  const privateKey = process.env.GSC_PRIVATE_KEY
-
-  if (!clientEmail || !privateKey) {
-    throw new Error(
-      'GSC non configure. Ajoutez GSC_CLIENT_EMAIL et GSC_PRIVATE_KEY dans Settings. ' +
-      'Voir la documentation Google pour creer un compte de service: ' +
-      'https://developers.google.com/webmaster-tools/v1/how-tos/service_accounts'
-    )
-  }
+  const { clientEmail, privateKey } = await getGscCredentials()
 
   // Build JWT header and claim set
   const now = Math.floor(Date.now() / 1000)

@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Save, Key, Brain, Search, ImageIcon, Loader2, CheckCircle, XCircle, Cpu } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
+import { Save, Key, Brain, Search, ImageIcon, Loader2, CheckCircle, XCircle, Cpu, Globe } from "lucide-react"
 
 const AVAILABLE_MODELS = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4", tag: "Recommande" },
@@ -37,7 +38,6 @@ const API_KEY_FIELDS = [
   { key: "openai_api_key", label: "OpenAI (GPT)", icon: Brain, placeholder: "sk-proj-..." },
   { key: "serper_api_key", label: "Serper.dev (SERP)", icon: Search, placeholder: "Cle API Serper" },
   { key: "fal_api_key", label: "Fal.ai (Images)", icon: ImageIcon, placeholder: "fal-..." },
-  { key: "gsc_client_email", label: "GSC Service Account Email", icon: Key, placeholder: "xxx@project.iam.gserviceaccount.com" },
 ]
 
 const THRESHOLD_FIELDS = [
@@ -168,6 +168,132 @@ export default function SettingsPage() {
               </div>
             )
           })}
+        </CardContent>
+      </Card>
+
+      <Separator />
+
+      {/* Google Indexing API */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Globe className="h-5 w-5" />
+            Google Indexing API
+          </CardTitle>
+          <CardDescription>
+            Credentials du compte de service Google pour l&apos;indexation automatique apres publication.
+            Le compte doit avoir le role &quot;Owner&quot; dans la Search Console.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Client Email */}
+          {(() => {
+            const emailKey = "gsc_client_email"
+            const currentEmail = (config[emailKey] as string) || ""
+            const hasEmail = !!currentEmail
+            return (
+              <div className="flex items-end gap-3">
+                <div className="flex-1 space-y-1.5">
+                  <Label htmlFor={emailKey} className="flex items-center gap-2">
+                    <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                    Client Email (Service Account)
+                    {hasEmail ? (
+                      <Badge variant="outline" className="ml-1 gap-1 text-green-500 border-green-500/30">
+                        <CheckCircle className="h-3 w-3" /> Configure
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="ml-1 gap-1 text-orange-500 border-orange-500/30">
+                        <XCircle className="h-3 w-3" /> Non configure
+                      </Badge>
+                    )}
+                  </Label>
+                  <Input
+                    id={emailKey}
+                    type="text"
+                    placeholder="xxx@project.iam.gserviceaccount.com"
+                    defaultValue={currentEmail}
+                    onBlur={(e) => {
+                      const val = e.target.value.trim()
+                      if (val !== currentEmail) saveConfig(emailKey, val)
+                    }}
+                  />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={saving === emailKey}
+                  onClick={(e) => {
+                    const input = (e.currentTarget.parentElement?.querySelector("input") as HTMLInputElement)
+                    if (input) saveConfig(emailKey, input.value.trim())
+                  }}
+                >
+                  {saving === emailKey ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                </Button>
+              </div>
+            )
+          })()}
+
+          {/* Private Key */}
+          {(() => {
+            const pkKey = "gsc_private_key"
+            const currentPk = (config[pkKey] as string) || ""
+            const hasPk = !!currentPk
+            return (
+              <div className="flex items-end gap-3">
+                <div className="flex-1 space-y-1.5">
+                  <Label htmlFor={pkKey} className="flex items-center gap-2">
+                    <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                    Private Key (JSON)
+                    {hasPk ? (
+                      <Badge variant="outline" className="ml-1 gap-1 text-green-500 border-green-500/30">
+                        <CheckCircle className="h-3 w-3" /> Configure
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="ml-1 gap-1 text-orange-500 border-orange-500/30">
+                        <XCircle className="h-3 w-3" /> Non configure
+                      </Badge>
+                    )}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Collez la valeur du champ &quot;private_key&quot; du fichier JSON telecharge depuis Google Cloud Console
+                  </p>
+                  <Textarea
+                    id={pkKey}
+                    rows={4}
+                    className="font-mono text-xs"
+                    placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+                    defaultValue={hasPk ? "********" : ""}
+                    onFocus={(e) => {
+                      if (e.target.value === "********") e.target.value = ""
+                    }}
+                    onBlur={(e) => {
+                      const val = e.target.value.trim()
+                      if (val && val !== "********") {
+                        saveConfig(pkKey, val)
+                        e.target.value = "********"
+                      } else if (!val && hasPk) {
+                        e.target.value = "********"
+                      }
+                    }}
+                  />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={saving === pkKey}
+                  onClick={(e) => {
+                    const textarea = (e.currentTarget.parentElement?.querySelector("textarea") as HTMLTextAreaElement)
+                    if (textarea && textarea.value && textarea.value !== "********") {
+                      saveConfig(pkKey, textarea.value.trim())
+                      textarea.value = "********"
+                    }
+                  }}
+                >
+                  {saving === pkKey ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                </Button>
+              </div>
+            )
+          })()}
         </CardContent>
       </Card>
 

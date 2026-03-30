@@ -5,20 +5,14 @@
 // API: https://developers.google.com/search/apis/indexing-api/v3/quickstart
 // ============================================================
 
+import { getGscCredentials } from './gsc-credentials'
+
 /**
  * Get an access token with the Indexing API scope.
- * Reuses the same JWT auth mechanism as GSC but with a different scope.
+ * Reads credentials from DB (Settings) with env var fallback.
  */
 async function getIndexingAccessToken(): Promise<string> {
-  const clientEmail = process.env.GSC_CLIENT_EMAIL
-  const privateKey = process.env.GSC_PRIVATE_KEY
-
-  if (!clientEmail || !privateKey) {
-    throw new Error(
-      'GSC non configure. Ajoutez GSC_CLIENT_EMAIL et GSC_PRIVATE_KEY dans Settings. ' +
-      'Le compte de service doit avoir le role "Owner" dans la Search Console.'
-    )
-  }
+  const { clientEmail, privateKey } = await getGscCredentials()
 
   const now = Math.floor(Date.now() / 1000)
   const header = { alg: 'RS256', typ: 'JWT' }
