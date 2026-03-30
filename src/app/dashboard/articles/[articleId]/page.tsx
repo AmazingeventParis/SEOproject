@@ -840,11 +840,12 @@ export default function ArticleDetailPage() {
     wp_post_id: number;
     wp_post_title: string;
     wp_post_url: string;
-    injection_type: 'wrap_existing' | 'add_sentences';
+    injection_type: 'wrap_existing' | 'contextual_wrap';
     anchor_text: string;
     original_paragraph: string;
     modified_paragraph: string;
     paragraph_index: number;
+    relevance_score: number;
     status: 'suggested' | 'approved' | 'rejected' | 'injected' | 'rolled_back';
     injected_at?: string;
   }> | null>(null);
@@ -3293,7 +3294,7 @@ export default function ArticleDetailPage() {
                                   : "bg-amber-50 text-amber-700 border-amber-200"
                               }
                             >
-                              {suggestion.injection_type === "wrap_existing" ? "Lien existant" : "Phrases ajoutees"}
+                              {suggestion.injection_type === "wrap_existing" ? "Lien existant" : "Lien contextuel"}
                             </Badge>
                             <Badge
                               variant="outline"

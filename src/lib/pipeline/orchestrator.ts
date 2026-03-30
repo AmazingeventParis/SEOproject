@@ -28,6 +28,7 @@ import { buildOptimizeBlocksPrompt } from '@/lib/ai/prompts/optimize-blocks'
 import { checkNuggetIntegration, type NuggetCheckDetail, type NuggetIntegrationResult } from './quality-checks'
 import { convertHtmlToGutenbergBlocks } from './gutenberg'
 import { checkBrokenLinks, type LinkCheckSummary } from '@/lib/seo/link-checker'
+import { findBacklinkCandidates, generateBacklinkSuggestion, type BacklinkSuggestion } from '@/lib/seo/reverse-backlinks'
 import { analyzeReadability, type ReadabilityResult } from '@/lib/seo/readability'
 import {
   analyzeSemanticCoverage,
@@ -2576,6 +2577,39 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
     console.warn('[seo-audit] Semantic coverage analysis failed:', err)
   }
 
+  // 5h. SEO Audit — sub-step H: auto reverse backlinks (for published articles with WP)
+  let reverseBacklinksResult: BacklinkSuggestion[] = []
+  if (article.wp_post_id && article.wp_url && (article.status === 'published' || article.status === 'refresh_needed')) {
+    try {
+      console.log(`[seo-audit] Generating reverse backlink suggestions…`)
+      const candidates = await findBacklinkCandidates(
+        article.site_id,
+        article.keyword,
+        article.title || article.keyword,
+        article.wp_post_id,
+        article.wp_url
+      )
+
+      if (candidates.length > 0) {
+        for (const candidate of candidates) {
+          const suggestion = await generateBacklinkSuggestion(
+            { keyword: article.keyword, title: article.title || article.keyword, wpUrl: article.wp_url },
+            candidate,
+            article.site_id
+          )
+          if (suggestion) {
+            reverseBacklinksResult.push(suggestion)
+          }
+        }
+        console.log(`[seo-audit] ${reverseBacklinksResult.length} reverse backlink suggestion(s) generated`)
+      } else {
+        console.log(`[seo-audit] No backlink candidates found`)
+      }
+    } catch (err) {
+      console.warn('[seo-audit] Reverse backlinks generation failed, skipping:', err)
+    }
+  }
+
   // Build seo_audit object
   const seoAudit = {
     auditedAt: new Date().toISOString(),
@@ -2655,7 +2689,11 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
     json_ld: jsonLd,
     content_blocks: updatedBlocks,
     nugget_density_score: nuggetDensity,
-    serp_data: { ...existingSerpData, seo_audit: seoAudit },
+    serp_data: {
+      ...existingSerpData,
+      seo_audit: seoAudit,
+      ...(reverseBacklinksResult.length > 0 ? { reverse_backlinks: reverseBacklinksResult } : {}),
+    },
   }
   if (metaRegenerated) {
     updatePayload.meta_description = metaDesc
@@ -2723,6 +2761,9 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
             keyword: semanticCannibalization.conflicts[0].articleKeyword,
             overlap: semanticCannibalization.conflicts[0].overlapScore,
           } : null,
+        } : null,
+        reverseBacklinks: reverseBacklinksResult.length > 0 ? {
+          count: reverseBacklinksResult.length,
         } : null,
       },
     },
