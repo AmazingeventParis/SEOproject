@@ -12,7 +12,7 @@ import { analyzeSERP, extractCompetitorInsights } from '@/lib/seo/serper'
 import { checkCannibalization } from '@/lib/seo/anti-cannibal'
 import { analyzeCompetitorContent, buildCompetitorAnalysisPrompt } from '@/lib/seo/competitor-scraper'
 import type { CompetitorContentAnalysis } from '@/lib/seo/competitor-scraper'
-import { routeAI, routeAIWithOverrides, modelIdToOverride } from '@/lib/ai/router'
+import { routeAI, routeAIWithOverrides, modelIdToOverride, estimateCost as estimateResponseCost } from '@/lib/ai/router'
 import type { ModelConfig } from '@/lib/ai/types'
 import { buildPlanArchitectPrompt } from '@/lib/ai/prompts/plan-architect'
 import { buildBlockWriterPrompt } from '@/lib/ai/prompts/block-writer'
@@ -331,7 +331,7 @@ async function executeAnalyze(
           competitorTokensIn = aiResponse.tokensIn
           competitorTokensOut = aiResponse.tokensOut
           competitorModel = aiResponse.model
-          competitorCostUsd = estimateCost(aiResponse.tokensIn, aiResponse.tokensOut, aiResponse.model)
+          competitorCostUsd = estimateCost(aiResponse.tokensIn, aiResponse.tokensOut, aiResponse.model, aiResponse.thinkingTokens)
 
           semanticAnalysis = extractJSON(aiResponse.content)
         } catch {
@@ -351,7 +351,7 @@ async function executeAnalyze(
             )
             competitorTokensIn += entityResponse.tokensIn
             competitorTokensOut += entityResponse.tokensOut
-            competitorCostUsd += estimateCost(entityResponse.tokensIn, entityResponse.tokensOut, entityResponse.model)
+            competitorCostUsd += estimateCost(entityResponse.tokensIn, entityResponse.tokensOut, entityResponse.model, entityResponse.thinkingTokens)
 
             const entityResult = extractJSON<{ entities: ExtractedEntity[] }>(entityResponse.content)
             if (entityResult?.entities && Array.isArray(entityResult.entities)) {
@@ -737,7 +737,7 @@ Pas de texte avant ou apres le JSON.`
     },
     tokensIn: aiResponse.tokensIn,
     tokensOut: aiResponse.tokensOut,
-    costUsd: estimateCost(aiResponse.tokensIn, aiResponse.tokensOut, aiResponse.model),
+    costUsd: estimateCost(aiResponse.tokensIn, aiResponse.tokensOut, aiResponse.model, aiResponse.thinkingTokens),
     modelUsed: aiResponse.model,
   }
 }
@@ -1026,7 +1026,7 @@ async function executeWriteBlock(
       },
       tokensIn: aiResponse.tokensIn,
       tokensOut: aiResponse.tokensOut,
-      costUsd: estimateCost(aiResponse.tokensIn, aiResponse.tokensOut, aiResponse.model),
+      costUsd: estimateCost(aiResponse.tokensIn, aiResponse.tokensOut, aiResponse.model, aiResponse.thinkingTokens),
       modelUsed: aiResponse.model,
     }
   }
@@ -1068,7 +1068,7 @@ async function executeWriteBlock(
     },
     tokensIn: aiResponse.tokensIn,
     tokensOut: aiResponse.tokensOut,
-    costUsd: estimateCost(aiResponse.tokensIn, aiResponse.tokensOut, aiResponse.model),
+    costUsd: estimateCost(aiResponse.tokensIn, aiResponse.tokensOut, aiResponse.model, aiResponse.thinkingTokens),
     modelUsed: aiResponse.model,
   }
 }
@@ -3391,19 +3391,14 @@ function countWords(html: string): number {
   return text ? text.split(' ').length : 0
 }
 
-function estimateCost(tokensIn: number, tokensOut: number, model: string): number {
-  // Approximate pricing per 1M tokens
-  if (model.includes('claude')) {
-    return (tokensIn * 3 + tokensOut * 15) / 1_000_000
-  }
-  if (model.includes('gemini')) {
-    return (tokensIn * 0.075 + tokensOut * 0.3) / 1_000_000
-  }
-  if (model.includes('gpt')) {
-    if (model.includes('mini')) {
-      return (tokensIn * 0.15 + tokensOut * 0.6) / 1_000_000
-    }
-    return (tokensIn * 2.5 + tokensOut * 10) / 1_000_000
-  }
-  return 0
+function estimateCost(tokensIn: number, tokensOut: number, model: string, thinkingTokens?: number): number {
+  return estimateResponseCost({
+    content: '',
+    model,
+    provider: 'google',
+    tokensIn,
+    tokensOut,
+    durationMs: 0,
+    thinkingTokens,
+  })
 }

@@ -351,14 +351,16 @@ export function getAllRoutingConfigs(): Record<AITask, ModelConfig> {
 
 /**
  * Estimated cost per 1K tokens for each model.
- * These are approximate and should be updated when pricing changes.
+ * Updated March 2026 — includes thinking token pricing for Gemini 3.x.
+ * Gemini thinking tokens are billed separately and often dominate total cost.
  */
-const COST_PER_1K_TOKENS: Record<string, { input: number; output: number }> = {
+const COST_PER_1K_TOKENS: Record<string, { input: number; output: number; thinking?: number }> = {
   'claude-sonnet-4-20250514': { input: 0.003, output: 0.015 },
   'claude-haiku-4-5-20251001': { input: 0.001, output: 0.005 },
-  'gemini-3.1-pro-preview': { input: 0.002, output: 0.012 },
-  'gemini-3.1-flash-preview': { input: 0.0005, output: 0.003 },
-  'gemini-3-flash-preview': { input: 0.0005, output: 0.003 },
+  'gemini-3.1-pro-preview': { input: 0.00125, output: 0.01, thinking: 0.0035 },
+  'gemini-3.1-flash-preview': { input: 0.0001, output: 0.0004, thinking: 0.00035 },
+  'gemini-3-flash-preview': { input: 0.0001, output: 0.0004, thinking: 0.00035 },
+  'gemini-2.5-flash': { input: 0.00015, output: 0.0006, thinking: 0.00125 },
   'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
   'gpt-4o': { input: 0.0025, output: 0.01 },
 }
@@ -387,16 +389,16 @@ export const AVAILABLE_MODELS = [
     id: 'gemini-3.1-pro-preview',
     label: 'Gemini 3.1 Pro',
     provider: 'google' as const,
-    costInput: 2.00,
-    costOutput: 12.00,
+    costInput: 1.25,
+    costOutput: 10.00,
     tag: 'Puissant',
   },
   {
     id: 'gemini-3-flash-preview',
     label: 'Gemini 3 Flash',
     provider: 'google' as const,
-    costInput: 0.50,
-    costOutput: 3.00,
+    costInput: 0.10,
+    costOutput: 0.40,
     tag: 'Rapide',
   },
   {
@@ -440,7 +442,17 @@ export function estimateCost(response: AIResponse): number {
   if (!pricing) return 0
 
   const inputCost = (response.tokensIn / 1000) * pricing.input
-  const outputCost = (response.tokensOut / 1000) * pricing.output
+
+  // For Gemini: tokensOut includes thinking tokens (added in gemini.ts).
+  // Separate them out so we can apply the correct per-token rate.
+  const thinkingTokens = response.thinkingTokens || 0
+  const pureOutputTokens = response.tokensOut - thinkingTokens
+  const outputCost = (pureOutputTokens / 1000) * pricing.output
+
+  // Gemini thinking tokens have their own pricing tier
+  const thinkingCost = pricing.thinking
+    ? (thinkingTokens / 1000) * pricing.thinking
+    : 0
 
   // Anthropic prompt caching: cache writes cost 1.25x, cache reads cost 0.1x
   let cacheCost = 0
@@ -451,7 +463,7 @@ export function estimateCost(response: AIResponse): number {
     cacheCost += (response.cacheReadTokens / 1000) * pricing.input * 0.1
   }
 
-  return Math.round((inputCost + outputCost + cacheCost) * 1000000) / 1000000 // 6 decimal places
+  return Math.round((inputCost + outputCost + thinkingCost + cacheCost) * 1000000) / 1000000 // 6 decimal places
 }
 
 /**

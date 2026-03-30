@@ -145,14 +145,17 @@ export async function callGemini(options: {
     }
   }
   const usage = result.usageMetadata
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const thinkingTokens = (usage as any)?.thoughtsTokenCount || 0
 
   return {
     content: text,
     model: modelName,
     provider: 'google',
     tokensIn: usage?.promptTokenCount || 0,
-    tokensOut: usage?.candidatesTokenCount || 0,
+    tokensOut: (usage?.candidatesTokenCount || 0) + thinkingTokens,
     durationMs: Date.now() - start,
+    thinkingTokens,
   }
 }
 
@@ -248,13 +251,16 @@ export async function generateWithGemini(
   })
   const text = result.text ?? ''
   const usage = result.usageMetadata
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const thinkingTokens = (usage as any)?.thoughtsTokenCount || 0
 
   return {
     content: text,
     model: modelName,
     provider: 'google',
     tokensIn: usage?.promptTokenCount || 0,
-    tokensOut: usage?.candidatesTokenCount || 0,
+    tokensOut: (usage?.candidatesTokenCount || 0) + thinkingTokens,
     durationMs: Date.now() - start,
+    thinkingTokens,
   }
 }

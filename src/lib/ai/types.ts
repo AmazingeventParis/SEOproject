@@ -37,6 +37,7 @@ export interface AIResponse {
   durationMs: number
   cacheCreationTokens?: number
   cacheReadTokens?: number
+  thinkingTokens?: number
 }
 
 export interface AIStreamCallbacks {
