@@ -75,6 +75,7 @@ import {
   TrendingUp,
   Copy,
   ShoppingCart,
+  Rocket,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -1880,6 +1881,20 @@ export default function ArticleDetailPage() {
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Publie (brouillon WP)
                 </Badge>
+                {article.wp_post_id && (
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => runPipelineAction("go-live", "Mise en ligne")}
+                    disabled={!!actionLoading}
+                  >
+                    {actionLoading === "Mise en ligne" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Rocket className="mr-2 h-4 w-4" />
+                    )}
+                    Mettre en ligne + Indexer
+                  </Button>
+                )}
                 {article.wp_url && (
                   <a
                     href={article.wp_url}
