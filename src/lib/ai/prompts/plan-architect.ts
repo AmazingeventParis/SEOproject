@@ -220,6 +220,18 @@ Le lecteur est venu pour la REPONSE PRINCIPALE (premier H2). Plus on descend dan
 
 Le word_count doit DIMINUER de section en section (pas necessairement de facon lineaire, mais la tendance doit etre a la baisse). Un article ou le dernier H2 est plus long que le premier est une ERREUR DE STRUCTURE.
 
+## ENCARTS THEMATIQUES ET CTA "A LIRE AUSSI"
+
+### Encarts thematiques (info, conseil, attention, chiffre cle)
+Le block-writer inserera des encarts colores dans les sections. Prevois dans la writing_directive de 2-3 blocs H2 : "Inclure un encart [type] pour mettre en avant [info cle]".
+Types : info (bleu, fait interessant), conseil (vert, astuce actionable), attention (orange, mise en garde), chiffre (violet, statistique).
+
+### CTA "A lire aussi" (maillage interne visuel)
+Le block-writer inserera un encart "A lire aussi" dans les sections qui ont des liens internes. Cela cree une carte visuelle cliquable vers un article lie.
+- Prevois des internal_link_targets sur 2-3 blocs H2 espaces regulierement dans l'article
+- Le bloc-writer se chargera de transformer 1 lien par section en encart visuel
+- Cela ameliore le maillage interne ET la retention du lecteur (invitation a continuer la lecture)
+
 ## CONTENU
 - Respecte la fourchette de mots indiquee dans la strategie ci-dessus
 - Section FAQ (optionnelle) avec le heading "FAQ" en type "faq". Ne l'inclus PAS si la strategie l'interdit (ex: discover). L'utilisateur pourra l'ajouter manuellement plus tard si besoin.

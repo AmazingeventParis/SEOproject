@@ -11,6 +11,32 @@ Phases 1-4 terminées. Projet en production.
 
 ## Progressions
 
+### 2026-03-29
+- 4 optimisations de performance ecriture
+  - **Ecriture parallele par batch de 3** : write-all et autopilot ecrivent 3 blocs en parallele avec `skipSave` puis merge DB une fois par batch
+  - **Gemini 3.1 Flash pour write_block** : modele passe de gemini-3.1-pro-preview a gemini-3.1-flash-preview (3x plus rapide, cout divise par 4)
+  - **Thinking level LOW** : `thinkingLevel: 'LOW'` pour write_block (nouveau champ dans ModelConfig, supporte par callGemini)
+  - **Pre-generation images concurrente** : dans autopilot, les images sont generees en parallele pendant l'ecriture des blocs via `preGenerateArticleImages()`
+- Conversion Gutenberg native
+  - **`src/lib/pipeline/gutenberg.ts`** : convertit HTML en blocs WP natifs (wp:paragraph, wp:list, wp:table, wp:blockquote, wp:image)
+  - Utilise dans orchestrator (executePublish) et revamp generator
+- Verification liens casses + Google Indexing API
+  - **`src/lib/seo/link-checker.ts`** : HEAD requests (fallback GET), timeout 8s, batches de 5, deduplication. Integre dans executeSeo (step 5f), stocke dans `serp_data.seo_audit.brokenLinks`
+  - **`src/lib/seo/indexing-api.ts`** : notification auto apres publish WP (fire-and-forget), meme service account que GSC (scope `indexing`)
+  - **`/api/articles/[articleId]/request-indexing`** : POST (demander indexation) + GET (statut + historique). Historique dans `serp_data.indexing_requests` (max 10)
+  - Pre-requis : activer "Web Search Indexing API" dans Google Cloud Console + role "Owner" dans Search Console
+- 5 analyses semantiques SEO
+  - **Validation semantique post-ecriture** (Axe 1+3) : verifie algorithmiquement la presence des termes TF-IDF (top 30) et champ semantique dans le contenu. Score global pondere (60% TF-IDF + 40% champ semantique). Stocke dans `serp_data.seo_audit.semanticCoverage`
+  - **Extraction entites NLP** (Axe 2) : extraction IA des entites nommees (personnes, marques, concepts, outils, metriques) depuis le contenu concurrent pendant executeAnalyze. Validation de couverture post-ecriture. Stocke dans `serp_data.semanticAnalysis.entities` + `seo_audit.entityCoverage`
+  - **Termes manquants dans critique** (Axe 4) : les termes TF-IDF et entites absents sont injectes dans le prompt du critique IA pour penaliser le score SEO/E-E-A-T. Suggestions d'injection par bloc dans `seo_audit.missingTerms`
+  - **Cannibalisation semantique** (Axe 5) : compare les tokens du contenu avec les autres articles du meme silo. Alerte si overlap >60%. Stocke dans `seo_audit.semanticCannibalization`
+  - **Fichier** : `src/lib/seo/semantic-analysis.ts`
+- 4 optimisations SEO supplementaires
+  - **Featured Snippets (Position Zero)** : plan-architect genere `featured_snippet_type` par bloc H2 (definition/list/table/steps/none). Block-writer commence par la reponse directe selon le type (40-50 mots autonome pour definition, liste numerotee pour list, tableau comparatif pour table). Checklist de validation dans plan-architect.
+  - **Score de lisibilite algorithmique** : `src/lib/seo/readability.ts` — score 0-100 base sur longueur moyenne phrases (<20 mots ideal), ratio phrases longues (>25 mots), longueur paragraphes, densite elements visuels (listes/tableaux), blocs prose consecutifs. Integre dans seo_audit.readability.
+  - **Attributs images optimises** : premiere image section = `fetchpriority="high"` (LCP Core Web Vitals), images suivantes = `loading="lazy"`. `width` et `height` toujours presents (evite CLS).
+  - **Open Graph + Twitter Cards** : meta OG poussees vers WP via champs Yoast + Rank Math (`og:title`, `og:description`, `og:image`, `twitter:card=summary_large_image`, canonical URL). Hero image = og:image.
+
 ### 2026-03-11
 - 5 features majeures ajoutees
   - **Verification key_ideas** : apres ecriture, check programmatique que chaque bloc couvre ses idees cles MECE. Resultat envoye via SSE `key_ideas_check` + inclus dans `done` payload. Fichier `src/lib/pipeline/quality-checks.ts`.

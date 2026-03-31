@@ -17,6 +17,9 @@ import {
   buildTableStyleRules,
   getCalloutStyleForSite,
   buildCalloutPromptTemplate,
+  THEMATIC_CALLOUT_TYPES,
+  buildThematicCalloutTemplate,
+  buildCtaLireAussiTemplate,
 } from './seo-guidelines'
 
 interface BlockWriterParams {
@@ -153,11 +156,24 @@ ${SEO_FAQ_RULES}
 ### Pour un bloc de type "callout"
 Ecris un encadre informatif, d'alerte ou d'avis expert en HTML.
 
-**Encadres simples (info, warning) :**
-Format : <div class="callout callout-info"><p>Contenu...</p></div>
-Variantes : callout-info, callout-warning, callout-tip, callout-important
+**ENCADRES THEMATIQUES (info, conseil, attention, chiffre cle) :**
+Utilise ces encarts pour mettre en valeur une info cle, un conseil, un avertissement ou un chiffre marquant.
+Les styles inline sont OBLIGATOIRES (publication WordPress sans CSS custom).
 
-**Encadres expert avec photo auteur ("Mon Avis", "Mes Astuces", "Conseil d'expert") :**
+4 types disponibles :
+${Object.entries(THEMATIC_CALLOUT_TYPES).map(([key, type]) => `- **${key}** (${type.emoji} ${type.name}) : bordure ${type.borderColor}, fond ${type.bgColor}`).join('\n')}
+
+**Modele HTML (copie exactement, change le type selon le contexte) :**
+${buildThematicCalloutTemplate(THEMATIC_CALLOUT_TYPES.info)}
+
+**Regles des encarts thematiques :**
+- Utilise-les dans les blocs H2/H3 pour casser le rythme et mettre en avant une info cle
+- 1 encart thematique par section H2 maximum (pas plus)
+- Le titre peut etre adapte au contenu : "Bon a savoir", "Attention", "Le chiffre a retenir", "Conseil de pro"
+- Contenu COURT : 1-3 phrases percutantes, jamais de paragraphe long
+- Choisis le TYPE adapte au contenu : info (fait interessant), conseil (astuce actionable), attention (mise en garde), chiffre (statistique marquante)
+
+**ENCADRES EXPERT avec photo auteur ("Mon Avis", "Mes Astuces", "Conseil d'expert") :**
 Utilise ce format des que le contenu est un AVIS PERSONNEL, une ASTUCE du persona, ou un CONSEIL D'EXPERT.
 Les styles inline sont OBLIGATOIRES (publication WordPress sans CSS custom).
 
@@ -231,6 +247,32 @@ Si ce bloc cible un featured snippet, la PREMIERE chose que tu ecris doit etre l
 - **table** : un tableau HTML comparatif avec headers clairs. 3-5 colonnes max. PUIS ajoute du contexte en prose.
 - **steps** : une liste numerotee <ol> avec chaque etape en <strong>. Format "Etape N : [Action]". PUIS developpe chaque etape.
 - **none** : pas de ciblage snippet, ecris normalement.
+
+## EMOJIS SUR LES LISTES A PUCES (OBLIGATOIRE)
+Chaque item <li> DOIT commencer par un emoji pertinent lie au contenu de l'item, suivi d'un espace.
+Exemples :
+- <li>✅ <strong>Avantage principal</strong> : description...</li>
+- <li>⚠️ <strong>Point de vigilance</strong> : description...</li>
+- <li>💡 <strong>Astuce</strong> : description...</li>
+- <li>📊 <strong>Donnee cle</strong> : description...</li>
+- <li>🔧 <strong>Outil recommande</strong> : description...</li>
+- <li>💰 <strong>Budget</strong> : description...</li>
+- <li>🎯 <strong>Objectif</strong> : description...</li>
+- <li>🏠 <strong>Pour la maison</strong> : description...</li>
+Varie les emojis au sein d'une meme liste. INTERDIT d'utiliser le meme emoji pour tous les items.
+
+## CTA "A LIRE AUSSI" (MAILLAGE INTERNE VISUEL)
+Si des liens internes sont fournis pour ce bloc, insere UN encart "A lire aussi" apres le contenu principal du bloc (avant la fin de la section).
+Cet encart met en valeur UN lien interne sous forme de carte cliquable :
+
+${buildCtaLireAussiTemplate()}
+
+**Regles :**
+- MAX 1 encart "A lire aussi" par section H2 (pas plus)
+- Place-le apres un paragraphe de contenu, jamais en tout debut de section
+- Remplace URL_ARTICLE par l'URL complete du lien interne et le titre par le titre de l'article cible
+- N'utilise cet encart QUE si un lien interne est fourni et pertinent pour cette section
+- Cet encart NE REMPLACE PAS les liens <a> dans le texte — c'est un complement visuel
 
 ## REGLES STRICTES
 - Retourne UNIQUEMENT du HTML propre, sans markdown, sans blocs de code

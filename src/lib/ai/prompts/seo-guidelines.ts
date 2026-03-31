@@ -199,6 +199,14 @@ export const SEO_WRITING_STYLE_RULES = `- Ecris dans un style naturel, fluide et
   * LISTES A PUCES : des que tu enumeres 3+ elements (avantages, etapes, criteres, conseils), utilise une liste <ul> ou <ol> avec <strong> sur le point cle. JAMAIS de liste "cachee" dans un paragraphe de prose.
   * Le lecteur doit pouvoir SCANNER la page en 10 secondes et comprendre les points cles grace aux elements visuels (tableaux, listes, mots en gras).
 
+- EMOJIS SUR LES LISTES A PUCES :
+  * Chaque item <li> DOIT commencer par un emoji pertinent suivi d'un espace avant le texte
+  * Choisis des emojis THEMATIQUES lies au contenu de l'item (pas toujours le meme emoji)
+  * Exemples : "✅ <strong>Avantage cle</strong> : ...", "⚠️ <strong>Point d'attention</strong> : ...", "💡 <strong>Astuce</strong> : ...", "📊 <strong>Chiffre cle</strong> : ...", "🔧 <strong>Outil</strong> : ...", "💰 <strong>Budget</strong> : ..."
+  * Pour les listes <ol> numerotees, l'emoji vient APRES le numero automatique : "<li>🎯 <strong>Etape 1</strong> : ..."
+  * Varie les emojis au sein d'une meme liste — INTERDIT d'utiliser le meme emoji pour tous les items
+  * Les emojis rendent la liste scannable et ajoutent de la couleur visuelle sur mobile
+
 Style humain et accessible :
 - Ecris comme un humain expert qui parle a un autre humain
 - Vocabulaire simple et direct, accessible a tous
@@ -457,6 +465,84 @@ export function buildCalloutPromptTemplate(
     </div>
 Le contenu de l'encart ici. 2-4 phrases maximum, avis tranche ou astuce actionable.
 </div>
+</div>`
+}
+
+/**
+ * Thematic callout box types (info, conseil, attention, chiffre cle).
+ * These are simpler callouts without avatar — used for visual breaks and key info.
+ * All styles use inline CSS for WordPress compatibility.
+ */
+export interface ThematicCalloutType {
+  name: string
+  emoji: string
+  borderColor: string
+  bgColor: string
+  titleColor: string
+  iconBg: string
+}
+
+export const THEMATIC_CALLOUT_TYPES: Record<string, ThematicCalloutType> = {
+  info: {
+    name: 'Le saviez-vous ?',
+    emoji: '💡',
+    borderColor: '#3b82f6',
+    bgColor: '#eff6ff',
+    titleColor: '#1e40af',
+    iconBg: '#dbeafe',
+  },
+  conseil: {
+    name: 'Conseil pratique',
+    emoji: '✅',
+    borderColor: '#22c55e',
+    bgColor: '#f0fdf4',
+    titleColor: '#166534',
+    iconBg: '#dcfce7',
+  },
+  attention: {
+    name: 'Point d\'attention',
+    emoji: '⚠️',
+    borderColor: '#f59e0b',
+    bgColor: '#fffbeb',
+    titleColor: '#92400e',
+    iconBg: '#fef3c7',
+  },
+  chiffre: {
+    name: 'Chiffre cle',
+    emoji: '📊',
+    borderColor: '#8b5cf6',
+    bgColor: '#f5f3ff',
+    titleColor: '#5b21b6',
+    iconBg: '#ede9fe',
+  },
+}
+
+/**
+ * Build HTML template for a thematic callout box.
+ */
+export function buildThematicCalloutTemplate(type: ThematicCalloutType): string {
+  return `<div style="display:flex;gap:14px;align-items:flex-start;padding:18px 22px;background:${type.bgColor};border-left:4px solid ${type.borderColor};border-radius:8px;margin:24px 0;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+  <div style="flex-shrink:0;width:40px;height:40px;border-radius:50%;background:${type.iconBg};display:flex;align-items:center;justify-content:center;font-size:1.3rem">${type.emoji}</div>
+  <div style="flex:1;min-width:0">
+    <strong style="display:block;font-size:0.95rem;color:${type.titleColor};margin-bottom:6px">${type.name}</strong>
+    <p style="margin:0;line-height:1.6;color:#334155">Contenu de l'encart ici. 1-3 phrases percutantes.</p>
+  </div>
+</div>`
+}
+
+/**
+ * Build HTML template for a CTA "Lire aussi" box (internal link promotion).
+ */
+export function buildCtaLireAussiTemplate(): string {
+  return `<div style="display:flex;align-items:center;gap:14px;padding:16px 22px;background:linear-gradient(135deg,#f8fafc 0%,#f1f5f9 100%);border:1px solid #e2e8f0;border-radius:10px;margin:28px 0;box-shadow:0 2px 4px rgba(0,0,0,0.04);transition:box-shadow 0.2s">
+  <div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:#3b82f6;display:flex;align-items:center;justify-content:center">
+    <span style="color:#fff;font-size:1.1rem">📖</span>
+  </div>
+  <div style="flex:1;min-width:0">
+    <span style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;font-weight:600">A lire aussi</span>
+    <a href="URL_ARTICLE" style="display:block;color:#1e40af;font-weight:600;font-size:1rem;text-decoration:none;margin-top:2px">Titre de l'article lie</a>
+  </div>
+  <div style="flex-shrink:0;color:#3b82f6;font-size:1.2rem">→</div>
 </div>`
 }
 
