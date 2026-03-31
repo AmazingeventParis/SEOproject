@@ -206,6 +206,7 @@ export const SEO_WRITING_STYLE_RULES = `- Ecris dans un style naturel, fluide et
   * Pour les listes <ol> numerotees, l'emoji vient APRES le numero automatique : "<li>🎯 <strong>Etape 1</strong> : ..."
   * Varie les emojis au sein d'une meme liste — INTERDIT d'utiliser le meme emoji pour tous les items
   * Les emojis rendent la liste scannable et ajoutent de la couleur visuelle sur mobile
+  * TAILLE MEDIUM OBLIGATOIRE : chaque <ul> et <ol> DOIT avoir style="font-size:1.125rem;line-height:1.8" et chaque <li> DOIT avoir style="margin-bottom:8px;font-size:1.125rem". Cela correspond a la taille "Medium" de WordPress pour une meilleure lisibilite.
 
 Style humain et accessible :
 - Ecris comme un humain expert qui parle a un autre humain

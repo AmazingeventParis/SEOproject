@@ -261,6 +261,11 @@ Exemples :
 - <li>🏠 <strong>Pour la maison</strong> : description...</li>
 Varie les emojis au sein d'une meme liste. INTERDIT d'utiliser le meme emoji pour tous les items.
 
+**TAILLE MEDIUM (OBLIGATOIRE)** : toutes les listes doivent avoir une taille de police plus grande pour une meilleure lisibilite sur WordPress.
+- Chaque <ul> et <ol> DOIT avoir : style="font-size:1.125rem;line-height:1.8"
+- Chaque <li> DOIT avoir : style="margin-bottom:8px;font-size:1.125rem"
+- Exemple complet : <ul style="font-size:1.125rem;line-height:1.8"><li style="margin-bottom:8px;font-size:1.125rem">💡 <strong>Point cle</strong> : description...</li></ul>
+
 ## CTA "A LIRE AUSSI" (MAILLAGE INTERNE VISUEL)
 Si des liens internes sont fournis pour ce bloc, insere UN encart "A lire aussi" apres le contenu principal du bloc (avant la fin de la section).
 Cet encart met en valeur UN lien interne sous forme de carte cliquable :
