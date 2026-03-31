@@ -535,16 +535,21 @@ export function buildThematicCalloutTemplate(type: ThematicCalloutType): string 
  * Build HTML template for a CTA "Lire aussi" box (internal link promotion).
  */
 export function buildCtaLireAussiTemplate(): string {
-  return `<div style="display:flex;align-items:center;gap:14px;padding:16px 22px;background:linear-gradient(135deg,#f8fafc 0%,#f1f5f9 100%);border:1px solid #e2e8f0;border-radius:10px;margin:28px 0;box-shadow:0 2px 4px rgba(0,0,0,0.04);transition:box-shadow 0.2s">
-  <div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:#3b82f6;display:flex;align-items:center;justify-content:center">
-    <span style="color:#fff;font-size:1.1rem">📖</span>
+  return `<a href="URL_ARTICLE" style="display:block;text-decoration:none;margin:32px 0;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.08);border:1px solid #e2e8f0">
+  <div style="display:flex;flex-wrap:wrap;align-items:stretch;min-height:80px">
+    <div style="flex-shrink:0;width:6px;background:linear-gradient(180deg,#3b82f6 0%,#8b5cf6 100%)"></div>
+    <div style="flex:1;min-width:0;padding:20px 24px;display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#ffffff 0%,#f8fafc 100%)">
+      <div style="flex-shrink:0;width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%);display:flex;align-items:center;justify-content:center;font-size:1.4rem">📖</div>
+      <div style="flex:1;min-width:0">
+        <span style="display:block;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;font-weight:700;margin-bottom:4px">A lire aussi</span>
+        <span style="display:block;color:#1e293b;font-weight:700;font-size:1.05rem;line-height:1.4;overflow:hidden;text-overflow:ellipsis">Titre de l'article lie</span>
+      </div>
+      <div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center">
+        <span style="color:#3b82f6;font-size:1.2rem;font-weight:700">&#8250;</span>
+      </div>
+    </div>
   </div>
-  <div style="flex:1;min-width:0">
-    <span style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;font-weight:600">A lire aussi</span>
-    <a href="URL_ARTICLE" style="display:block;color:#1e40af;font-weight:600;font-size:1rem;text-decoration:none;margin-top:2px">Titre de l'article lie</a>
-  </div>
-  <div style="flex-shrink:0;color:#3b82f6;font-size:1.2rem">→</div>
-</div>`
+</a>`
 }
 
 /**

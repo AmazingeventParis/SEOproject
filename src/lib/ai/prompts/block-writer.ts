@@ -268,16 +268,18 @@ Varie les emojis au sein d'une meme liste. INTERDIT d'utiliser le meme emoji pou
 
 ## CTA "A LIRE AUSSI" (MAILLAGE INTERNE VISUEL)
 Si des liens internes sont fournis pour ce bloc, insere UN encart "A lire aussi" apres le contenu principal du bloc (avant la fin de la section).
-Cet encart met en valeur UN lien interne sous forme de carte cliquable :
+L'encart est une CARTE CLIQUABLE entiere (tout le bloc est un <a>) avec un design moderne et responsive :
 
 ${buildCtaLireAussiTemplate()}
 
 **Regles :**
 - MAX 1 encart "A lire aussi" par section H2 (pas plus)
 - Place-le apres un paragraphe de contenu, jamais en tout debut de section
-- Remplace URL_ARTICLE par l'URL complete du lien interne et le titre par le titre de l'article cible
+- Remplace les DEUX occurrences : URL_ARTICLE dans le href du <a> + le texte "Titre de l'article lie" par le vrai titre
+- L'encart entier est un lien <a> cliquable — NE PAS ajouter un autre <a> a l'interieur
 - N'utilise cet encart QUE si un lien interne est fourni et pertinent pour cette section
-- Cet encart NE REMPLACE PAS les liens <a> dans le texte — c'est un complement visuel
+- Cet encart NE REMPLACE PAS les liens <a> dans le texte courant — c'est un complement visuel
+- Copie le HTML EXACTEMENT tel quel (inline styles obligatoires pour WordPress), en ne changeant que le href et le titre
 
 ## REGLES STRICTES
 - Retourne UNIQUEMENT du HTML propre, sans markdown, sans blocs de code
