@@ -323,8 +323,27 @@ async function executeAnalyze(
 
       // Run Gemini semantic analysis if we got scraped content
       if (competitorContent.scrapedCount > 0) {
+        // Fetch nuggets to include in semantic analysis
+        let nuggetsSummary: string[] = []
         try {
-          const prompt = buildCompetitorAnalysisPrompt(article.keyword, competitorContent)
+          const { data: siteNuggets } = await supabase
+            .from('seo_nuggets')
+            .select('content, tags')
+            .or(`site_ids.cs.{${article.site_id}},site_id.eq.${article.site_id},site_id.is.null`)
+            .limit(20)
+          if (siteNuggets && siteNuggets.length > 0) {
+            nuggetsSummary = siteNuggets.map(n => {
+              const tags = (n.tags || []).join(', ')
+              const content = (n.content || '').slice(0, 150)
+              return tags ? `[${tags}] ${content}` : content
+            })
+          }
+        } catch {
+          // Nuggets fetch failed — continue without them
+        }
+
+        try {
+          const prompt = buildCompetitorAnalysisPrompt(article.keyword, competitorContent, nuggetsSummary.length > 0 ? nuggetsSummary : undefined)
           const aiResponse = await routeAI(
             'analyze_competitor_content',
             [{ role: 'user', content: prompt }]
@@ -1915,8 +1934,8 @@ async function executeSeo(
 
       console.log(`[seo] Nugget integration: ${totalIntegrated}/${totalAssigned} integrated (${nuggetIntegration.integrationRate}%), ${totalIgnored} ignored`)
 
-      // 4c. Auto-rewrite blocks with ignored nuggets (max 2 blocks)
-      if (totalIgnored > 0 && nuggetIntegration.integrationRate < 50) {
+      // 4c. Auto-rewrite blocks with ignored nuggets (max 3 blocks)
+      if (totalIgnored > 0 && nuggetIntegration.integrationRate < 80) {
         const ignoredByBlock = new Map<number, string[]>()
         for (const d of details) {
           if (d.status === 'ignored') {
@@ -1929,7 +1948,7 @@ async function executeSeo(
         let rewriteCount = 0
         const ignoredEntries = Array.from(ignoredByBlock.entries())
         for (const [bi, ignoredIds] of ignoredEntries) {
-          if (rewriteCount >= 2) break
+          if (rewriteCount >= 3) break
           const block = contentBlocks[bi]
           if (!block || block.status !== 'written') continue
 

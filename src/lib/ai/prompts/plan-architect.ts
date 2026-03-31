@@ -226,12 +226,22 @@ Le word_count doit DIMINUER de section en section (pas necessairement de facon l
 ${SEO_FAQ_RULES}
 - Blocs "list" pour les elements enumeratifs
 
-## NUGGETS (contenus authentiques du persona — donnees verifiees et a jour)
-- Assigne les nuggets pertinents via nugget_ids
+## NUGGETS — DONNEES VERIFIEES DU PERSONA (SOURCE D'INFORMATION PRIORITAIRE)
+
+Les nuggets sont des FAITS REELS, des donnees verifiees et des temoignages authentiques du persona. Ils constituent la SOURCE D'INFORMATION LA PLUS FIABLE de l'article car ils proviennent directement de l'expertise du persona (extraits de videos, notes personnelles, observations terrain).
+
+**REGLE FONDAMENTALE** : les nuggets disponibles doivent etre la BASE INFORMATIONNELLE de l'article. L'analyse SERP et les donnees concurrents viennent COMPLETER, pas remplacer.
+
+### Regles d'assignation :
+- Assigne les nuggets pertinents via nugget_ids — VISE un taux d'assignation de 80%+ des nuggets disponibles
 - Pour CHAQUE nugget assigne, ajoute une explication dans "nugget_context" (objet cle=nugget_id, valeur=raison)
 - Exemple: "nugget_context": {"uuid-123": "Chiffre recent a utiliser pour appuyer l'argument sur les couts"}
-- Ne force pas les nuggets non pertinents
-- Les nuggets recents contiennent des donnees a jour (stats, prix, reglementations) — PRIORISE-LES
+- Chaque nugget ne doit etre assigne qu'a UN SEUL bloc (pas de doublon)
+- Un bloc peut recevoir 1 a 3 nuggets — assigne-en le MAXIMUM pertinent par bloc
+- Les nuggets recents contiennent des donnees a jour (stats, prix, reglementations) — PRIORISE-LES ABSOLUMENT
+- Les nuggets de type "youtube" ou "vocal" sont des temoignages riches — place-les dans les sections ou l'experience personnelle renforce l'E-E-A-T
+- Si un nugget contient un chiffre, une stat ou un fait precis, il DOIT etre assigne — ces donnees sont verifiees et rendent l'article credible
+- SEULE exception pour ne PAS assigner un nugget : il n'a AUCUN rapport meme indirect avec le sujet de l'article
 
 ## ANALYSE CONCURRENTIELLE (si disponible)
 - Couvre TOUS les H2 communs des concurrents — mais reformule-les pour etre MEILLEURS (plus specifiques, avec mot-cle, avec qualificateur chiffre)
@@ -398,9 +408,34 @@ Voici des extraits authentiques de ${persona.name}. Adapte la structure du plan 
 - La densite d'information par section (word_count adapte)`
   }
 
-  // Add SERP data if available
+  // Add nuggets FIRST — they are the primary verified source
+  if (nuggets.length > 0) {
+    user += `\n\n## DONNEES VERIFIEES DU PERSONA — SOURCE PRIORITAIRE (${nuggets.length} nuggets)
+Ces nuggets sont des FAITS REELS et des donnees verifiees provenant directement de l'expertise du persona.
+Ils constituent la BASE INFORMATIONNELLE de l'article — les donnees SERP ci-dessous viennent les completer, pas les remplacer.
+
+OBJECTIF : assigner AU MOINS 80% de ces nuggets dans les blocs de l'article.
+Chaque nugget non assigne est une PERTE de contenu authentique qui differencie l'article des concurrents.
+
+REGLES :
+- Assigne chaque nugget au bloc le plus pertinent via \`nugget_ids\`
+- Si un nugget contient un chiffre, une stat ou un fait → il DOIT etre assigne (donnee verifiee)
+- Chaque nugget ne doit etre assigne qu'a UN SEUL bloc (pas de doublon)
+- Structure tes sections pour ACCOMMODER les nuggets (pas l'inverse)`
+
+    for (const nugget of nuggets) {
+      user += `\n\n### Nugget [${nugget.id}]`
+      if (nugget.source_type) user += ` (source: ${nugget.source_type})`
+      user += `\nTags: ${nugget.tags.join(', ') || 'aucun'}`
+      user += `\nContenu: "${nugget.content}"`
+    }
+
+    user += `\n\n→ RAPPEL : ces ${nuggets.length} nuggets sont ta source d'information principale. Concois le plan pour les integrer naturellement.`
+  }
+
+  // Add SERP data (complementary to nuggets)
   if (serpData) {
-    user += `\n\n## DONNEES SERP (Top resultats Google actuels)`
+    user += `\n\n## DONNEES SERP (Top resultats Google — donnees complementaires)`
 
     if (serpData.organic?.length > 0) {
       user += `\n\n### Top resultats organiques :`
@@ -422,26 +457,6 @@ Voici des extraits authentiques de ${persona.name}. Adapte la structure du plan 
       for (const rs of serpData.relatedSearches) {
         user += `\n- ${rs.query}`
       }
-    }
-  }
-
-  // Add nuggets if available
-  if (nuggets.length > 0) {
-    user += `\n\n## NUGGETS DISPONIBLES (contenus authentiques du persona)
-Ces nuggets sont des pepites de connaissance REELLES du persona. Ils rendent le contenu unique et humain.
-
-REGLES D'ASSIGNATION :
-- Assigne les nuggets pertinents aux blocs via leur ID dans \`nugget_ids\`
-- Chaque nugget ne doit etre assigne qu'a UN SEUL bloc (pas de doublon)
-- Assigne en priorite les nuggets dont les tags correspondent au sujet du bloc
-- Un bloc peut avoir 0 a 3 nuggets — ne force JAMAIS un nugget non pertinent
-- Les nuggets de type "youtube" ou "vocal" sont souvent des temoignages riches — place-les dans les sections ou l'experience personnelle renforce la credibilite`
-
-    for (const nugget of nuggets) {
-      user += `\n\n### Nugget [${nugget.id}]`
-      if (nugget.source_type) user += ` (source: ${nugget.source_type})`
-      user += `\nTags: ${nugget.tags.join(', ') || 'aucun'}`
-      user += `\nContenu: "${nugget.content}"`
     }
   }
 

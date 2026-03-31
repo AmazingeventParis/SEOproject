@@ -225,7 +225,8 @@ export function computeTFIDF(documents: string[], topN: number = 50): TermScore[
 
 export function buildCompetitorAnalysisPrompt(
   keyword: string,
-  analysis: CompetitorContentAnalysis
+  analysis: CompetitorContentAnalysis,
+  nuggetsSummary?: string[]
 ): string {
   const headingsList = analysis.commonHeadings.slice(0, 20).join('\n- ')
   const tfidfList = analysis.tfidfKeywords
@@ -256,7 +257,15 @@ ${pagesInfo}
 ### Termes TF-IDF les plus importants:
 - ${tfidfList || 'Aucun terme extrait'}
 
-## INSTRUCTIONS
+${nuggetsSummary && nuggetsSummary.length > 0 ? `### Donnees verifiees disponibles (nuggets du persona)
+Le persona dispose deja de ces informations verifiees. Tiens-en compte dans ton analyse pour :
+- NE PAS suggerer comme "content gap" ce qui est deja couvert par un nugget
+- INCLURE dans le champ semantique les termes cles presents dans les nuggets
+- ORIENTER les differenciateurs vers l'exploitation de ces donnees exclusives
+
+${nuggetsSummary.map(n => `- ${n}`).join('\n')}
+
+` : ''}## INSTRUCTIONS
 Retourne un JSON valide (sans bloc markdown) avec cette structure exacte:
 {
   "contentGaps": [

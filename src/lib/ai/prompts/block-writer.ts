@@ -313,10 +313,10 @@ REGLE ANTI-REDITE ABSOLUE (CRITIQUE — une redite = echec de la section) :
 - Si tu n'as rien de nouveau a dire sur un point, PASSE AU SUIVANT — mieux vaut un bloc plus court que repetitif`
   }
 
-  // Add nuggets to integrate
+  // Add nuggets to integrate — MANDATORY
   if (nuggets.length > 0) {
-    user += `\n\n## NUGGETS A INTEGRER
-Les nuggets suivants doivent etre integres naturellement dans ce bloc :`
+    user += `\n\n## NUGGETS OBLIGATOIRES — DONNEES VERIFIEES A INTEGRER
+Les nuggets suivants sont des FAITS VERIFIES du persona. Ils DOIVENT etre integres dans ce bloc :`
 
     for (const nugget of nuggets) {
       user += `\n\n### Nugget [${nugget.id}]`
@@ -328,9 +328,11 @@ Les nuggets suivants doivent etre integres naturellement dans ce bloc :`
     }
 
     user += `\n\nREGLES D'INTEGRATION DES NUGGETS :
+- OBLIGATION : chaque nugget assigne a ce bloc DOIT etre integre. Un nugget non integre = echec de la redaction.
 - Integre chaque nugget de maniere fluide dans le texte. Le lecteur ne doit pas sentir qu'il s'agit d'un element "plaque".
-- GARDE-FOU PERTINENCE : si un nugget n'a AUCUN rapport direct avec le sujet "${keyword}" ou le heading de cette section, IGNORE-LE completement. Ne l'integre PAS. Un nugget hors-sujet est pire que pas de nugget du tout.
-- JAMAIS de copie mot pour mot — reformule et adapte au contexte de la section.`
+- Si un nugget contient un chiffre, une stat ou un fait precis, il doit apparaitre TEXTUELLEMENT (reformule la phrase autour, pas le chiffre).
+- JAMAIS de copie mot pour mot du nugget entier — reformule et adapte au contexte de la section.
+- SEULE exception pour ignorer un nugget : il est TOTALEMENT hors-sujet par rapport au heading "${keyword}" de cette section.`
   }
 
   // Inject writing style examples as few-shot references
