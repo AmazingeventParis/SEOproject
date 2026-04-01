@@ -531,9 +531,13 @@ Aucun article existant sur le site. Laisse internal_link_targets a [] pour tous 
   if (moneyPage) {
     user += `\n\n## PAGE PRIORITAIRE (MONEY PAGE)
 URL : ${moneyPage.url}
-Description : ${moneyPage.description}
-Tu DOIS placer un lien vers cette page dans 1 a 2 sections H2 pertinentes.
-Marque ces entrees avec "is_money_page": true dans internal_link_targets.`
+Description EXACTE de cette page : "${moneyPage.description}"
+
+ATTENTION : le contenu de cette page est STRICTEMENT "${moneyPage.description}".
+NE PAS inventer un autre sujet base sur le nom de domaine.
+Tu DOIS placer un lien vers cette page dans 1-2 sections H2 pertinentes.
+L'ancre et le contexte du lien doivent correspondre a "${moneyPage.description}" et PAS a autre chose.
+Marque ces entrees avec "is_money_page": true et "money_page_description": "${moneyPage.description}" dans internal_link_targets.`
   }
 
   // Add competitor content analysis if available

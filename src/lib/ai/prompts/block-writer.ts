@@ -447,7 +447,8 @@ Voici des extraits authentiques. Imite ce style, ce vocabulaire, cette structure
           : `/${link.target_slug || ''}`
       user += `\n- URL : ${fullUrl}`
       if (link.is_money_page) {
-        user += ` (page prioritaire)`
+        const mpDesc = (link as Record<string, unknown>).money_page_description as string || ''
+        user += ` (PAGE PRIORITAIRE — cette page parle de : "${mpDesc}". L'ancre du lien doit correspondre a CE sujet, PAS au nom de domaine)`
       }
     }
     user += `\n

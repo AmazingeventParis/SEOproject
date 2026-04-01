@@ -871,7 +871,15 @@ async function executeWriteBlock(
     .map((b: ContentBlock) => b.heading!)
 
   // Extract internal link targets from the block (set by the plan)
-  const internalLinkTargets = block.internal_link_targets || []
+  // Enrich money page links with the actual description from site settings
+  const rawLinkTargets = block.internal_link_targets || []
+  const moneyPageDesc = article.seo_sites?.money_page_description || ''
+  const internalLinkTargets = rawLinkTargets.map((lt) => {
+    if (lt.is_money_page && moneyPageDesc) {
+      return { ...lt, money_page_description: moneyPageDesc } as typeof lt & { money_page_description: string }
+    }
+    return lt
+  })
   const siteDomain = article.seo_sites?.domain
 
   // Authority link injection: any block AFTER the first H2 (never in intro or first H2)
