@@ -395,7 +395,22 @@ OU : { "impossible": true }`,
   )
 
   try {
-    const parsed = JSON.parse(aiResponse.content)
+    // Clean AI response: strip markdown code blocks and extract JSON
+    let rawContent = aiResponse.content.trim()
+    // Strip ```json ... ``` or ``` ... ``` wrappers
+    const fenceMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (fenceMatch) {
+      rawContent = fenceMatch[1].trim()
+    }
+    // If still not starting with {, try to find the first { ... } block
+    if (!rawContent.startsWith('{')) {
+      const jsonMatch = rawContent.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        rawContent = jsonMatch[0]
+      }
+    }
+
+    const parsed = JSON.parse(rawContent)
     if (parsed.impossible) return null
 
     const anchor = parsed.anchor_text
@@ -421,7 +436,7 @@ OU : { "impossible": true }`,
 
     return { anchor, modifiedParagraph: modified }
   } catch {
-    console.error('[reverse-backlinks] Failed to parse anchor AI response:', aiResponse.content)
+    console.error('[reverse-backlinks] Failed to parse anchor AI response (full):', aiResponse.content.slice(0, 500))
     return null
   }
 }
