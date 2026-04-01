@@ -4,15 +4,15 @@
 // the same WP site and inject links back to the new article.
 //
 // SEO Guidelines enforced:
+// - Category filter: ONLY articles sharing a WP category (same topic)
 // - Silo priority: same-silo articles scored 2x higher
 // - Link density cap: skip articles with 8+ internal links
 // - Paragraph exclusion: never in intro (first 2 <p>), never in last <p>
 // - Anchor ≠ exact keyword/title/slug (varied, natural 2-6 words)
 // - Max 1 link injected per candidate post
-// - No paragraph added just to place a link (wrap_existing only)
+// - If no natural anchor: add 1-2 transitional sentences (contextual_add)
 // - Skip candidates that already link to the target article
 // - Skip paragraphs with 2+ existing links
-// - No fallback to random paragraph — relevance required
 // - Stopwords excluded from scoring
 // ============================================================
 
@@ -25,7 +25,7 @@ export interface BacklinkSuggestion {
   wp_post_id: number
   wp_post_title: string
   wp_post_url: string
-  injection_type: 'wrap_existing' | 'contextual_wrap'
+  injection_type: 'wrap_existing' | 'contextual_wrap' | 'contextual_add'
   anchor_text: string
   original_paragraph: string
   modified_paragraph: string
@@ -82,7 +82,7 @@ const INTRO_SKIP_PARAGRAPHS = 2
 function getSignificantWords(text: string): string[] {
   return text
     .toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove accents for matching
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .split(/\s+/)
     .filter(w => w.length >= MIN_WORD_LEN && !STOPWORDS.has(w))
 }
@@ -105,7 +105,6 @@ function countInternalLinks(htmlContent: string, siteDomain: string): number {
   const domainNorm = siteDomain.replace(/^www\./, '').toLowerCase()
   while ((match = linkRegex.exec(htmlContent)) !== null) {
     const href = match[1].toLowerCase()
-    // Relative links or same-domain links
     if (href.startsWith('/') || href.includes(domainNorm)) {
       count++
     }
@@ -128,9 +127,6 @@ function extractParagraphs(html: string): { text: string; index: number }[] {
   return paragraphs
 }
 
-/**
- * Extract the site domain from a WP URL.
- */
 function extractDomain(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '')
@@ -143,8 +139,6 @@ function extractDomain(url: string): string {
 
 /**
  * Score a candidate post for relevance to the new article.
- * Uses significant words only (no stopwords, min 4 chars).
- * Higher score = better candidate for receiving a backlink.
  */
 export function scoreCandidate(
   newKeyword: string,
@@ -159,23 +153,16 @@ export function scoreCandidate(
 
   let score = 0
 
-  // Keyword word overlap with candidate title (high value)
   for (const w of keywordWords) {
     if (candidateTitleNorm.includes(w)) score += 4
   }
-
-  // Title word overlap with candidate title
   for (const w of titleWords) {
     if (candidateTitleNorm.includes(w)) score += 2
   }
-
-  // Keyword words found in content body (capped)
   for (const w of keywordWords) {
     const matches = candidateContentNorm.split(w).length - 1
     score += Math.min(matches, 3)
   }
-
-  // Title words found in content body (capped)
   for (const w of titleWords) {
     const matches = candidateContentNorm.split(w).length - 1
     score += Math.min(matches, 2)
@@ -184,9 +171,6 @@ export function scoreCandidate(
   return score
 }
 
-/**
- * Check if a WP post already contains a link to the target URL.
- */
 function alreadyLinksTo(htmlContent: string, targetUrl: string): boolean {
   const normalizedTarget = targetUrl.replace(/\/$/, '').toLowerCase()
   const linkRegex = /<a\s[^>]*href=["']([^"']+)["']/gi
@@ -203,11 +187,10 @@ function alreadyLinksTo(htmlContent: string, targetUrl: string): boolean {
 /**
  * Fetch all published WP posts for a site, score them, and return the top 3 candidates.
  *
- * SEO expert rules applied:
- * - Silo articles are scored with a 2x bonus (topical relevance)
- * - Articles with 8+ internal links are skipped (over-optimized)
- * - Self-article is excluded
- * - Articles already linking to the target are excluded
+ * SEO expert rules:
+ * - CATEGORY FILTER: only candidates sharing at least 1 WP category with the source article
+ * - Silo articles scored with 2x bonus
+ * - Articles with 8+ internal links are skipped
  */
 export async function findBacklinkCandidates(
   siteId: string,
@@ -220,7 +203,25 @@ export async function findBacklinkCandidates(
   const allPosts = await getAllPublishedPosts(siteId)
   const siteDomain = extractDomain(articleWpUrl)
 
-  // Build a set of WP post IDs that are in the same silo
+  // Get the source article's WP categories
+  const sourcePost = allPosts.find(p => p.id === articleWpPostId)
+  const sourceCategories = new Set(sourcePost?.categories || [])
+
+  // If source has no categories, fetch them directly
+  if (sourceCategories.size === 0) {
+    try {
+      const fullPost = await getPostById(siteId, articleWpPostId)
+      for (const catId of fullPost.categories) {
+        sourceCategories.add(catId)
+      }
+    } catch {
+      console.warn(`[reverse-backlinks] Could not fetch source article categories`)
+    }
+  }
+
+  console.log(`[reverse-backlinks] Source article categories: [${Array.from(sourceCategories).join(', ')}] (${sourceCategories.size} categories)`)
+
+  // Build silo WP post ID set
   const siloWpPostIds = new Set<number>()
   if (siloArticles && siloArticles.length > 0) {
     for (const sa of siloArticles) {
@@ -230,13 +231,20 @@ export async function findBacklinkCandidates(
     }
   }
 
-  // Exclude the article itself
-  const candidates = allPosts.filter(p => p.id !== articleWpPostId)
+  // STEP 1: Filter candidates by CATEGORY (same topic only)
+  const sameCategoryCandidates = allPosts.filter(p => {
+    if (p.id === articleWpPostId) return false
+    // Must share at least 1 category with the source article
+    if (sourceCategories.size === 0) return true // No categories = no filter (fallback)
+    return p.categories.some(catId => sourceCategories.has(catId))
+  })
+
+  console.log(`[reverse-backlinks] ${sameCategoryCandidates.length} candidates in same category (out of ${allPosts.length - 1} total)`)
 
   const scored: { id: number; title: string; link: string; score: number; isSiloMatch: boolean }[] = []
 
-  // Fetch content in batches of 5 (limit to 30 for perf — more than before to find silo matches)
-  const toFetch = candidates.slice(0, 30)
+  // Fetch content in batches of 5 (limit to 30 for perf)
+  const toFetch = sameCategoryCandidates.slice(0, 30)
   for (let i = 0; i < toFetch.length; i += 5) {
     const batch = toFetch.slice(i, i + 5)
     const results = await Promise.allSettled(
@@ -252,10 +260,8 @@ export async function findBacklinkCandidates(
       if (result.status === 'fulfilled') {
         const post = result.value
 
-        // Skip if already links to the target article
         if (alreadyLinksTo(post.content, articleWpUrl)) continue
 
-        // Skip if the article already has too many internal links
         const internalLinkCount = countInternalLinks(post.content, siteDomain)
         if (internalLinkCount >= MAX_EXISTING_LINKS_IN_POST) {
           console.log(`[reverse-backlinks] Skipping "${post.title}" — ${internalLinkCount} internal links (max ${MAX_EXISTING_LINKS_IN_POST})`)
@@ -265,10 +271,8 @@ export async function findBacklinkCandidates(
         let sc = scoreCandidate(articleKeyword, articleTitle, post.title, post.content)
         const isSiloMatch = siloWpPostIds.has(post.id)
 
-        // Silo bonus: same-silo articles get 2x score (topical authority)
         if (isSiloMatch) {
           sc = Math.round(sc * SILO_BONUS_MULTIPLIER)
-          console.log(`[reverse-backlinks] Silo match: "${post.title}" — score boosted to ${sc}`)
         }
 
         if (sc >= MIN_CANDIDATE_SCORE) {
@@ -278,23 +282,21 @@ export async function findBacklinkCandidates(
     }
   }
 
-  // Sort by score desc, return top 3
   scored.sort((a, b) => b.score - a.score)
+  console.log(`[reverse-backlinks] Top candidates: ${scored.slice(0, 5).map(c => `"${c.title}" (score:${c.score}, silo:${c.isSiloMatch})`).join(', ')}`)
   return scored.slice(0, 3)
 }
 
 // ---- Paragraph Selection ----
 
 /**
- * Find the best paragraph in the candidate content that's most relevant
- * to the new article's topic. Returns null if no paragraph is relevant enough.
+ * Find the best paragraph in the candidate content for link placement.
  *
- * SEO expert rules:
- * - NEVER in intro (skip first 2 paragraphs — intro is sacred for SEO)
- * - NEVER in last paragraph (conclusion = bad placement for internal links)
- * - Skip paragraphs with 2+ existing links (avoid link stacking)
- * - Skip paragraphs where no significant keyword word appears
- * - No fallback to random paragraph — relevance is required
+ * SEO rules:
+ * - NEVER in intro (skip first 2 paragraphs)
+ * - NEVER in last paragraph (conclusion)
+ * - Skip paragraphs with 2+ existing links
+ * - Prefer body zone (20-80% of article)
  */
 function findBestParagraph(
   paragraphs: { text: string; index: number }[],
@@ -304,20 +306,14 @@ function findBestParagraph(
   let bestScore = 0
   let bestPara: { text: string; index: number; score: number } | null = null
 
-  // Determine exclusion zones
   const totalParagraphs = paragraphs.length
-  if (totalParagraphs < 4) return null // Not enough paragraphs for safe placement
+  if (totalParagraphs < 4) return null
 
   for (let i = 0; i < paragraphs.length; i++) {
     const para = paragraphs[i]
 
-    // RULE: Skip intro paragraphs (first 2 real paragraphs)
     if (para.index < INTRO_SKIP_PARAGRAPHS) continue
-
-    // RULE: Skip the last paragraph (conclusion zone)
     if (i === paragraphs.length - 1) continue
-
-    // RULE: Skip paragraphs with too many existing links
     if (countLinksInHtml(para.text) >= MAX_EXISTING_LINKS_IN_PARA) continue
 
     const plain = stripHtml(para.text).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -326,11 +322,9 @@ function findBestParagraph(
       if (plain.includes(w)) score++
     }
 
-    // Prefer paragraphs in the middle of the article (body zone)
-    // Give a small boost to paragraphs not near the edges
     const relativePosition = para.index / totalParagraphs
     if (relativePosition >= 0.2 && relativePosition <= 0.8) {
-      score += 1 // Slight bonus for body zone
+      score += 1
     }
 
     if (score > bestScore) {
@@ -339,7 +333,6 @@ function findBestParagraph(
     }
   }
 
-  // Only return if minimum relevance is met
   if (bestPara && bestPara.score >= MIN_PARAGRAPH_SCORE) {
     return bestPara
   }
@@ -347,11 +340,59 @@ function findBestParagraph(
   return null
 }
 
+/**
+ * Find a suitable paragraph for adding sentences (less strict than anchor wrapping).
+ * Used as fallback when no natural anchor is found.
+ * Picks a thematically relevant paragraph in the body zone.
+ */
+function findParagraphForSentenceAdd(
+  paragraphs: { text: string; index: number }[],
+  keyword: string
+): { text: string; index: number; score: number } | null {
+  const words = getSignificantWords(keyword)
+  let bestScore = -1
+  let bestPara: { text: string; index: number; score: number } | null = null
+
+  const totalParagraphs = paragraphs.length
+  if (totalParagraphs < 4) return null
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    const para = paragraphs[i]
+
+    // Still respect intro and conclusion exclusion
+    if (para.index < INTRO_SKIP_PARAGRAPHS) continue
+    if (i === paragraphs.length - 1) continue
+    // Less strict on existing links — we're adding after, not inside
+    if (countLinksInHtml(para.text) >= 3) continue
+
+    const plain = stripHtml(para.text).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    let score = 0
+    for (const w of words) {
+      if (plain.includes(w)) score++
+    }
+
+    // Prefer middle body zone
+    const relativePosition = para.index / totalParagraphs
+    if (relativePosition >= 0.3 && relativePosition <= 0.7) {
+      score += 2
+    } else if (relativePosition >= 0.2 && relativePosition <= 0.8) {
+      score += 1
+    }
+
+    if (score > bestScore) {
+      bestScore = score
+      bestPara = { ...para, score }
+    }
+  }
+
+  // Accept even score 0 paragraphs for sentence add (we're creating the context)
+  return bestPara
+}
+
 // ---- Anchor Text Generation ----
 
 /**
- * Generate a natural anchor text that is NOT the exact keyword or title.
- * Uses AI to create a 2-6 word varied anchor within the paragraph context.
+ * Try to find a natural anchor text already present in the paragraph.
  */
 async function generateNaturalAnchor(
   keyword: string,
@@ -389,19 +430,12 @@ OU : { "impossible": true }`,
   )
 
   try {
-    // Clean AI response: strip markdown code blocks and extract JSON
     let rawContent = aiResponse.content.trim()
-    // Strip ```json ... ``` or ``` ... ``` wrappers
     const fenceMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (fenceMatch) {
-      rawContent = fenceMatch[1].trim()
-    }
-    // If still not starting with {, try to find the first { ... } block
+    if (fenceMatch) rawContent = fenceMatch[1].trim()
     if (!rawContent.startsWith('{')) {
       const jsonMatch = rawContent.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        rawContent = jsonMatch[0]
-      }
+      if (jsonMatch) rawContent = jsonMatch[0]
     }
 
     const parsed = JSON.parse(rawContent)
@@ -410,12 +444,10 @@ OU : { "impossible": true }`,
     const anchor = parsed.anchor_text
     if (!anchor || anchor.length < 3) return null
 
-    // Verify anchor is not the exact keyword or title
     const anchorLower = anchor.toLowerCase().trim()
     if (anchorLower === keyword.toLowerCase().trim()) return null
     if (anchorLower === title.toLowerCase().trim()) return null
 
-    // Find and wrap the anchor in the paragraph HTML
     const anchorRegex = new RegExp(
       `(?<![">])${anchor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![<"])`,
       'i'
@@ -425,12 +457,86 @@ OU : { "impossible": true }`,
       `<a href="${targetUrl}">$&</a>`
     )
 
-    // Check that replacement actually happened
     if (modified === paragraphText) return null
 
     return { anchor, modifiedParagraph: modified }
   } catch {
-    console.error('[reverse-backlinks] Failed to parse anchor AI response (full):', JSON.stringify(aiResponse.content.slice(0, 500)))
+    console.error('[reverse-backlinks] Failed to parse anchor AI response:', JSON.stringify(aiResponse.content.slice(0, 500)))
+    return null
+  }
+}
+
+// ---- Sentence Addition (fallback) ----
+
+/**
+ * Generate 1-2 transitional sentences that naturally introduce a link to the target article.
+ * Used when no natural anchor text is found in existing content.
+ */
+async function generateTransitionalSentences(
+  keyword: string,
+  title: string,
+  paragraphText: string,
+  targetUrl: string,
+  candidateTitle: string
+): Promise<{ anchor: string; modifiedParagraph: string } | null> {
+  const plainPara = stripHtml(paragraphText)
+
+  const aiResponse = await routeAI(
+    'generate_backlink_sentences',
+    [
+      {
+        role: 'user',
+        content: `Tu es un expert SEO en maillage interne. Tu dois ajouter 1-2 phrases de TRANSITION apres le paragraphe ci-dessous pour creer un lien naturel vers un article connexe.
+
+PARAGRAPHE EXISTANT :
+"${plainPara.slice(0, 600)}"
+
+ARTICLE DE L'ARTICLE HOTE : "${candidateTitle}"
+ARTICLE CIBLE A LINKER : "${title}" (mot-cle : "${keyword}")
+URL CIBLE : ${targetUrl}
+
+REGLES STRICTES :
+- Genere 1-2 phrases MAX (40 mots max au total) qui font la TRANSITION entre le sujet du paragraphe et le sujet de l'article cible
+- La transition doit etre NATURELLE et LOGIQUE : le lecteur ne doit pas sentir qu'on force un lien
+- Inclus UN lien <a href="${targetUrl}">ancre de 2-6 mots</a> dans ces phrases
+- L'ancre NE DOIT PAS etre le keyword exact "${keyword}" ni le titre exact — utilise une expression naturelle, un synonyme ou une variante
+- Le ton doit correspondre au reste du paragraphe
+- Ces phrases s'ajoutent APRES le paragraphe, pas dedans
+- Exemples de bonnes transitions :
+  * "Pour aller plus loin dans la regulation de votre chauffage, decouvrez notre <a href="URL">guide du thermostat connecte</a>."
+  * "Ce point rejoint d'ailleurs la question du <a href="URL">pilotage intelligent du chauffage</a>, un sujet que nous avons detaille."
+
+JSON : { "sentences": "1-2 phrases avec le lien HTML inclus", "anchor_text": "texte de l'ancre seul", "impossible": false }
+OU : { "impossible": true }`,
+      },
+    ]
+  )
+
+  try {
+    let rawContent = aiResponse.content.trim()
+    const fenceMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (fenceMatch) rawContent = fenceMatch[1].trim()
+    if (!rawContent.startsWith('{')) {
+      const jsonMatch = rawContent.match(/\{[\s\S]*\}/)
+      if (jsonMatch) rawContent = jsonMatch[0]
+    }
+
+    const parsed = JSON.parse(rawContent)
+    if (parsed.impossible) return null
+
+    const sentences = parsed.sentences
+    const anchor = parsed.anchor_text
+    if (!sentences || !anchor) return null
+
+    // Verify the sentences contain the target URL
+    if (!sentences.includes(targetUrl)) return null
+
+    // Add the sentences as a new <p> after the existing paragraph
+    const modifiedParagraph = `${paragraphText}\n<p>${sentences}</p>`
+
+    return { anchor, modifiedParagraph }
+  } catch {
+    console.error('[reverse-backlinks] Failed to parse transitional sentences AI response:', JSON.stringify(aiResponse.content.slice(0, 500)))
     return null
   }
 }
@@ -440,52 +546,79 @@ OU : { "impossible": true }`,
 /**
  * Generate a backlink suggestion for a single candidate post.
  *
- * Strategy: wrap_existing or contextual_wrap only (never add new paragraphs).
- * - If keyword words are found in a paragraph, use AI to pick a natural varied anchor
- * - The anchor is always an expression already in the text, never added
- * - Falls back to null if no natural placement is possible
+ * Strategy (in order):
+ * 1. Try to find a natural anchor in a relevant paragraph (wrap_existing)
+ * 2. If no anchor found, add 1-2 transitional sentences (contextual_add)
  */
 export async function generateBacklinkSuggestion(
   article: { keyword: string; title: string; wpUrl: string },
   candidate: { id: number; title: string; link: string; isSiloMatch?: boolean },
   siteId: string
 ): Promise<BacklinkSuggestion | null> {
-  // Fetch full content
   const post = await getPostById(siteId, candidate.id)
 
-  // Double-check: skip if already links to target
   if (alreadyLinksTo(post.content, article.wpUrl)) return null
 
   const paragraphs = extractParagraphs(post.content)
   if (paragraphs.length === 0) return null
 
-  // Find best relevant paragraph (respects intro/conclusion exclusion)
+  // Strategy 1: Try natural anchor wrapping
   const bestPara = findBestParagraph(paragraphs, article.keyword)
-  if (!bestPara) return null
+  if (bestPara) {
+    const result = await generateNaturalAnchor(
+      article.keyword,
+      article.title,
+      bestPara.text,
+      article.wpUrl
+    )
 
-  // Use AI to find natural anchor text and wrap it
-  const result = await generateNaturalAnchor(
-    article.keyword,
-    article.title,
-    bestPara.text,
-    article.wpUrl
-  )
-
-  if (!result) return null
-
-  return {
-    wp_post_id: candidate.id,
-    wp_post_title: candidate.title,
-    wp_post_url: candidate.link,
-    injection_type: 'contextual_wrap',
-    anchor_text: result.anchor,
-    original_paragraph: bestPara.text,
-    modified_paragraph: result.modifiedParagraph,
-    paragraph_index: bestPara.index,
-    relevance_score: bestPara.score,
-    status: 'suggested',
-    is_silo_match: candidate.isSiloMatch || false,
+    if (result) {
+      return {
+        wp_post_id: candidate.id,
+        wp_post_title: candidate.title,
+        wp_post_url: candidate.link,
+        injection_type: 'contextual_wrap',
+        anchor_text: result.anchor,
+        original_paragraph: bestPara.text,
+        modified_paragraph: result.modifiedParagraph,
+        paragraph_index: bestPara.index,
+        relevance_score: bestPara.score,
+        status: 'suggested',
+        is_silo_match: candidate.isSiloMatch || false,
+      }
+    }
   }
+
+  // Strategy 2: No natural anchor → add transitional sentences
+  console.log(`[reverse-backlinks] No natural anchor in "${candidate.title}" — trying sentence addition`)
+  const sentencePara = findParagraphForSentenceAdd(paragraphs, article.keyword)
+  if (sentencePara) {
+    const result = await generateTransitionalSentences(
+      article.keyword,
+      article.title,
+      sentencePara.text,
+      article.wpUrl,
+      candidate.title
+    )
+
+    if (result) {
+      return {
+        wp_post_id: candidate.id,
+        wp_post_title: candidate.title,
+        wp_post_url: candidate.link,
+        injection_type: 'contextual_add',
+        anchor_text: result.anchor,
+        original_paragraph: sentencePara.text,
+        modified_paragraph: result.modifiedParagraph,
+        paragraph_index: sentencePara.index,
+        relevance_score: sentencePara.score,
+        status: 'suggested',
+        is_silo_match: candidate.isSiloMatch || false,
+      }
+    }
+  }
+
+  return null
 }
 
 // ---- Inject / Rollback ----
@@ -503,11 +636,9 @@ export async function injectBacklink(
   const post = await getPostById(siteId, wpPostId)
   let content = post.content
 
-  // Find the paragraph by matching the original text
   if (content.includes(originalParagraph)) {
     content = content.replace(originalParagraph, modifiedParagraph)
   } else {
-    // Fallback: try to find by index
     const paragraphs: string[] = []
     const regex = /<p[^>]*>[\s\S]*?<\/p>/gi
     let match

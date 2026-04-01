@@ -233,13 +233,13 @@ export async function uploadMedia(
  */
 export async function getAllPublishedPosts(
   siteId: string
-): Promise<{ id: number; title: string; slug: string; link: string }[]> {
+): Promise<{ id: number; title: string; slug: string; link: string; categories: number[] }[]> {
   const creds = await getWPCredentials(siteId)
-  const posts: { id: number; title: string; slug: string; link: string }[] = []
+  const posts: { id: number; title: string; slug: string; link: string; categories: number[] }[] = []
 
   for (let page = 1; page <= 2; page++) {
     const response = await fetch(
-      `${apiBase(creds)}/posts?per_page=100&page=${page}&status=publish&_fields=id,title,slug,link`,
+      `${apiBase(creds)}/posts?per_page=100&page=${page}&status=publish&_fields=id,title,slug,link,categories`,
       {
         method: 'GET',
         headers: {
@@ -252,7 +252,7 @@ export async function getAllPublishedPosts(
 
     if (!response.ok) break
 
-    const data: { id: number; title: { rendered: string }; slug: string; link: string }[] = await response.json()
+    const data: { id: number; title: { rendered: string }; slug: string; link: string; categories: number[] }[] = await response.json()
     if (data.length === 0) break
 
     for (const p of data) {
@@ -261,6 +261,7 @@ export async function getAllPublishedPosts(
         title: p.title.rendered.replace(/&#8217;/g, "'").replace(/&amp;/g, '&').replace(/&#8211;/g, '-'),
         slug: p.slug,
         link: p.link,
+        categories: p.categories || [],
       })
     }
 
@@ -277,11 +278,11 @@ export async function getAllPublishedPosts(
 export async function getPostById(
   siteId: string,
   postId: number
-): Promise<{ id: number; title: string; content: string; link: string }> {
+): Promise<{ id: number; title: string; content: string; link: string; categories: number[] }> {
   const creds = await getWPCredentials(siteId)
 
   const response = await fetch(
-    `${apiBase(creds)}/posts/${postId}?_fields=id,title,content,link`,
+    `${apiBase(creds)}/posts/${postId}?_fields=id,title,content,link,categories`,
     {
       method: 'GET',
       headers: {
@@ -299,12 +300,13 @@ export async function getPostById(
     )
   }
 
-  const data: { id: number; title: { rendered: string }; content: { rendered: string }; link: string } = await response.json()
+  const data: { id: number; title: { rendered: string }; content: { rendered: string }; link: string; categories: number[] } = await response.json()
   return {
     id: data.id,
     title: data.title.rendered.replace(/&#8217;/g, "'").replace(/&amp;/g, '&').replace(/&#8211;/g, '-'),
     content: data.content.rendered,
     link: data.link,
+    categories: data.categories || [],
   }
 }
 
