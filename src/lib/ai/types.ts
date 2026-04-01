@@ -23,6 +23,8 @@ export type AITask =
   | 'check_persona_consistency'   // Check persona voice consistency across blocks -> Gemini Flash
   | 'analyze_link_gap'             // Netlinking gap analysis -> Gemini Flash
   | 'generate_netlinking_article'  // Generate netlinking article -> Gemini Pro
+  | 'generate_article_angle'     // Generate unique article angle suggestions -> Gemini Flash
+  | 'generate_writing_directives' // Generate human-touch writing directives -> Gemini Flash
 
 export interface AIMessage {
   role: 'user' | 'assistant' | 'system'

@@ -29,6 +29,15 @@ export function SiteDialog({ open, onOpenChange, site, onSuccess }: SiteDialogPr
       niche: data.niche || null,
       money_page_url: data.money_page_url || null,
       money_page_description: data.money_page_description || null,
+      editorial_angle: (data.editorial_angle_site_description || data.editorial_angle_tone || data.editorial_angle_usp || data.editorial_angle_content_approach || data.editorial_angle_target_audience)
+        ? {
+            site_description: data.editorial_angle_site_description || '',
+            tone: data.editorial_angle_tone || '',
+            unique_selling_point: data.editorial_angle_usp || '',
+            content_approach: data.editorial_angle_content_approach || '',
+            target_audience: data.editorial_angle_target_audience || '',
+          }
+        : null,
     };
 
     try {

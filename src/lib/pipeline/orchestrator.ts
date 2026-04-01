@@ -527,6 +527,20 @@ async function executePlan(
     }
   }
 
+  // Build editorial context
+  const siteEditorialAngle = (article.seo_sites as Record<string, unknown>)?.editorial_angle as Record<string, string> | null
+  const editorialContext = {
+    siteEditorialAngle: siteEditorialAngle ? {
+      site_description: siteEditorialAngle.site_description || '',
+      tone: siteEditorialAngle.tone || '',
+      unique_selling_point: siteEditorialAngle.unique_selling_point || '',
+      content_approach: siteEditorialAngle.content_approach || '',
+      target_audience: siteEditorialAngle.target_audience || '',
+    } : undefined,
+    articleAngle: (article as Record<string, unknown>).article_angle as string | undefined,
+    writingDirectives: ((article as Record<string, unknown>).writing_directives as { label: string; checked: boolean }[] | null)?.filter(d => d.checked),
+  }
+
   // Build prompt and call AI
   const prompt = buildPlanArchitectPrompt({
     keyword: article.keyword,
@@ -540,6 +554,7 @@ async function executePlan(
     semanticAnalysis: serpDataRaw?.semanticAnalysis,
     selectedContentGaps: (serpDataRaw as Record<string, unknown> | null)?.selectedContentGaps as string[] | undefined,
     productComparison,
+    editorialContext,
   })
 
   const aiResponse = modelOverride
@@ -905,6 +920,20 @@ async function executeWriteBlock(
     articleDigest = digestParts.join('\n')
   }
 
+  // Build editorial context for block writing
+  const siteEA = (article.seo_sites as Record<string, unknown>)?.editorial_angle as Record<string, string> | null
+  const blockEditorialContext = {
+    siteEditorialAngle: siteEA ? {
+      tone: siteEA.tone || '',
+      unique_selling_point: siteEA.unique_selling_point || '',
+      content_approach: siteEA.content_approach || '',
+    } : undefined,
+    articleAngle: (article as Record<string, unknown>).article_angle as string | undefined,
+    writingDirectives: undefined as string[] | undefined,
+  }
+  // Extract writing directives relevant to this block from the block's writing_directive
+  // The plan-architect assigns directives to blocks via writing_directive text
+
   const prompt = buildBlockWriterPrompt({
     keyword: article.keyword,
     searchIntent: article.search_intent,
@@ -972,6 +1001,7 @@ async function executeWriteBlock(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return sd?.productComparison as any
     })(),
+    editorialContext: blockEditorialContext,
   })
 
   const aiResponse = modelOverride

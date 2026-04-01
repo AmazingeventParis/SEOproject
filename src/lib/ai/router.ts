@@ -144,6 +144,20 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     maxTokens: 8192,
     temperature: 0.7,
   },
+  generate_article_angle: {
+    provider: 'google',
+    model: 'gemini-3-flash-preview',
+    maxTokens: 2048,
+    temperature: 0.7,
+    jsonMode: true,
+  },
+  generate_writing_directives: {
+    provider: 'google',
+    model: 'gemini-3-flash-preview',
+    maxTokens: 2048,
+    temperature: 0.6,
+    jsonMode: true,
+  },
 }
 
 // ---- Cross-provider fallback map ----

@@ -43,6 +43,8 @@ import { Progress } from "@/components/ui/progress";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { ModelSelector } from "@/components/articles/model-selector";
 import { ProductComparisonEditor } from "@/components/articles/product-comparison-editor";
+import { ArticleAngleCard } from "@/components/articles/article-angle-card";
+import { WritingDirectivesCard } from "@/components/articles/writing-directives-card";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
@@ -2116,6 +2118,24 @@ export default function ArticleDetailPage() {
                   return null;
                 })()}
 
+              {/* Article Angle + Writing Directives — shown before plan */}
+              {article.status === "analyzing" && (
+                <>
+                  <ArticleAngleCard
+                    articleId={articleId as string}
+                    currentAngle={article.article_angle as string | null}
+                    onSave={(angle) => setArticle((prev) => prev ? { ...prev, article_angle: angle } as typeof prev : prev)}
+                    hasAnalysis={!!article.serp_data}
+                  />
+                  <WritingDirectivesCard
+                    articleId={articleId as string}
+                    currentDirectives={article.writing_directives as { id: string; label: string; category?: string; checked: boolean; source: "ai" | "user" }[] | null}
+                    onSave={(directives) => setArticle((prev) => prev ? { ...prev, writing_directives: directives as unknown as Record<string, unknown>[] } : prev)}
+                    hasAnalysis={!!article.serp_data}
+                  />
+                </>
+              )}
+
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <FileText className="mb-4 h-10 w-10 text-muted-foreground/50" />
@@ -2139,6 +2159,20 @@ export default function ArticleDetailPage() {
                     {sections.length} sections - {writtenBlocks.length}/{blocks.length} blocs ecrits
                   </p>
                 </div>
+
+                {/* Article Angle + Writing Directives — editable after plan too */}
+                <ArticleAngleCard
+                  articleId={articleId as string}
+                  currentAngle={article.article_angle as string | null}
+                  onSave={(angle) => setArticle((prev) => prev ? { ...prev, article_angle: angle } as typeof prev : prev)}
+                  hasAnalysis={!!article.serp_data}
+                />
+                <WritingDirectivesCard
+                  articleId={articleId as string}
+                  currentDirectives={article.writing_directives as { id: string; label: string; category?: string; checked: boolean; source: "ai" | "user" }[] | null}
+                  onSave={(directives) => setArticle((prev) => prev ? { ...prev, writing_directives: directives as unknown as Record<string, unknown>[] } : prev)}
+                  hasAnalysis={!!article.serp_data}
+                />
 
                 {/* Title Selection */}
                 {article.title_suggestions &&

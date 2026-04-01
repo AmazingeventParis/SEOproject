@@ -48,6 +48,17 @@ interface PlanArchitectParams {
     products: { name: string; brand: string | null; price: number | null; price_label: string | null; rating: number | null; rating_scale: number; verdict: string | null; pros: string[]; cons: string[]; specs: { criterion_id: string; value: string; rating: string }[]; affiliate_url: string | null; affiliate_enabled: boolean }[]
     criteria: { id: string; name: string; unit: string | null }[]
   }
+  editorialContext?: {
+    siteEditorialAngle?: {
+      site_description: string
+      tone: string
+      unique_selling_point: string
+      content_approach: string
+      target_audience: string
+    }
+    articleAngle?: string
+    writingDirectives?: { label: string; checked: boolean }[]
+  }
 }
 
 interface PlanArchitectPrompt {
@@ -83,7 +94,7 @@ interface PlanArchitectPrompt {
 export function buildPlanArchitectPrompt(
   params: PlanArchitectParams
 ): PlanArchitectPrompt {
-  const { keyword, searchIntent, persona, serpData, nuggets, existingSiloArticles, moneyPage, competitorContent, semanticAnalysis, selectedContentGaps, productComparison } = params
+  const { keyword, searchIntent, persona, serpData, nuggets, existingSiloArticles, moneyPage, competitorContent, semanticAnalysis, selectedContentGaps, productComparison, editorialContext } = params
 
   const currentYear = new Date().getFullYear()
 
@@ -170,6 +181,28 @@ ${SEO_EEAT_RULES}
 ${INTENT_STRATEGIES[searchIntent]?.plan || 'Structure guide complet standard.'}
 
 Tu DOIS respecter cette strategie de structure. L'intention de recherche determine TOUT : le nombre de mots, l'ordre des sections, les formats de blocs, et la presence ou non d'une FAQ.
+
+${editorialContext?.siteEditorialAngle ? `
+## IDENTITE EDITORIALE DU SITE
+- **Description** : ${editorialContext.siteEditorialAngle.site_description}
+- **Ton** : ${editorialContext.siteEditorialAngle.tone}
+- **Ce qui nous differencie** : ${editorialContext.siteEditorialAngle.unique_selling_point}
+- **Approche contenu** : ${editorialContext.siteEditorialAngle.content_approach}
+- **Audience cible** : ${editorialContext.siteEditorialAngle.target_audience}
+
+Le plan DOIT refleter cette identite. Le ton, la structure et les angles doivent correspondre a l'ADN du site.` : ''}
+
+${editorialContext?.articleAngle ? `
+## ANGLE UNIQUE DE CET ARTICLE (OBLIGATOIRE)
+"${editorialContext.articleAngle}"
+
+Cet angle est la THESE CENTRALE de l'article. Le plan doit etre construit AUTOUR de cet angle. Chaque section doit servir ou renforcer cet angle. Les writing_directive de chaque bloc doivent mentionner comment integrer cet angle.` : ''}
+
+${editorialContext?.writingDirectives && editorialContext.writingDirectives.filter(d => d.checked).length > 0 ? `
+## DIRECTIVES D'ECRITURE HUMAINE (A DISTRIBUER DANS LES BLOCS)
+${editorialContext.writingDirectives.filter(d => d.checked).map((d, i) => `${i + 1}. ${d.label}`).join('\n')}
+
+Tu DOIS repartir ces directives dans les writing_directive des blocs concernes. Chaque directive cochee doit etre assignee a au moins un bloc. Mentionne explicitement dans la writing_directive du bloc quelle directive appliquer.` : ''}
 
 ## DECOUPE H3 DES SECTIONS LONGUES (OBLIGATOIRE)
 

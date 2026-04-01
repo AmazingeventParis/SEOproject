@@ -59,6 +59,15 @@ interface BlockWriterParams {
     products: { name: string; brand: string | null; price: number | null; price_label: string | null; rating: number | null; rating_scale: number; verdict: string | null; pros: string[]; cons: string[]; specs: { criterion_id: string; value: string; rating: string }[]; affiliate_url: string | null; affiliate_enabled: boolean }[]
     criteria: { id: string; name: string; unit: string | null }[]
   }
+  editorialContext?: {
+    siteEditorialAngle?: {
+      tone: string
+      unique_selling_point: string
+      content_approach: string
+    }
+    articleAngle?: string
+    writingDirectives?: string[]
+  }
 }
 
 interface BlockWriterPrompt {
@@ -242,6 +251,20 @@ Nous sommes en ${new Date().getFullYear()}. Si le contenu fait reference a une p
 ${searchIntent && INTENT_STRATEGIES[searchIntent]?.writing ? `## STRATEGIE D'ECRITURE — Intention "${searchIntent}"
 ${INTENT_STRATEGIES[searchIntent].writing}
 Cette strategie PRIME sur les regles generales en cas de conflit.
+
+` : ''}${params.editorialContext?.siteEditorialAngle ? `## IDENTITE EDITORIALE DU SITE
+- Ton : ${params.editorialContext.siteEditorialAngle.tone}
+- Ce qui nous differencie : ${params.editorialContext.siteEditorialAngle.unique_selling_point}
+- Approche : ${params.editorialContext.siteEditorialAngle.content_approach}
+Ecris dans ce style. Le lecteur doit retrouver l'ADN du site.
+
+` : ''}${params.editorialContext?.articleAngle ? `## ANGLE UNIQUE DE L'ARTICLE
+"${params.editorialContext.articleAngle}"
+Ce bloc doit servir ou renforcer cet angle. Integre-le naturellement dans ta redaction.
+
+` : ''}${params.editorialContext?.writingDirectives && params.editorialContext.writingDirectives.length > 0 ? `## DIRECTIVES SPECIFIQUES A CE BLOC
+${params.editorialContext.writingDirectives.map((d) => `- ${d}`).join('\n')}
+Applique ces directives dans ta redaction de ce bloc.
 
 ` : ''}## FEATURED SNIPPET (POSITION ZERO)
 Si ce bloc cible un featured snippet, la PREMIERE chose que tu ecris doit etre la reponse directe :

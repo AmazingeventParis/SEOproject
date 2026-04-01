@@ -35,6 +35,11 @@ export interface SiteFormData {
   blog_path: string;
   money_page_url: string;
   money_page_description: string;
+  editorial_angle_site_description: string;
+  editorial_angle_tone: string;
+  editorial_angle_usp: string;
+  editorial_angle_content_approach: string;
+  editorial_angle_target_audience: string;
 }
 
 interface SiteFormProps {
@@ -59,6 +64,11 @@ export function SiteForm({ site, onSubmit, submitLabel = "Enregistrer" }: SiteFo
     blog_path: (site as Record<string, unknown> | undefined)?.blog_path as string ?? "",
     money_page_url: site?.money_page_url ?? "",
     money_page_description: site?.money_page_description ?? "",
+    editorial_angle_site_description: (site?.editorial_angle as Record<string, string> | null)?.site_description ?? "",
+    editorial_angle_tone: (site?.editorial_angle as Record<string, string> | null)?.tone ?? "",
+    editorial_angle_usp: (site?.editorial_angle as Record<string, string> | null)?.unique_selling_point ?? "",
+    editorial_angle_content_approach: (site?.editorial_angle as Record<string, string> | null)?.content_approach ?? "",
+    editorial_angle_target_audience: (site?.editorial_angle as Record<string, string> | null)?.target_audience ?? "",
   });
 
   function handleChange(field: keyof SiteFormData, value: string) {
@@ -264,6 +274,69 @@ export function SiteForm({ site, onSubmit, submitLabel = "Enregistrer" }: SiteFo
             placeholder="Page de location de photobooth pour evenements"
             value={formData.money_page_description}
             onChange={(e) => handleChange("money_page_description", e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Editorial Angle */}
+      <div className="border-t pt-4 space-y-4">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">Angle editorial du site</p>
+          <p className="text-xs text-muted-foreground mt-1">Definit l&apos;identite editoriale pour tous les articles de ce site</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="ea_desc">Description du site</Label>
+          <textarea
+            id="ea_desc"
+            placeholder="Ex: Blog specialise dans les solutions de chauffage connecte pour les particuliers"
+            value={formData.editorial_angle_site_description}
+            onChange={(e) => handleChange("editorial_angle_site_description", e.target.value)}
+            rows={2}
+            className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="ea_tone">Ton et style</Label>
+          <textarea
+            id="ea_tone"
+            placeholder="Ex: Expert accessible, pas de jargon inutile, ton de conseiller de confiance"
+            value={formData.editorial_angle_tone}
+            onChange={(e) => handleChange("editorial_angle_tone", e.target.value)}
+            rows={2}
+            className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="ea_usp">Ce qui nous differencie (USP)</Label>
+          <textarea
+            id="ea_usp"
+            placeholder="Ex: On teste reellement les produits, retours d'experience terrain avec mesures"
+            value={formData.editorial_angle_usp}
+            onChange={(e) => handleChange("editorial_angle_usp", e.target.value)}
+            rows={2}
+            className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="ea_approach">Approche contenu</Label>
+          <textarea
+            id="ea_approach"
+            placeholder="Ex: Guides pratiques bases sur des tests reels, comparatifs avec donnees mesurees"
+            value={formData.editorial_angle_content_approach}
+            onChange={(e) => handleChange("editorial_angle_content_approach", e.target.value)}
+            rows={2}
+            className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="ea_audience">Audience cible</Label>
+          <textarea
+            id="ea_audience"
+            placeholder="Ex: Proprietaires de maison, 30-55 ans, budget moyen, cherchent a optimiser leur consommation"
+            value={formData.editorial_angle_target_audience}
+            onChange={(e) => handleChange("editorial_angle_target_audience", e.target.value)}
+            rows={2}
+            className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           />
         </div>
       </div>

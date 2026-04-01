@@ -15,6 +15,13 @@ const updateSiteSchema = z.object({
   money_page_url: z.string().nullable().optional(),
   money_page_description: z.string().nullable().optional(),
   active: z.boolean().optional(),
+  editorial_angle: z.object({
+    site_description: z.string(),
+    tone: z.string(),
+    unique_selling_point: z.string(),
+    content_approach: z.string(),
+    target_audience: z.string(),
+  }).nullable().optional(),
 });
 
 interface RouteContext {

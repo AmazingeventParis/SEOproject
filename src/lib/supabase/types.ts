@@ -148,6 +148,7 @@ export type Database = {
           money_page_url: string | null
           money_page_description: string | null
           blog_path: string | null
+          editorial_angle: Record<string, unknown> | null
           active: boolean
           created_at: string
           updated_at: string
@@ -166,6 +167,7 @@ export type Database = {
           money_page_url?: string | null
           money_page_description?: string | null
           blog_path?: string | null
+          editorial_angle?: Record<string, unknown> | null
           active?: boolean
           created_at?: string
           updated_at?: string
@@ -184,6 +186,7 @@ export type Database = {
           money_page_url?: string | null
           money_page_description?: string | null
           blog_path?: string | null
+          editorial_angle?: Record<string, unknown> | null
           active?: boolean
           created_at?: string
           updated_at?: string
@@ -396,6 +399,8 @@ export type Database = {
           selected_authority_link: SelectedAuthorityLink | null
           year_tag: number | null
           hero_image_url: string | null
+          article_angle: string | null
+          writing_directives: Record<string, unknown>[] | null
           created_at: string
           updated_at: string
           published_at: string | null
@@ -426,6 +431,8 @@ export type Database = {
           selected_authority_link?: SelectedAuthorityLink | null
           year_tag?: number | null
           hero_image_url?: string | null
+          article_angle?: string | null
+          writing_directives?: Record<string, unknown>[] | null
           created_at?: string
           updated_at?: string
           published_at?: string | null
@@ -456,6 +463,8 @@ export type Database = {
           selected_authority_link?: SelectedAuthorityLink | null
           year_tag?: number | null
           hero_image_url?: string | null
+          article_angle?: string | null
+          writing_directives?: Record<string, unknown>[] | null
           created_at?: string
           updated_at?: string
           published_at?: string | null
