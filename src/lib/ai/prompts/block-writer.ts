@@ -6,7 +6,6 @@
 
 import {
   SEO_EEAT_RULES,
-  SEO_FAQ_RULES,
   SEO_ANTI_AI_PATTERNS,
   SEO_KEYWORD_RULES,
   SEO_INTERNAL_LINKING_RULES,
@@ -20,6 +19,8 @@ import {
   THEMATIC_CALLOUT_TYPES,
   buildThematicCalloutTemplate,
   buildCtaLireAussiTemplate,
+  getFaqStyleForSite,
+  buildFaqRules,
 } from './seo-guidelines'
 
 interface BlockWriterParams {
@@ -158,9 +159,10 @@ Format : <ul> ou <ol> avec des <li> detailles (pas juste un mot par item).
 Chaque item doit apporter de la valeur.
 
 ### Pour un bloc de type "faq"
-Ecris le bloc FAQ COMPLET avec le H2 et les questions-reponses en HTML :
-${SEO_FAQ_RULES}
-- Le H2 DOIT etre inclus dans le HTML genere (ex: <h2>Questions frequentes</h2> ou <h2>FAQ</h2>)
+Ecris le bloc FAQ COMPLET avec le H2 et l'accordion en HTML :
+${buildFaqRules(getFaqStyleForSite(siteDomain))}
+- Le H2 DOIT etre inclus dans le HTML genere et DOIT contenir le mot-cle principal + "questions frequentes" ou "FAQ"
+- Le H2 NE DOIT PAS etre generique ("FAQ" seul). Il doit etre optimise SEO (ex: "Thermostat connecte : questions frequentes")
 
 ### Pour un bloc de type "callout"
 Ecris un encadre informatif, d'alerte ou d'avis expert en HTML.

@@ -25,34 +25,125 @@ Penalites E-E-A-T :
 - Persona present dans la bio mais JAMAIS cite ou ancre dans le contenu`
 
 /**
- * FAQ format and rules (HTML accordion + Schema.org).
- * Used by: block-writer, plan-architect
+ * FAQ accordion style presets per site domain.
+ * Modern accordion with inline styles for WordPress compatibility.
  */
-export const SEO_FAQ_RULES = `Format HTML : le bloc FAQ DOIT contenir le H2 + l'accordion natif <details>/<summary> avec balisage Schema.org FAQ.
-Structure COMPLETE a generer :
-<div class="mhd-faq-wrapper">
-  <h2 class="mhd-faq-title">Questions frequentes sur [SUJET]</h2>
-  <div class="faq-section" itemscope itemtype="https://schema.org/FAQPage">
-    <details class="mhd-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
-      <summary itemprop="name">Question ici ?</summary>
-      <div class="mhd-faq-content" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+export interface FaqStylePreset {
+  accentColor: string    // Gradient start + icon bg
+  accentLight: string    // Gradient end + hover bg
+  bgColor: string        // Wrapper background
+  borderColor: string    // Wrapper + item borders
+  titleColor: string     // H2 color
+  textColor: string      // Answer text
+  arrowColor: string     // Expand/collapse arrow
+}
+
+export const SITE_FAQ_STYLES: Record<string, FaqStylePreset> = {
+  'smakk.fr': {
+    accentColor: '#0A6CFF',
+    accentLight: '#3B8AFF',
+    bgColor: '#F8FAFF',
+    borderColor: '#DBEAFE',
+    titleColor: '#00052F',
+    textColor: '#334155',
+    arrowColor: '#0A6CFF',
+  },
+  'mon-habitat-durable.fr': {
+    accentColor: '#2D5A27',
+    accentLight: '#3D7A35',
+    bgColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+    titleColor: '#14532D',
+    textColor: '#334155',
+    arrowColor: '#2D5A27',
+  },
+  'shootnbox.fr': {
+    accentColor: '#18181B',
+    accentLight: '#3F3F46',
+    bgColor: '#FAFAFA',
+    borderColor: '#E4E4E7',
+    titleColor: '#18181B',
+    textColor: '#3F3F46',
+    arrowColor: '#EAB308',
+  },
+  'kiftabox.fr': {
+    accentColor: '#7C3AED',
+    accentLight: '#8B5CF6',
+    bgColor: '#FAF5FF',
+    borderColor: '#E9D5FF',
+    titleColor: '#5B21B6',
+    textColor: '#334155',
+    arrowColor: '#7C3AED',
+  },
+}
+
+export const DEFAULT_FAQ_STYLE: FaqStylePreset = {
+  accentColor: '#1e293b',
+  accentLight: '#334155',
+  bgColor: '#f8fafc',
+  borderColor: '#e2e8f0',
+  titleColor: '#1e293b',
+  textColor: '#334155',
+  arrowColor: '#3b82f6',
+}
+
+export function getFaqStyleForSite(siteDomain: string | undefined): FaqStylePreset {
+  const domain = (siteDomain || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '')
+  return SITE_FAQ_STYLES[domain] || DEFAULT_FAQ_STYLE
+}
+
+/**
+ * Build the FAQ accordion HTML template with full inline styles.
+ * Modern design: rounded corners, smooth transitions, per-site colors.
+ */
+export function buildFaqTemplate(style: FaqStylePreset): string {
+  return `<div style="margin:40px 0;padding:0;background:${style.bgColor};border:1px solid ${style.borderColor};border-radius:16px;overflow:hidden">
+  <h2 style="margin:0;padding:22px 28px 18px;font-size:1.35rem;font-weight:800;color:${style.titleColor};border-bottom:2px solid ${style.borderColor}">H2 SEO optimise : [Mot-cle] — Questions frequentes</h2>
+  <div itemscope itemtype="https://schema.org/FAQPage" style="padding:8px 0">
+    <details style="border-bottom:1px solid ${style.borderColor};margin:0" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+      <summary style="padding:16px 28px;font-weight:600;font-size:1rem;color:${style.titleColor};cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;-webkit-appearance:none" itemprop="name">
+        Question optimisee ici ?
+        <span style="flex-shrink:0;font-size:1.3rem;color:${style.arrowColor};transition:transform 0.2s">+</span>
+      </summary>
+      <div style="padding:0 28px 18px;color:${style.textColor};line-height:1.7;font-size:0.95rem" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
         <div itemprop="text">
-          <p>Reponse directe en 2-4 phrases. Solution concrete.</p>
+          <p style="margin:0">Reponse directe en 2-3 phrases. Commence par LA reponse, puis precise si besoin.</p>
         </div>
       </div>
     </details>
-    <!-- Repeter <details> pour chaque question -->
+    <!-- Repeter <details> pour chaque question (3-6 questions) -->
   </div>
-</div>
+</div>`
+}
 
-Regles FAQ :
-- Le <h2> DOIT avoir la classe "mhd-faq-title" et etre inclus UNE SEULE FOIS dans le <div class="mhd-faq-wrapper">
-- Le heading du bloc FAQ doit etre "Questions frequentes sur [sujet de l'article]"
-- Reponses COURTES : 2-4 phrases maximum, directes et actionables
-- Chaque reponse donne une VRAIE SOLUTION rapide a la question posee
-- Optimise pour le featured snippet Google (reponse immediate, pas de bavardage)
-- 3 a 6 questions basees sur les "People Also Ask"
-- UTILISE EXACTEMENT les classes CSS : mhd-faq-wrapper, mhd-faq-title, mhd-faq-item, mhd-faq-content (pas d'autres noms)`
+/**
+ * FAQ format and rules (HTML accordion + Schema.org).
+ * Used by: block-writer, plan-architect
+ */
+export function buildFaqRules(style: FaqStylePreset): string {
+  return `Format HTML : le bloc FAQ est un ACCORDION MODERNE avec balisage Schema.org FAQPage.
+Structure COMPLETE a generer (copie les styles inline EXACTEMENT) :
+
+${buildFaqTemplate(style)}
+
+REGLES FAQ STRICTES :
+1. **H2 SEO OPTIMISE** : le <h2> inclut le mot-cle principal + "Questions frequentes" ou variante naturelle. Exemples :
+   - "Thermostat connecte Heatzy : vos questions frequentes"
+   - "FAQ : tout savoir sur le comparatif des box cuisine"
+   - NE PAS ecrire "Questions frequentes" seul (trop generique, zero signal SEO)
+2. **BALISAGE FAQPage** : le <div> wrapper DOIT avoir itemscope itemtype="https://schema.org/FAQPage". Chaque <details> = Question, chaque reponse = Answer
+3. **ACCORDION HTML NATIF** : utilise <details>/<summary> (pas de JS). Chaque question s'ouvre/ferme au clic
+4. **STYLES INLINE OBLIGATOIRES** : copie EXACTEMENT les styles du template ci-dessus (padding, couleurs, border-radius, etc.)
+5. **SUMMARY sans marqueur natif** : ajoute list-style:none et -webkit-appearance:none sur chaque <summary>. Le "+" en <span> fait office de fleche
+6. **REPONSES COURTES** : 2-3 phrases MAX par reponse. Commence par LA reponse directe (optimise featured snippet). Pas de intro, pas de "En effet...", pas de bavardage
+7. **3-6 QUESTIONS** basees sur les "People Also Ask" et le sujet. Questions naturelles que le lecteur se pose reellement
+8. **PAS DE HEADING DANS LES REPONSES** : uniquement du <p> dans le div itemprop="text". Pas de <h3>, pas de <strong> excessif
+9. Le wrapper a border-radius:16px et background:${style.bgColor}. Les items ont border-bottom:1px solid ${style.borderColor}
+10. La DERNIERE question n'a PAS de border-bottom (ajoute style="border-bottom:none" sur le dernier <details>)`
+}
+
+// Legacy constant for backward compatibility — uses default style
+export const SEO_FAQ_RULES = buildFaqRules(DEFAULT_FAQ_STYLE)
 
 /**
  * Forbidden AI-sounding patterns.

@@ -6,7 +6,6 @@
 
 import {
   SEO_EEAT_RULES,
-  SEO_FAQ_RULES,
   SEO_HEADING_STRUCTURE_RULES,
   SEO_INTERNAL_LINKING_RULES,
   INTENT_STRATEGIES,
@@ -267,8 +266,15 @@ Le block-writer inserera un encart "A lire aussi" dans les sections qui ont des 
 
 ## CONTENU
 - Respecte la fourchette de mots indiquee dans la strategie ci-dessus
-- Section FAQ (optionnelle) avec le heading "FAQ" en type "faq". Ne l'inclus PAS si la strategie l'interdit (ex: discover). L'utilisateur pourra l'ajouter manuellement plus tard si besoin.
-${SEO_FAQ_RULES}
+- Section FAQ (optionnelle) en type "faq". Ne l'inclus PAS si la strategie l'interdit (ex: discover).
+- Le heading du bloc FAQ DOIT etre un H2 SEO optimise contenant le mot-cle principal. Exemples :
+  * "[Mot-cle] : vos questions frequentes"
+  * "FAQ [mot-cle] : les reponses essentielles"
+  * NE PAS ecrire "FAQ" seul ni "Questions frequentes" seul (zero signal SEO)
+- 3-6 questions basees sur les PAA + questions naturelles du lecteur
+- Reponses COURTES (2-3 phrases) optimisees featured snippet
+- Balisage Schema.org FAQPage dans le HTML (genere par le block-writer)
+- Format accordion <details>/<summary> avec styles inline (genere par le block-writer)
 - Blocs "list" pour les elements enumeratifs
 
 ## NUGGETS — DONNEES VERIFIEES DU PERSONA (SOURCE D'INFORMATION PRIORITAIRE)
@@ -673,7 +679,7 @@ ${productComparison.products.filter(p => p.affiliate_enabled && p.affiliate_url)
 13. WORD COUNT MINIMUM : chaque bloc H2 DOIT avoir word_count >= 250. Chaque H3 >= 150. JAMAIS de word_count < 120 sauf intro. Un word_count de 30, 50 ou 80 est une ERREUR — le redacteur ne peut rien ecrire de substantiel en si peu de mots.
 14. KEY IDEAS MECE : chaque bloc a un "key_ideas" (3-5 idees) qui definit son perimetre exclusif. AUCUN chevauchement entre sections.
 15. LONGUEUR DES TITRES : chaque heading H2/H3/H4 DOIT faire MAX 80 caracteres. Compte les caracteres avant de valider. Si un titre depasse 80 chars, reformule-le plus court.
-16. FAQ : le heading du bloc FAQ doit etre simplement "FAQ" (pas de variante longue). Le balisage Schema.org FAQPage est OBLIGATOIRE dans le HTML genere.
+16. FAQ : le heading du bloc FAQ DOIT contenir le mot-cle principal + "questions frequentes" ou "FAQ". Ex: "[Mot-cle] : FAQ", "FAQ [mot-cle]". JAMAIS "FAQ" seul. Le balisage Schema.org FAQPage est OBLIGATOIRE.
 17. **TERMES TF-IDF EN Hn** : si des termes TF-IDF sont fournis, au moins 3-5 de ces termes doivent apparaitre dans les H2/H3 de l'article (integres naturellement, pas forces). Ils enrichissent le signal semantique pour Google.
 
 Retourne UNIQUEMENT le JSON, rien d'autre.`
