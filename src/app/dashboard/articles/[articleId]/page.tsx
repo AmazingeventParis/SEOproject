@@ -848,6 +848,7 @@ export default function ArticleDetailPage() {
     relevance_score: number;
     status: 'suggested' | 'approved' | 'rejected' | 'injected' | 'rolled_back';
     injected_at?: string;
+    is_silo_match?: boolean;
   }> | null>(null);
   const [backlinksLoading, setBacklinksLoading] = useState(false);
   const [backlinksActionLoading, setBacklinksActionLoading] = useState<number | null>(null);
@@ -3296,6 +3297,14 @@ export default function ArticleDetailPage() {
                             >
                               {suggestion.injection_type === "wrap_existing" ? "Lien existant" : "Lien contextuel"}
                             </Badge>
+                            {suggestion.is_silo_match && (
+                            <Badge
+                              variant="outline"
+                              className="bg-purple-50 text-purple-700 border-purple-200"
+                            >
+                              Meme silo
+                            </Badge>
+                            )}
                             <Badge
                               variant="outline"
                               className={

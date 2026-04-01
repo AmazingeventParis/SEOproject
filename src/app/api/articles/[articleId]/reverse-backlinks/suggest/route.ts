@@ -4,6 +4,7 @@ import {
   findBacklinkCandidates,
   generateBacklinkSuggestion,
   type BacklinkSuggestion,
+  type SiloArticleInfo,
 } from '@/lib/seo/reverse-backlinks'
 
 export const maxDuration = 120
@@ -23,7 +24,7 @@ export async function POST(
   // Fetch article
   const { data: article, error: fetchError } = await supabase
     .from('seo_articles')
-    .select('id, keyword, title, wp_post_id, wp_url, status, site_id, serp_data')
+    .select('id, keyword, title, wp_post_id, wp_url, status, site_id, silo_id, serp_data')
     .eq('id', articleId)
     .single()
 
@@ -46,13 +47,28 @@ export async function POST(
   }
 
   try {
-    // Find top 3 candidates
+    // Fetch same-silo articles for priority scoring
+    let siloArticles: SiloArticleInfo[] = []
+    if (article.silo_id) {
+      const { data: siloData } = await supabase
+        .from('seo_articles')
+        .select('keyword, title, slug, wp_post_id, silo_id')
+        .eq('silo_id', article.silo_id)
+        .neq('id', article.id)
+        .in('status', ['published', 'refresh_needed'])
+      if (siloData && siloData.length > 0) {
+        siloArticles = siloData as SiloArticleInfo[]
+      }
+    }
+
+    // Find top 3 candidates with silo priority
     const candidates = await findBacklinkCandidates(
       article.site_id,
       article.keyword,
       article.title || article.keyword,
       article.wp_post_id!,
-      article.wp_url!
+      article.wp_url!,
+      siloArticles
     )
 
     if (candidates.length === 0) {

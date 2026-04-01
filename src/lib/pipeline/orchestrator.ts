@@ -28,7 +28,7 @@ import { buildOptimizeBlocksPrompt } from '@/lib/ai/prompts/optimize-blocks'
 import { checkNuggetIntegration, type NuggetCheckDetail, type NuggetIntegrationResult } from './quality-checks'
 import { convertHtmlToGutenbergBlocks } from './gutenberg'
 import { checkBrokenLinks, type LinkCheckSummary } from '@/lib/seo/link-checker'
-import { findBacklinkCandidates, generateBacklinkSuggestion, type BacklinkSuggestion } from '@/lib/seo/reverse-backlinks'
+import { findBacklinkCandidates, generateBacklinkSuggestion, type BacklinkSuggestion, type SiloArticleInfo } from '@/lib/seo/reverse-backlinks'
 import { analyzeReadability, type ReadabilityResult } from '@/lib/seo/readability'
 import {
   analyzeSemanticCoverage,
@@ -2601,12 +2601,29 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
   if (article.wp_post_id && article.wp_url && (article.status === 'published' || article.status === 'refresh_needed')) {
     try {
       console.log(`[seo-audit] Generating reverse backlink suggestions…`)
+
+      // Fetch same-silo articles for priority scoring
+      let siloArticles: SiloArticleInfo[] = []
+      if (article.silo_id) {
+        const { data: siloData } = await supabase
+          .from('seo_articles')
+          .select('keyword, title, slug, wp_post_id, silo_id')
+          .eq('silo_id', article.silo_id)
+          .neq('id', article.id)
+          .in('status', ['published', 'refresh_needed'])
+        if (siloData && siloData.length > 0) {
+          siloArticles = siloData as SiloArticleInfo[]
+          console.log(`[seo-audit] Found ${siloArticles.length} same-silo articles for priority scoring`)
+        }
+      }
+
       const candidates = await findBacklinkCandidates(
         article.site_id,
         article.keyword,
         article.title || article.keyword,
         article.wp_post_id,
-        article.wp_url
+        article.wp_url,
+        siloArticles
       )
 
       if (candidates.length > 0) {

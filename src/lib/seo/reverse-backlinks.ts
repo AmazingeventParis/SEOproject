@@ -1,14 +1,17 @@
 // ============================================================
-// Reverse Backlinks — Semi-Auto Internal Linking
+// Reverse Backlinks — Semi-Auto Internal Linking (Expert SEO)
 // After publishing an article, find 2-3 existing articles on
 // the same WP site and inject links back to the new article.
 //
 // SEO Guidelines enforced:
+// - Silo priority: same-silo articles scored 2x higher
+// - Link density cap: skip articles with 8+ internal links
+// - Paragraph exclusion: never in intro (first 2 <p>), never in last <p>
 // - Anchor ≠ exact keyword/title/slug (varied, natural 2-6 words)
 // - Max 1 link injected per candidate post
-// - No paragraph added just to place a link (wrap_existing only by default)
+// - No paragraph added just to place a link (wrap_existing only)
 // - Skip candidates that already link to the target article
-// - Skip paragraphs with 1+ existing link (conservative)
+// - Skip paragraphs with 2+ existing links
 // - No fallback to random paragraph — relevance required
 // - Stopwords excluded from scoring
 // ============================================================
@@ -30,6 +33,15 @@ export interface BacklinkSuggestion {
   relevance_score: number
   status: 'suggested' | 'approved' | 'rejected' | 'injected' | 'rolled_back'
   injected_at?: string
+  is_silo_match?: boolean
+}
+
+export interface SiloArticleInfo {
+  keyword: string
+  title: string | null
+  slug: string | null
+  wp_post_id: number | null
+  silo_id: string | null
 }
 
 // ---- Constants ----
@@ -48,13 +60,22 @@ const STOPWORDS = new Set([
 const MIN_WORD_LEN = 4
 
 /** Max existing links allowed in a paragraph to consider it */
-const MAX_EXISTING_LINKS_IN_PARA = 1
+const MAX_EXISTING_LINKS_IN_PARA = 2
 
 /** Min score to consider a candidate */
 const MIN_CANDIDATE_SCORE = 4
 
 /** Min paragraph relevance score to inject */
 const MIN_PARAGRAPH_SCORE = 2
+
+/** Max internal links an article can already have before we skip it */
+const MAX_EXISTING_LINKS_IN_POST = 8
+
+/** Silo match scoring bonus multiplier */
+const SILO_BONUS_MULTIPLIER = 2
+
+/** Number of intro paragraphs to skip (never place a link there) */
+const INTRO_SKIP_PARAGRAPHS = 2
 
 // ---- Helpers ----
 
@@ -74,6 +95,24 @@ function countLinksInHtml(html: string): number {
   return (html.match(/<a\s/gi) || []).length
 }
 
+/**
+ * Count internal links in the full post content (links pointing to the same domain).
+ */
+function countInternalLinks(htmlContent: string, siteDomain: string): number {
+  const linkRegex = /<a\s[^>]*href=["']([^"']+)["']/gi
+  let count = 0
+  let match
+  const domainNorm = siteDomain.replace(/^www\./, '').toLowerCase()
+  while ((match = linkRegex.exec(htmlContent)) !== null) {
+    const href = match[1].toLowerCase()
+    // Relative links or same-domain links
+    if (href.startsWith('/') || href.includes(domainNorm)) {
+      count++
+    }
+  }
+  return count
+}
+
 function extractParagraphs(html: string): { text: string; index: number }[] {
   const paragraphs: { text: string; index: number }[] = []
   const regex = /<p[^>]*>([\s\S]*?)<\/p>/gi
@@ -87,6 +126,17 @@ function extractParagraphs(html: string): { text: string; index: number }[] {
     idx++
   }
   return paragraphs
+}
+
+/**
+ * Extract the site domain from a WP URL.
+ */
+function extractDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
 }
 
 // ---- Scoring ----
@@ -152,27 +202,41 @@ function alreadyLinksTo(htmlContent: string, targetUrl: string): boolean {
 
 /**
  * Fetch all published WP posts for a site, score them, and return the top 3 candidates.
- * Excludes:
- * - The article's own WP post
- * - Posts that already link to the target article
- * - Posts below minimum relevance score
+ *
+ * SEO expert rules applied:
+ * - Silo articles are scored with a 2x bonus (topical relevance)
+ * - Articles with 8+ internal links are skipped (over-optimized)
+ * - Self-article is excluded
+ * - Articles already linking to the target are excluded
  */
 export async function findBacklinkCandidates(
   siteId: string,
   articleKeyword: string,
   articleTitle: string,
   articleWpPostId: number,
-  articleWpUrl: string
-): Promise<{ id: number; title: string; link: string; score: number }[]> {
+  articleWpUrl: string,
+  siloArticles?: SiloArticleInfo[]
+): Promise<{ id: number; title: string; link: string; score: number; isSiloMatch: boolean }[]> {
   const allPosts = await getAllPublishedPosts(siteId)
+  const siteDomain = extractDomain(articleWpUrl)
+
+  // Build a set of WP post IDs that are in the same silo
+  const siloWpPostIds = new Set<number>()
+  if (siloArticles && siloArticles.length > 0) {
+    for (const sa of siloArticles) {
+      if (sa.wp_post_id && sa.wp_post_id !== articleWpPostId) {
+        siloWpPostIds.add(sa.wp_post_id)
+      }
+    }
+  }
 
   // Exclude the article itself
   const candidates = allPosts.filter(p => p.id !== articleWpPostId)
 
-  const scored: { id: number; title: string; link: string; score: number }[] = []
+  const scored: { id: number; title: string; link: string; score: number; isSiloMatch: boolean }[] = []
 
-  // Fetch content in batches of 5 (limit to 20 for perf)
-  const toFetch = candidates.slice(0, 20)
+  // Fetch content in batches of 5 (limit to 30 for perf — more than before to find silo matches)
+  const toFetch = candidates.slice(0, 30)
   for (let i = 0; i < toFetch.length; i += 5) {
     const batch = toFetch.slice(i, i + 5)
     const results = await Promise.allSettled(
@@ -187,9 +251,24 @@ export async function findBacklinkCandidates(
         // Skip if already links to the target article
         if (alreadyLinksTo(post.content, articleWpUrl)) continue
 
-        const sc = scoreCandidate(articleKeyword, articleTitle, post.title, post.content)
+        // Skip if the article already has too many internal links
+        const internalLinkCount = countInternalLinks(post.content, siteDomain)
+        if (internalLinkCount >= MAX_EXISTING_LINKS_IN_POST) {
+          console.log(`[reverse-backlinks] Skipping "${post.title}" — ${internalLinkCount} internal links (max ${MAX_EXISTING_LINKS_IN_POST})`)
+          continue
+        }
+
+        let sc = scoreCandidate(articleKeyword, articleTitle, post.title, post.content)
+        const isSiloMatch = siloWpPostIds.has(post.id)
+
+        // Silo bonus: same-silo articles get 2x score (topical authority)
+        if (isSiloMatch) {
+          sc = Math.round(sc * SILO_BONUS_MULTIPLIER)
+          console.log(`[reverse-backlinks] Silo match: "${post.title}" — score boosted to ${sc}`)
+        }
+
         if (sc >= MIN_CANDIDATE_SCORE) {
-          scored.push({ id: post.id, title: post.title, link: post.link, score: sc })
+          scored.push({ id: post.id, title: post.title, link: post.link, score: sc, isSiloMatch })
         }
       }
     }
@@ -206,8 +285,10 @@ export async function findBacklinkCandidates(
  * Find the best paragraph in the candidate content that's most relevant
  * to the new article's topic. Returns null if no paragraph is relevant enough.
  *
- * Rules:
- * - Skip paragraphs with 1+ existing links (conservative, avoid link stacking)
+ * SEO expert rules:
+ * - NEVER in intro (skip first 2 paragraphs — intro is sacred for SEO)
+ * - NEVER in last paragraph (conclusion = bad placement for internal links)
+ * - Skip paragraphs with 2+ existing links (avoid link stacking)
  * - Skip paragraphs where no significant keyword word appears
  * - No fallback to random paragraph — relevance is required
  */
@@ -219,8 +300,20 @@ function findBestParagraph(
   let bestScore = 0
   let bestPara: { text: string; index: number; score: number } | null = null
 
-  for (const para of paragraphs) {
-    // Skip paragraphs with existing links (conservative limit)
+  // Determine exclusion zones
+  const totalParagraphs = paragraphs.length
+  if (totalParagraphs < 4) return null // Not enough paragraphs for safe placement
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    const para = paragraphs[i]
+
+    // RULE: Skip intro paragraphs (first 2 real paragraphs)
+    if (para.index < INTRO_SKIP_PARAGRAPHS) continue
+
+    // RULE: Skip the last paragraph (conclusion zone)
+    if (i === paragraphs.length - 1) continue
+
+    // RULE: Skip paragraphs with too many existing links
     if (countLinksInHtml(para.text) >= MAX_EXISTING_LINKS_IN_PARA) continue
 
     const plain = stripHtml(para.text).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -228,6 +321,14 @@ function findBestParagraph(
     for (const w of words) {
       if (plain.includes(w)) score++
     }
+
+    // Prefer paragraphs in the middle of the article (body zone)
+    // Give a small boost to paragraphs not near the edges
+    const relativePosition = para.index / totalParagraphs
+    if (relativePosition >= 0.2 && relativePosition <= 0.8) {
+      score += 1 // Slight bonus for body zone
+    }
+
     if (score > bestScore) {
       bestScore = score
       bestPara = { ...para, score }
@@ -272,7 +373,8 @@ URL cible : ${targetUrl}
 Regles STRICTES :
 - L'ancre doit etre une expression DEJA PRESENTE dans le paragraphe (pas un mot ajoute)
 - L'ancre NE DOIT PAS etre le keyword exact "${keyword}" ni le titre exact "${title}"
-- L'ancre = 2-6 mots, expression naturelle liee au sujet
+- L'ancre = 2-6 mots, expression naturelle liee thematiquement au sujet cible
+- Privilegier une expression qui inclut un mot-cle ou synonyme du sujet cible
 - Le lien doit etre INVISIBLE pour le lecteur (pas de rupture de ton)
 - Si aucune expression naturelle ne convient, reponds {"impossible": true}
 
@@ -326,7 +428,7 @@ OU : { "impossible": true }`,
  */
 export async function generateBacklinkSuggestion(
   article: { keyword: string; title: string; wpUrl: string },
-  candidate: { id: number; title: string; link: string },
+  candidate: { id: number; title: string; link: string; isSiloMatch?: boolean },
   siteId: string
 ): Promise<BacklinkSuggestion | null> {
   // Fetch full content
@@ -338,7 +440,7 @@ export async function generateBacklinkSuggestion(
   const paragraphs = extractParagraphs(post.content)
   if (paragraphs.length === 0) return null
 
-  // Find best relevant paragraph
+  // Find best relevant paragraph (respects intro/conclusion exclusion)
   const bestPara = findBestParagraph(paragraphs, article.keyword)
   if (!bestPara) return null
 
@@ -363,6 +465,7 @@ export async function generateBacklinkSuggestion(
     paragraph_index: bestPara.index,
     relevance_score: bestPara.score,
     status: 'suggested',
+    is_silo_match: candidate.isSiloMatch || false,
   }
 }
 
