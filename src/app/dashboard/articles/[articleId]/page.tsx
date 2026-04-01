@@ -1067,8 +1067,8 @@ export default function ArticleDetailPage() {
       // Refetch article and pipeline
       await Promise.all([fetchArticle(), fetchPipelineRuns()]);
 
-      // After publish: auto-suggest reverse backlinks and navigate to SEO tab
-      if (endpoint === "publish") {
+      // After go-live (publish + index): auto-suggest reverse backlinks and navigate to SEO tab
+      if (endpoint === "go-live") {
         toast({
           title: "Backlinks retour",
           description: "Recherche de suggestions de maillage retour...",
