@@ -3328,28 +3328,36 @@ export default function ArticleDetailPage() {
                           </div>
                         </div>
 
-                        {/* Diff preview */}
+                        {/* Diff preview with highlighted anchor */}
                         <div className="space-y-2 text-xs">
                           <div className="bg-red-50 border border-red-100 rounded p-2.5">
                             <p className="text-red-400 font-medium mb-1 text-[10px] uppercase tracking-wide">Original</p>
                             <div
-                              className="text-red-800 leading-relaxed"
+                              className="text-red-800 leading-relaxed [&_a]:pointer-events-none"
                               dangerouslySetInnerHTML={{ __html: suggestion.original_paragraph }}
                             />
                           </div>
                           <div className="bg-green-50 border border-green-100 rounded p-2.5">
-                            <p className="text-green-400 font-medium mb-1 text-[10px] uppercase tracking-wide">Modifie</p>
+                            <p className="text-green-400 font-medium mb-1 text-[10px] uppercase tracking-wide">
+                              {suggestion.injection_type === "contextual_add" ? "Modifie (phrases ajoutees)" : "Modifie"}
+                            </p>
                             <div
-                              className="text-green-800 leading-relaxed"
+                              className="text-green-800 leading-relaxed [&_a]:bg-yellow-200 [&_a]:text-green-900 [&_a]:font-bold [&_a]:px-1 [&_a]:py-0.5 [&_a]:rounded [&_a]:border [&_a]:border-yellow-400 [&_a]:no-underline [&_a]:pointer-events-none"
                               dangerouslySetInnerHTML={{ __html: suggestion.modified_paragraph }}
                             />
                           </div>
                         </div>
 
                         {/* Anchor text */}
-                        <p className="text-xs text-muted-foreground">
-                          Ancre : <span className="font-medium">{suggestion.anchor_text}</span>
-                        </p>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-muted-foreground">Ancre :</span>
+                          <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-900 font-semibold px-2 py-0.5 rounded border border-yellow-300">
+                            🔗 {suggestion.anchor_text}
+                          </span>
+                          {suggestion.injection_type === "contextual_add" && (
+                            <span className="text-amber-600 text-[10px]">+ phrases de transition</span>
+                          )}
+                        </div>
 
                         {/* Info lien : URL article + lien editeur WP */}
                         {article.wp_url && (
