@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import type {
@@ -836,6 +836,8 @@ export default function ArticleDetailPage() {
   const [writeProgress, setWriteProgress] = useState<{ current: number; total: number } | null>(null);
   const [gscAnalysis, setGscAnalysis] = useState<Record<string, unknown> | null>(null);
   const [gscLoading, setGscLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("plan");
+  const backlinksRef = useRef<HTMLDivElement>(null);
   const [reverseBacklinks, setReverseBacklinks] = useState<Array<{
     wp_post_id: number;
     wp_post_title: string;
@@ -1064,6 +1066,22 @@ export default function ArticleDetailPage() {
       });
       // Refetch article and pipeline
       await Promise.all([fetchArticle(), fetchPipelineRuns()]);
+
+      // After publish: auto-suggest reverse backlinks and navigate to SEO tab
+      if (endpoint === "publish") {
+        toast({
+          title: "Backlinks retour",
+          description: "Recherche de suggestions de maillage retour...",
+        });
+        setActiveTab("seo");
+        // Trigger backlinks suggestion in background
+        suggestBacklinks().then(() => {
+          // Scroll to backlinks section after suggestions load
+          setTimeout(() => {
+            backlinksRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 300);
+        });
+      }
     } catch (err) {
       toast({
         variant: "destructive",
@@ -1993,7 +2011,7 @@ export default function ArticleDetailPage() {
       <Separator />
 
       {/* Tabs */}
-      <Tabs defaultValue="plan" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
           <TabsTrigger value="plan">
             <FileText className="mr-1.5 h-4 w-4" />
@@ -3234,7 +3252,7 @@ export default function ArticleDetailPage() {
 
           {/* Reverse Backlinks — only for published articles */}
           {(article.status === "published" || article.status === "refresh_needed") && (
-            <Card className="border-orange-200">
+            <Card className="border-orange-200" ref={backlinksRef}>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
