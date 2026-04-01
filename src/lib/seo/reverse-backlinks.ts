@@ -392,9 +392,81 @@ function findParagraphForSentenceAdd(
 // ---- Anchor Text Generation ----
 
 /**
- * Try to find a natural anchor text already present in the paragraph.
+ * Wrap an anchor text found in a paragraph with a link tag.
+ * Returns null if the text is not found or is already inside a link.
  */
-async function generateNaturalAnchor(
+function wrapAnchorInParagraph(
+  paragraphHtml: string,
+  anchorText: string,
+  targetUrl: string
+): string | null {
+  const anchorRegex = new RegExp(
+    `(?<![">])${anchorText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![<"])`,
+    'i'
+  )
+  const modified = paragraphHtml.replace(
+    anchorRegex,
+    `<a href="${targetUrl}">$&</a>`
+  )
+  if (modified === paragraphHtml) return null
+  return modified
+}
+
+/**
+ * Strategy 1: Exact match — find the exact keyword already present in the paragraph.
+ * Best SEO practice: exact-match anchor is the strongest signal.
+ */
+function tryExactAnchor(
+  paragraphHtml: string,
+  keyword: string,
+  targetUrl: string
+): { anchor: string; modifiedParagraph: string } | null {
+  const modified = wrapAnchorInParagraph(paragraphHtml, keyword, targetUrl)
+  if (modified) {
+    console.log(`[reverse-backlinks] ✓ Exact anchor found: "${keyword}"`)
+    return { anchor: keyword, modifiedParagraph: modified }
+  }
+  return null
+}
+
+/**
+ * Strategy 2: Semi-exact match — find a significant sub-expression of the keyword
+ * already present in the paragraph (e.g., "thermostat connecté" found when
+ * keyword is "thermostat connecté heatzy").
+ * Tries longest sub-expressions first for maximum relevance.
+ */
+function trySemiExactAnchor(
+  paragraphHtml: string,
+  keyword: string,
+  targetUrl: string
+): { anchor: string; modifiedParagraph: string } | null {
+  const words = keyword.split(/\s+/).filter(w => w.length >= 3)
+  if (words.length < 2) return null
+
+  // Generate sub-expressions from longest to shortest (minimum 2 words)
+  const candidates: string[] = []
+  for (let len = words.length - 1; len >= 2; len--) {
+    for (let start = 0; start <= words.length - len; start++) {
+      candidates.push(words.slice(start, start + len).join(' '))
+    }
+  }
+
+  for (const candidate of candidates) {
+    const modified = wrapAnchorInParagraph(paragraphHtml, candidate, targetUrl)
+    if (modified) {
+      console.log(`[reverse-backlinks] ✓ Semi-exact anchor found: "${candidate}"`)
+      return { anchor: candidate, modifiedParagraph: modified }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Strategy 3: AI thematic anchor — ask the AI to identify a relevant expression
+ * already in the text. Exact keyword and partial matches are welcome.
+ */
+async function generateThematicAnchor(
   keyword: string,
   title: string,
   paragraphText: string,
@@ -407,7 +479,7 @@ async function generateNaturalAnchor(
     [
       {
         role: 'user',
-        content: `Tu es un expert SEO en maillage interne. Dans le paragraphe suivant, identifie une expression naturelle de 2-6 mots deja presente dans le texte qui est thematiquement liee au sujet cible, puis transforme-la en lien.
+        content: `Tu es un expert SEO en maillage interne. Dans le paragraphe suivant, identifie la meilleure expression de 2-6 mots DEJA PRESENTE dans le texte pour servir d'ancre vers l'article cible.
 
 Paragraphe :
 "${plainPara.slice(0, 800)}"
@@ -415,15 +487,18 @@ Paragraphe :
 Sujet cible : "${keyword}" (titre : "${title}")
 URL cible : ${targetUrl}
 
-Regles STRICTES :
-- L'ancre doit etre une expression DEJA PRESENTE dans le paragraphe (pas un mot ajoute)
-- L'ancre NE DOIT PAS etre le keyword exact "${keyword}" ni le titre exact "${title}"
-- L'ancre = 2-6 mots, expression naturelle liee thematiquement au sujet cible
-- Privilegier une expression qui inclut un mot-cle ou synonyme du sujet cible
-- Le lien doit etre INVISIBLE pour le lecteur (pas de rupture de ton)
-- Si aucune expression naturelle ne convient, reponds {"impossible": true}
+PRIORITE DES ANCRES (du meilleur au moins bon) :
+1. ANCRE EXACTE : le mot-cle "${keyword}" tel quel s'il est present dans le texte
+2. ANCRE SEMI-EXACTE : une partie du mot-cle (ex: "thermostat connecte" si le keyword est "thermostat connecte heatzy")
+3. ANCRE THEMATIQUE : un synonyme ou expression du meme champ semantique (ex: "regulation du chauffage" pour un article sur les thermostats)
 
-JSON : { "anchor_text": "expression choisie", "impossible": false }
+Regles :
+- L'ancre DOIT etre une expression DEJA PRESENTE dans le paragraphe (mot pour mot)
+- 2-6 mots, pas de mot isole
+- Le lien doit etre naturel pour le lecteur
+- Si aucune expression pertinente ne convient, reponds {"impossible": true}
+
+JSON : { "anchor_text": "expression choisie", "anchor_type": "exact|semi_exact|thematic", "impossible": false }
 OU : { "impossible": true }`,
       },
     ]
@@ -444,21 +519,10 @@ OU : { "impossible": true }`,
     const anchor = parsed.anchor_text
     if (!anchor || anchor.length < 3) return null
 
-    const anchorLower = anchor.toLowerCase().trim()
-    if (anchorLower === keyword.toLowerCase().trim()) return null
-    if (anchorLower === title.toLowerCase().trim()) return null
+    const modified = wrapAnchorInParagraph(paragraphText, anchor, targetUrl)
+    if (!modified) return null
 
-    const anchorRegex = new RegExp(
-      `(?<![">])${anchor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![<"])`,
-      'i'
-    )
-    const modified = paragraphText.replace(
-      anchorRegex,
-      `<a href="${targetUrl}">$&</a>`
-    )
-
-    if (modified === paragraphText) return null
-
+    console.log(`[reverse-backlinks] ✓ AI thematic anchor found: "${anchor}" (type: ${parsed.anchor_type || 'unknown'})`)
     return { anchor, modifiedParagraph: modified }
   } catch {
     console.error('[reverse-backlinks] Failed to parse anchor AI response:', JSON.stringify(aiResponse.content.slice(0, 500)))
@@ -491,19 +555,21 @@ async function generateTransitionalSentences(
 PARAGRAPHE EXISTANT :
 "${plainPara.slice(0, 600)}"
 
-ARTICLE DE L'ARTICLE HOTE : "${candidateTitle}"
+ARTICLE HOTE (celui qu'on modifie) : "${candidateTitle}"
 ARTICLE CIBLE A LINKER : "${title}" (mot-cle : "${keyword}")
 URL CIBLE : ${targetUrl}
+
+CONTEXTE : L'article cible traite de "${keyword}". Tu dois comprendre ce sujet pour creer une transition logique depuis le paragraphe existant vers ce sujet.
 
 REGLES STRICTES :
 - Genere 1-2 phrases MAX (40 mots max au total) qui font la TRANSITION entre le sujet du paragraphe et le sujet de l'article cible
 - La transition doit etre NATURELLE et LOGIQUE : le lecteur ne doit pas sentir qu'on force un lien
 - Inclus UN lien <a href="${targetUrl}">ancre de 2-6 mots</a> dans ces phrases
-- L'ancre NE DOIT PAS etre le keyword exact "${keyword}" ni le titre exact — utilise une expression naturelle, un synonyme ou une variante
+- PRIORITE ANCRE : utilise le mot-cle exact "${keyword}" comme ancre si possible, sinon une variante proche ou un synonyme naturel
 - Le ton doit correspondre au reste du paragraphe
 - Ces phrases s'ajoutent APRES le paragraphe, pas dedans
 - Exemples de bonnes transitions :
-  * "Pour aller plus loin dans la regulation de votre chauffage, decouvrez notre <a href="URL">guide du thermostat connecte</a>."
+  * "Pour aller plus loin, decouvrez notre <a href="URL">${keyword}</a> en detail."
   * "Ce point rejoint d'ailleurs la question du <a href="URL">pilotage intelligent du chauffage</a>, un sujet que nous avons detaille."
 
 JSON : { "sentences": "1-2 phrases avec le lien HTML inclus", "anchor_text": "texte de l'ancre seul", "impossible": false }
@@ -546,9 +612,11 @@ OU : { "impossible": true }`,
 /**
  * Generate a backlink suggestion for a single candidate post.
  *
- * Strategy (in order):
- * 1. Try to find a natural anchor in a relevant paragraph (wrap_existing)
- * 2. If no anchor found, add 1-2 transitional sentences (contextual_add)
+ * Strategy (in priority order — expert SEO best practices):
+ * 1. EXACT ANCHOR: keyword found verbatim in existing text → wrap it
+ * 2. SEMI-EXACT ANCHOR: partial keyword match in existing text → wrap it
+ * 3. THEMATIC ANCHOR (AI): AI finds a semantically related expression → wrap it
+ * 4. TRANSITIONAL SENTENCES: no anchor possible → create 1-2 phrases with link
  */
 export async function generateBacklinkSuggestion(
   article: { keyword: string; title: string; wpUrl: string },
@@ -562,25 +630,62 @@ export async function generateBacklinkSuggestion(
   const paragraphs = extractParagraphs(post.content)
   if (paragraphs.length === 0) return null
 
-  // Strategy 1: Try natural anchor wrapping
+  // Get eligible paragraphs (respects intro/conclusion exclusion, link density)
   const bestPara = findBestParagraph(paragraphs, article.keyword)
+
   if (bestPara) {
-    const result = await generateNaturalAnchor(
+    // Strategy 1: EXACT ANCHOR — keyword found verbatim
+    const exactResult = tryExactAnchor(bestPara.text, article.keyword, article.wpUrl)
+    if (exactResult) {
+      return {
+        wp_post_id: candidate.id,
+        wp_post_title: candidate.title,
+        wp_post_url: candidate.link,
+        injection_type: 'wrap_existing',
+        anchor_text: exactResult.anchor,
+        original_paragraph: bestPara.text,
+        modified_paragraph: exactResult.modifiedParagraph,
+        paragraph_index: bestPara.index,
+        relevance_score: bestPara.score + 10, // Exact match bonus
+        status: 'suggested',
+        is_silo_match: candidate.isSiloMatch || false,
+      }
+    }
+
+    // Strategy 2: SEMI-EXACT ANCHOR — partial keyword match
+    const semiResult = trySemiExactAnchor(bestPara.text, article.keyword, article.wpUrl)
+    if (semiResult) {
+      return {
+        wp_post_id: candidate.id,
+        wp_post_title: candidate.title,
+        wp_post_url: candidate.link,
+        injection_type: 'wrap_existing',
+        anchor_text: semiResult.anchor,
+        original_paragraph: bestPara.text,
+        modified_paragraph: semiResult.modifiedParagraph,
+        paragraph_index: bestPara.index,
+        relevance_score: bestPara.score + 5, // Semi-exact bonus
+        status: 'suggested',
+        is_silo_match: candidate.isSiloMatch || false,
+      }
+    }
+
+    // Strategy 3: AI THEMATIC ANCHOR — AI finds a related expression
+    const thematicResult = await generateThematicAnchor(
       article.keyword,
       article.title,
       bestPara.text,
       article.wpUrl
     )
-
-    if (result) {
+    if (thematicResult) {
       return {
         wp_post_id: candidate.id,
         wp_post_title: candidate.title,
         wp_post_url: candidate.link,
         injection_type: 'contextual_wrap',
-        anchor_text: result.anchor,
+        anchor_text: thematicResult.anchor,
         original_paragraph: bestPara.text,
-        modified_paragraph: result.modifiedParagraph,
+        modified_paragraph: thematicResult.modifiedParagraph,
         paragraph_index: bestPara.index,
         relevance_score: bestPara.score,
         status: 'suggested',
@@ -589,8 +694,54 @@ export async function generateBacklinkSuggestion(
     }
   }
 
-  // Strategy 2: No natural anchor → add transitional sentences
-  console.log(`[reverse-backlinks] No natural anchor in "${candidate.title}" — trying sentence addition`)
+  // Also try exact/semi-exact on ALL eligible paragraphs (not just the best-scored one)
+  // The keyword might appear in a different paragraph than the highest-scored one
+  const totalParagraphs = paragraphs.length
+  if (totalParagraphs >= 4) {
+    for (const para of paragraphs) {
+      if (para.index < INTRO_SKIP_PARAGRAPHS) continue
+      if (para === paragraphs[paragraphs.length - 1]) continue
+      if (countLinksInHtml(para.text) >= MAX_EXISTING_LINKS_IN_PARA) continue
+      if (bestPara && para.index === bestPara.index) continue // Already tried
+
+      const exactResult = tryExactAnchor(para.text, article.keyword, article.wpUrl)
+      if (exactResult) {
+        return {
+          wp_post_id: candidate.id,
+          wp_post_title: candidate.title,
+          wp_post_url: candidate.link,
+          injection_type: 'wrap_existing',
+          anchor_text: exactResult.anchor,
+          original_paragraph: para.text,
+          modified_paragraph: exactResult.modifiedParagraph,
+          paragraph_index: para.index,
+          relevance_score: 10,
+          status: 'suggested',
+          is_silo_match: candidate.isSiloMatch || false,
+        }
+      }
+
+      const semiResult = trySemiExactAnchor(para.text, article.keyword, article.wpUrl)
+      if (semiResult) {
+        return {
+          wp_post_id: candidate.id,
+          wp_post_title: candidate.title,
+          wp_post_url: candidate.link,
+          injection_type: 'wrap_existing',
+          anchor_text: semiResult.anchor,
+          original_paragraph: para.text,
+          modified_paragraph: semiResult.modifiedParagraph,
+          paragraph_index: para.index,
+          relevance_score: 5,
+          status: 'suggested',
+          is_silo_match: candidate.isSiloMatch || false,
+        }
+      }
+    }
+  }
+
+  // Strategy 4: TRANSITIONAL SENTENCES — no anchor anywhere → create sentences
+  console.log(`[reverse-backlinks] No anchor found in "${candidate.title}" — trying sentence addition`)
   const sentencePara = findParagraphForSentenceAdd(paragraphs, article.keyword)
   if (sentencePara) {
     const result = await generateTransitionalSentences(
