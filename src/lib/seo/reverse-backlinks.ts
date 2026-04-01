@@ -436,7 +436,7 @@ OU : { "impossible": true }`,
 
     return { anchor, modifiedParagraph: modified }
   } catch {
-    console.error('[reverse-backlinks] Failed to parse anchor AI response (full):', aiResponse.content.slice(0, 500))
+    console.error('[reverse-backlinks] Failed to parse anchor AI response (full):', JSON.stringify(aiResponse.content.slice(0, 500)))
     return null
   }
 }
