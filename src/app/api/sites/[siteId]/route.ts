@@ -15,13 +15,7 @@ const updateSiteSchema = z.object({
   money_page_url: z.string().nullable().optional(),
   money_page_description: z.string().nullable().optional(),
   active: z.boolean().optional(),
-  editorial_angle: z.object({
-    site_description: z.string(),
-    tone: z.string(),
-    unique_selling_point: z.string(),
-    content_approach: z.string(),
-    target_audience: z.string(),
-  }).nullable().optional(),
+  editorial_angle: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 interface RouteContext {
@@ -82,14 +76,31 @@ export async function PATCH(
     );
   }
 
+  // Strip editorial_angle if the column doesn't exist yet (migration pending)
+  const updatePayload = { ...parsed.data, updated_at: new Date().toISOString() };
+
   const { data, error } = await supabase
     .from("seo_sites")
-    .update({ ...parsed.data, updated_at: new Date().toISOString() } as SiteUpdate)
+    .update(updatePayload as SiteUpdate)
     .eq("id", params.siteId)
     .select()
     .single();
 
   if (error) {
+    // If editorial_angle column doesn't exist, retry without it
+    if (error.message?.includes('editorial_angle')) {
+      const { editorial_angle: _ea, ...payloadWithout } = updatePayload;
+      const { data: d2, error: e2 } = await supabase
+        .from("seo_sites")
+        .update(payloadWithout as SiteUpdate)
+        .eq("id", params.siteId)
+        .select()
+        .single();
+      if (e2) {
+        return NextResponse.json({ error: e2.message }, { status: 500 });
+      }
+      return NextResponse.json(d2);
+    }
     if (error.code === "PGRST116") {
       return NextResponse.json(
         { error: "Site non trouve" },
