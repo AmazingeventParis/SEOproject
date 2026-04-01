@@ -333,9 +333,11 @@ export async function pushToWordPress(
 
   try {
     // Build update payload
+    const now = new Date().toISOString()
     const updatePayload: Record<string, unknown> = {
       content: contentHtml,
       status: 'publish', // Ensure post stays published (Elementor clearing can revert to draft)
+      date: now, // Update WP publication date so article appears freshly published
     }
 
     // Update title (H1) if audit suggests one

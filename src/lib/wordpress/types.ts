@@ -59,6 +59,7 @@ export interface WPUpdatePostInput {
   tags?: number[]
   featured_media?: number
   meta?: Record<string, unknown>
+  date?: string // ISO 8601 – updates the WP publication date
 }
 
 export interface WPUploadMediaInput {
