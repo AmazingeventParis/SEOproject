@@ -62,6 +62,7 @@ export async function POST(
     }
 
     // Find top 3 candidates with silo priority
+    console.log(`[reverse-backlinks] Finding candidates for "${article.keyword}" (wp_post_id=${article.wp_post_id}, wp_url=${article.wp_url})`)
     const candidates = await findBacklinkCandidates(
       article.site_id,
       article.keyword,
@@ -71,6 +72,8 @@ export async function POST(
       siloArticles
     )
 
+    console.log(`[reverse-backlinks] Found ${candidates.length} candidates:`, candidates.map(c => `${c.id}:"${c.title}" score=${c.score}`))
+
     if (candidates.length === 0) {
       return NextResponse.json({ suggestions: [], message: 'Aucun article candidat trouve' })
     }
@@ -78,11 +81,13 @@ export async function POST(
     // Generate suggestions for each candidate
     const suggestions: BacklinkSuggestion[] = []
     for (const candidate of candidates) {
+      console.log(`[reverse-backlinks] Generating suggestion for candidate ${candidate.id}:"${candidate.title}"`)
       const suggestion = await generateBacklinkSuggestion(
         { keyword: article.keyword, title: article.title || article.keyword, wpUrl: article.wp_url! },
         candidate,
         article.site_id
       )
+      console.log(`[reverse-backlinks] Suggestion result for ${candidate.id}:`, suggestion ? 'OK' : 'NULL')
       if (suggestion) {
         suggestions.push(suggestion)
       }
