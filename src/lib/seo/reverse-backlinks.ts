@@ -237,7 +237,6 @@ export async function findBacklinkCandidates(
 
   // Fetch content in batches of 5 (limit to 30 for perf — more than before to find silo matches)
   const toFetch = candidates.slice(0, 30)
-  console.log(`[reverse-backlinks] Fetching ${toFetch.length} posts from WP (total candidates: ${candidates.length})`)
   for (let i = 0; i < toFetch.length; i += 5) {
     const batch = toFetch.slice(i, i + 5)
     const results = await Promise.allSettled(
@@ -247,17 +246,14 @@ export async function findBacklinkCandidates(
     for (let j = 0; j < results.length; j++) {
       const result = results[j]
       if (result.status === 'rejected') {
-        console.log(`[reverse-backlinks] FAILED to fetch post ${batch[j].id}: ${result.reason}`)
+        console.warn(`[reverse-backlinks] Failed to fetch post ${batch[j].id}: ${result.reason}`)
         continue
       }
       if (result.status === 'fulfilled') {
         const post = result.value
 
         // Skip if already links to the target article
-        if (alreadyLinksTo(post.content, articleWpUrl)) {
-          console.log(`[reverse-backlinks] Skipping "${post.title}" — already links to ${articleWpUrl}`)
-          continue
-        }
+        if (alreadyLinksTo(post.content, articleWpUrl)) continue
 
         // Skip if the article already has too many internal links
         const internalLinkCount = countInternalLinks(post.content, siteDomain)
@@ -274,8 +270,6 @@ export async function findBacklinkCandidates(
           sc = Math.round(sc * SILO_BONUS_MULTIPLIER)
           console.log(`[reverse-backlinks] Silo match: "${post.title}" — score boosted to ${sc}`)
         }
-
-        console.log(`[reverse-backlinks] Score for "${post.title}" (id=${post.id}): ${sc} (min=${MIN_CANDIDATE_SCORE})`)
 
         if (sc >= MIN_CANDIDATE_SCORE) {
           scored.push({ id: post.id, title: post.title, link: post.link, score: sc, isSiloMatch })
@@ -460,22 +454,14 @@ export async function generateBacklinkSuggestion(
   const post = await getPostById(siteId, candidate.id)
 
   // Double-check: skip if already links to target
-  if (alreadyLinksTo(post.content, article.wpUrl)) {
-    console.log(`[reverse-backlinks] generateSuggestion: post ${candidate.id} already links to target`)
-    return null
-  }
+  if (alreadyLinksTo(post.content, article.wpUrl)) return null
 
   const paragraphs = extractParagraphs(post.content)
-  console.log(`[reverse-backlinks] generateSuggestion: post ${candidate.id} has ${paragraphs.length} eligible paragraphs`)
   if (paragraphs.length === 0) return null
 
   // Find best relevant paragraph (respects intro/conclusion exclusion)
   const bestPara = findBestParagraph(paragraphs, article.keyword)
-  if (!bestPara) {
-    console.log(`[reverse-backlinks] generateSuggestion: no suitable paragraph found in post ${candidate.id}`)
-    return null
-  }
-  console.log(`[reverse-backlinks] generateSuggestion: best paragraph index=${bestPara.index}, score=${bestPara.score}`)
+  if (!bestPara) return null
 
   // Use AI to find natural anchor text and wrap it
   const result = await generateNaturalAnchor(
@@ -485,11 +471,7 @@ export async function generateBacklinkSuggestion(
     article.wpUrl
   )
 
-  if (!result) {
-    console.log(`[reverse-backlinks] generateSuggestion: AI anchor generation failed for post ${candidate.id}`)
-    return null
-  }
-  console.log(`[reverse-backlinks] generateSuggestion: anchor="${result.anchor}" for post ${candidate.id}`)
+  if (!result) return null
 
   return {
     wp_post_id: candidate.id,
