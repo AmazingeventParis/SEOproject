@@ -2597,7 +2597,7 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
   }
 
   // 5h. SEO Audit — sub-step H: auto reverse backlinks (for published articles with WP)
-  let reverseBacklinksResult: BacklinkSuggestion[] = []
+  const reverseBacklinksResult: BacklinkSuggestion[] = []
   if (article.wp_post_id && article.wp_url && (article.status === 'published' || article.status === 'refresh_needed')) {
     try {
       console.log(`[seo-audit] Generating reverse backlink suggestions…`)

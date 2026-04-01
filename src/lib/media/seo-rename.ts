@@ -183,7 +183,7 @@ function translatePromptHintToAlt(
   }
 
   // Clean the hint: remove technical/style directives
-  let cleaned = hint
+  const cleaned = hint
     .replace(/\b(photorealistic|ultra realistic|high quality|highly detailed|4k|8k|hd|stock photo|editorial style|professional photo(graphy)?|cinematic|bokeh|shallow depth of field|soft lighting|natural lighting|studio lighting|dramatic lighting)\b/gi, '')
     .replace(/,\s*,/g, ',')
     .replace(/^\s*,|,\s*$/g, '')
@@ -192,6 +192,7 @@ function translatePromptHintToAlt(
   if (cleaned.length < 5) return null
 
   // Extract key visual elements from the hint
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const words = cleaned.toLowerCase().split(/[\s,]+/).filter(w => w.length > 2)
   const frenchParts: string[] = []
   const usedTranslations = new Set<string>()
