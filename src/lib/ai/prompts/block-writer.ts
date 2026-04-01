@@ -195,26 +195,29 @@ ${buildCalloutPromptTemplate(calloutStyle, persona.name, persona.role, persona.a
 })()}
 
 ### Pour un format "table"
-Cree un tableau HTML epure, moderne et responsive. Les styles inline sont OBLIGATOIRES car le HTML sera publie sur WordPress sans CSS custom.
+Cree un tableau HTML MODERNE, visuellement premium et responsive. Les styles inline sont OBLIGATOIRES car le HTML sera publie sur WordPress sans CSS custom.
 
 ${(() => {
   const tableStyle = getTableStyleForSite(siteDomain, tableStyleIndex ?? 0)
   return `**Style de tableau a utiliser : "${tableStyle.name}"**
 
-**Structure HTML OBLIGATOIRE (copie ce modele exactement) :**
+**Structure HTML OBLIGATOIRE (copie ce modele EXACTEMENT avec tous les styles inline) :**
 ${buildTablePromptTemplate(tableStyle)}
 
-**Regles de style :**
 ${buildTableStyleRules(tableStyle)}`
 })()}
 
-**Regles strictes :**
-- TOUJOURS wrapper dans <div class="table-container" style="...">
-- Styles inline OBLIGATOIRES sur CHAQUE <th>, <td>, <tr> pair et <div> — jamais compter sur le CSS externe
-- Max 4-5 colonnes pour la lisibilite mobile
-- Headers courts et clairs (1-3 mots)
+**Regles strictes du design tableau :**
+- TOUJOURS wrapper dans <div class="table-container" style="width:100%;overflow-x:auto;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.06);margin:28px 0;...">
+- Styles inline OBLIGATOIRES sur CHAQUE <th>, <td>, <tr> pair et <div> — JAMAIS compter sur le CSS externe
+- Coins arrondis : border-radius 12px sur le container, border-top-left-radius 12px sur le premier <th>, border-top-right-radius 12px sur le dernier <th>, border-bottom-*-radius 12px sur les derniers <td>
+- font-size 0.95rem sur le <table> et les <td> (taille lisible, pas trop petite)
+- Premiere colonne en <strong> (labels des lignes)
+- Derniere ligne : PAS de border-bottom
+- Max 4-5 colonnes (lisibilite mobile). Headers courts (1-3 mots)
 - Cellules concises (pas de paragraphes dans les cellules)
 - Ajoute une phrase d'introduction avant le tableau si pertinent
+- INTERDIT de generer un tableau sans styles inline — un tableau sans style sera REFUSE
 
 ### Pour un format "mixed"
 Combine prose + elements visuels (liste ou tableau) :

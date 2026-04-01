@@ -244,39 +244,85 @@ export const SITE_TABLE_STYLES: Record<string, [TableStylePreset, TableStylePres
   'smakk.fr': [
     {
       name: 'Impact',
-      thBg: '#00052F',
+      thBg: 'linear-gradient(135deg,#00052F 0%,#0A2463 100%)',
       thColor: '#FFFFFF',
       trAltBg: '#F0F6FC',
       tdBorder: '#E2E8F0',
+      accentColor: '#0A6CFF',
+      containerBorder: '1px solid #E2E8F0',
     },
     {
       name: 'Epure',
-      thBg: '#F0F6FC',
+      thBg: 'linear-gradient(135deg,#EFF6FF 0%,#DBEAFE 100%)',
       thColor: '#00052F',
       thBorder: '2px solid #0A6CFF',
       trAltBg: '#FAFBFF',
-      tdBorder: '#0A6CFF',
+      tdBorder: '#E2E8F0',
       accentColor: '#FB8E28',
-      containerBorder: '1px solid #0A6CFF',
+      containerBorder: '1px solid #DBEAFE',
     },
   ],
   'mon-habitat-durable.fr': [
     {
-      name: 'Autorite',
-      thBg: '#2D5A27',
+      name: 'Nature',
+      thBg: 'linear-gradient(135deg,#2D5A27 0%,#3D7A35 100%)',
       thColor: '#FFFFFF',
-      trAltBg: '#E8F5E9',
-      tdBorder: '#C8E6C9',
+      trAltBg: '#F0FDF4',
+      tdBorder: '#E2E8F0',
+      accentColor: '#26BD26',
+      containerBorder: '1px solid #E2E8F0',
     },
     {
-      name: 'Pratique',
-      thBg: '#E8F5E9',
-      thColor: '#2D5A27',
+      name: 'Eco',
+      thBg: 'linear-gradient(135deg,#ECFDF5 0%,#D1FAE5 100%)',
+      thColor: '#166534',
       thBorder: '2px solid #26BD26',
-      trAltBg: '#F1F8E9',
-      tdBorder: '#26BD26',
-      accentColor: '#FCD34D',
-      containerBorder: '1px solid #26BD26',
+      trAltBg: '#F7FEE7',
+      tdBorder: '#E2E8F0',
+      accentColor: '#16A34A',
+      containerBorder: '1px solid #D1FAE5',
+    },
+  ],
+  'shootnbox.fr': [
+    {
+      name: 'Studio',
+      thBg: 'linear-gradient(135deg,#18181B 0%,#27272A 100%)',
+      thColor: '#FFFFFF',
+      trAltBg: '#FAFAFA',
+      tdBorder: '#E4E4E7',
+      accentColor: '#EAB308',
+      containerBorder: '1px solid #E4E4E7',
+    },
+    {
+      name: 'Flash',
+      thBg: 'linear-gradient(135deg,#FEF9C3 0%,#FEF08A 100%)',
+      thColor: '#18181B',
+      thBorder: '2px solid #EAB308',
+      trAltBg: '#FFFBEB',
+      tdBorder: '#E4E4E7',
+      accentColor: '#CA8A04',
+      containerBorder: '1px solid #FEF08A',
+    },
+  ],
+  'kiftabox.fr': [
+    {
+      name: 'Tendance',
+      thBg: 'linear-gradient(135deg,#7C3AED 0%,#8B5CF6 100%)',
+      thColor: '#FFFFFF',
+      trAltBg: '#FAF5FF',
+      tdBorder: '#E2E8F0',
+      accentColor: '#A855F7',
+      containerBorder: '1px solid #E2E8F0',
+    },
+    {
+      name: 'Pop',
+      thBg: 'linear-gradient(135deg,#F5F3FF 0%,#EDE9FE 100%)',
+      thColor: '#5B21B6',
+      thBorder: '2px solid #8B5CF6',
+      trAltBg: '#FAFAFE',
+      tdBorder: '#E2E8F0',
+      accentColor: '#7C3AED',
+      containerBorder: '1px solid #EDE9FE',
     },
   ],
 }
@@ -284,21 +330,23 @@ export const SITE_TABLE_STYLES: Record<string, [TableStylePreset, TableStylePres
 /** Default table styles for sites not in the registry */
 export const DEFAULT_TABLE_STYLES: [TableStylePreset, TableStylePreset] = [
   {
-    name: 'Classique',
-    thBg: '#1e293b',
+    name: 'Moderne',
+    thBg: 'linear-gradient(135deg,#1e293b 0%,#334155 100%)',
     thColor: '#FFFFFF',
     trAltBg: '#f8fafc',
     tdBorder: '#e2e8f0',
+    accentColor: '#3b82f6',
+    containerBorder: '1px solid #e2e8f0',
   },
   {
-    name: 'Leger',
-    thBg: '#f1f5f9',
+    name: 'Clair',
+    thBg: 'linear-gradient(135deg,#f1f5f9 0%,#e2e8f0 100%)',
     thColor: '#1e293b',
     thBorder: '2px solid #3b82f6',
     trAltBg: '#fafbff',
-    tdBorder: '#3b82f6',
+    tdBorder: '#e2e8f0',
     accentColor: '#f59e0b',
-    containerBorder: '1px solid #3b82f6',
+    containerBorder: '1px solid #e2e8f0',
   },
 ]
 
@@ -307,34 +355,46 @@ export const DEFAULT_TABLE_STYLES: [TableStylePreset, TableStylePreset] = [
  * Alternates between Style 1 (even index) and Style 2 (odd index).
  */
 export function getTableStyleForSite(siteDomain: string | undefined, tableIndex: number): TableStylePreset {
-  const domain = siteDomain?.toLowerCase().replace(/^www\./, '') || ''
+  // Normalize domain: remove protocol, www, trailing slashes
+  const domain = (siteDomain || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '')
   const styles = SITE_TABLE_STYLES[domain] || DEFAULT_TABLE_STYLES
   return styles[tableIndex % 2]
 }
 
 /**
  * Build the full table HTML template for the AI prompt based on the style preset.
+ * Modern design: rounded corners, gradient headers, proper spacing, responsive.
  */
 export function buildTablePromptTemplate(style: TableStylePreset): string {
   const containerBorder = style.containerBorder ? `;border:${style.containerBorder}` : ''
   const thBorder = style.thBorder ? `;border-bottom:${style.thBorder}` : ''
+  // First th gets top-left radius, last th gets top-right radius
+  const thBaseStyle = `background:${style.thBg};color:${style.thColor};padding:14px 18px;font-weight:700;text-align:left;font-size:0.95rem;letter-spacing:0.01em${thBorder}`
 
-  return `<div class="table-container" style="width:100%;overflow-x:auto;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin:20px 0${containerBorder}">
-  <table style="width:100%;border-collapse:collapse;min-width:500px">
+  return `<div class="table-container" style="width:100%;overflow-x:auto;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.06);margin:28px 0${containerBorder}">
+  <table style="width:100%;border-collapse:collapse;min-width:480px;font-size:0.95rem;line-height:1.6">
     <thead>
       <tr>
-        <th style="background:${style.thBg};color:${style.thColor};padding:14px 16px;font-weight:600;text-align:left;font-size:0.9rem${thBorder}">En-tete 1</th>
-        <th style="background:${style.thBg};color:${style.thColor};padding:14px 16px;font-weight:600;text-align:left;font-size:0.9rem${thBorder}">En-tete 2</th>
+        <th style="${thBaseStyle};border-top-left-radius:12px">En-tete 1</th>
+        <th style="${thBaseStyle}">En-tete 2</th>
+        <th style="${thBaseStyle};border-top-right-radius:12px">En-tete 3</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td style="padding:12px 16px;border-bottom:1px solid ${style.tdBorder}">Donnee</td>
-        <td style="padding:12px 16px;border-bottom:1px solid ${style.tdBorder}">Donnee</td>
+        <td style="padding:13px 18px;border-bottom:1px solid ${style.tdBorder};font-size:0.95rem"><strong>Donnee importante</strong></td>
+        <td style="padding:13px 18px;border-bottom:1px solid ${style.tdBorder};font-size:0.95rem">Valeur</td>
+        <td style="padding:13px 18px;border-bottom:1px solid ${style.tdBorder};font-size:0.95rem">Detail</td>
       </tr>
       <tr style="background:${style.trAltBg}">
-        <td style="padding:12px 16px;border-bottom:1px solid ${style.tdBorder}">Donnee</td>
-        <td style="padding:12px 16px;border-bottom:1px solid ${style.tdBorder}">Donnee</td>
+        <td style="padding:13px 18px;border-bottom:1px solid ${style.tdBorder};font-size:0.95rem"><strong>Autre donnee</strong></td>
+        <td style="padding:13px 18px;border-bottom:1px solid ${style.tdBorder};font-size:0.95rem">Valeur</td>
+        <td style="padding:13px 18px;border-bottom:1px solid ${style.tdBorder};font-size:0.95rem">Detail</td>
+      </tr>
+      <tr>
+        <td style="padding:13px 18px;font-size:0.95rem;border-bottom-left-radius:12px"><strong>Derniere ligne</strong></td>
+        <td style="padding:13px 18px;font-size:0.95rem">Valeur</td>
+        <td style="padding:13px 18px;font-size:0.95rem;border-bottom-right-radius:12px">Detail</td>
       </tr>
     </tbody>
   </table>
@@ -347,13 +407,18 @@ export function buildTablePromptTemplate(style: TableStylePreset): string {
 export function buildTableStyleRules(style: TableStylePreset): string {
   const thBorderRule = style.thBorder ? `, border-bottom ${style.thBorder}` : ''
   const containerBorderRule = style.containerBorder ? `, border ${style.containerBorder}` : ''
-  const accentRule = style.accentColor ? `\n- Accent (donnees importantes, badges, chiffres cles) : color ${style.accentColor} ou background ${style.accentColor}` : ''
+  const accentRule = style.accentColor ? `\n- Accent (donnees importantes, badges, chiffres cles) : color ${style.accentColor} ou font-weight 700` : ''
 
-  return `- <th> : fond ${style.thBg}, texte ${style.thColor}, padding 14px 16px, font-weight 600${thBorderRule}
-- <td> : padding 12px 16px, border-bottom 1px solid ${style.tdBorder}
+  return `REGLES DE STYLE TABLEAU (OBLIGATOIRE — copie ces styles exactement) :
+- Container <div> : border-radius 12px, box-shadow 0 4px 12px rgba(0,0,0,0.06), overflow-x auto, margin 28px 0${containerBorderRule}
+- <table> : width 100%, border-collapse collapse, min-width 480px, font-size 0.95rem, line-height 1.6
+- <th> : background ${style.thBg}, color ${style.thColor}, padding 14px 18px, font-weight 700, font-size 0.95rem, letter-spacing 0.01em${thBorderRule}
+- Premier <th> : border-top-left-radius 12px. Dernier <th> : border-top-right-radius 12px
+- <td> : padding 13px 18px, border-bottom 1px solid ${style.tdBorder}, font-size 0.95rem
 - Lignes paires <tr> : style="background:${style.trAltBg}" (zebra-striping)
-- Derniere ligne : pas de border-bottom sur les <td>
-- Container : border-radius 8px, box-shadow legere, overflow-x auto${containerBorderRule}${accentRule}`
+- Premiere colonne <td> : utilise <strong> pour les labels (premiere cellule de chaque ligne)
+- Derniere ligne <tbody> : PAS de border-bottom sur les <td>, premier td border-bottom-left-radius 12px, dernier td border-bottom-right-radius 12px
+- Max 4-5 colonnes (lisibilite mobile). Headers courts (1-3 mots)${accentRule}`
 }
 
 /**
