@@ -1,6 +1,6 @@
 /**
  * GDS Client — GestionnaireDeSite REST API
- * Connexion au gestionnaire de site statique via JWT.
+ * Connexion au gestionnaire de site statique via clé API statique (X-Api-Key).
  * Aucun lien avec le client WordPress existant.
  */
 
@@ -32,6 +32,13 @@ export interface GdsMediaResult {
   filename: string
 }
 
+function gdsHeaders(apiToken: string, extra?: Record<string, string>) {
+  return {
+    'X-Api-Key': apiToken,
+    ...extra,
+  }
+}
+
 /**
  * Crée un article sur GestionnaireDeSite via POST /api/blog/create
  */
@@ -44,10 +51,7 @@ export async function gdsCreateArticle(
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiToken}`,
-    },
+    headers: gdsHeaders(apiToken, { 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
   })
 
@@ -72,10 +76,7 @@ export async function gdsUpdateArticle(
 
   const res = await fetch(url, {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiToken}`,
-    },
+    headers: gdsHeaders(apiToken, { 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
   })
 
@@ -106,9 +107,7 @@ export async function gdsUploadImage(
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiToken}`,
-    },
+    headers: gdsHeaders(apiToken),
     body: form,
   })
 

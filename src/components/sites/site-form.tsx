@@ -358,20 +358,21 @@ export function SiteForm({ site, onSubmit, submitLabel = "Enregistrer" }: SiteFo
           <Label htmlFor="gds_url">URL du GestionnaireDeSite</Label>
           <Input
             id="gds_url"
-            placeholder="https://admin.shootnbox.fr"
+            placeholder="https://sites.swipego.app"
             value={formData.gds_url}
             onChange={(e) => handleChange("gds_url", e.target.value)}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="gds_api_token">Token API GDS</Label>
+          <Label htmlFor="gds_api_token">Clé API GDS (GDS_API_SECRET)</Label>
           <Input
             id="gds_api_token"
             type="password"
-            placeholder="JWT token..."
+            placeholder="Clé statique sans expiration..."
             value={formData.gds_api_token}
             onChange={(e) => handleChange("gds_api_token", e.target.value)}
           />
+          <p className="text-xs text-muted-foreground">Valeur de la variable GDS_API_SECRET dans les settings du GestionnaireDeSite</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="gds_author">Auteur par défaut</Label>
