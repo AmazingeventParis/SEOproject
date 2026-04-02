@@ -18,6 +18,12 @@ const updateSiteSchema = z.object({
   money_page_description: z.string().nullable().optional(),
   active: z.boolean().optional(),
   editorial_angle: z.record(z.string(), z.unknown()).nullable().optional(),
+  // GDS — GestionnaireDeSite (optionnel, parallèle WordPress)
+  gds_url: z.string().nullable().optional(),
+  gds_api_token: z.string().nullable().optional(),
+  gds_author: z.enum(['mathilde', 'elise']).nullable().optional(),
+  gds_category_map: z.record(z.string(), z.string()).nullable().optional(),
+  publication_target: z.enum(['wordpress', 'gds']).nullable().optional(),
 }).passthrough();
 
 interface RouteContext {

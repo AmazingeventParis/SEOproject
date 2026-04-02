@@ -217,6 +217,9 @@ export async function executeStep(
       case 'publish':
         result = await executePublish(article as ArticleWithRelations)
         break
+      case 'publish_gds':
+        result = await executeGdsPublish(article as ArticleWithRelations)
+        break
       case 'refresh':
         result = await executeRefresh(article as ArticleWithRelations, input)
         break
@@ -3504,6 +3507,102 @@ function repairTruncatedHtml(html: string): string {
 function countWords(html: string): number {
   const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
   return text ? text.split(' ').length : 0
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GDS PUBLISH — Publication vers GestionnaireDeSite (parallèle WordPress)
+// Aucune modification des fonctions WordPress existantes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function executeGdsPublish(
+  article: ArticleWithRelations,
+): Promise<PipelineRunResult> {
+  const supabase = getServerClient()
+
+  // 1. Récupère la config GDS du site (colonnes ajoutées par sql/006-gds.sql)
+  const { data: siteRow } = await supabase
+    .from('seo_sites')
+    .select('gds_url, gds_api_token, gds_author, gds_category_map, domain, publication_target')
+    .eq('id', article.site_id)
+    .single()
+
+  if (!siteRow?.gds_url || !siteRow?.gds_api_token) {
+    return {
+      success: false,
+      runId: '',
+      error: 'Site non configuré pour GDS: gds_url et gds_api_token requis (Settings → site)',
+    }
+  }
+
+  const { publishToGds } = await import('@/lib/gds/publisher')
+
+  const contentBlocks = (article.content_blocks || []) as ContentBlock[]
+  const persona = article.seo_personas as { name?: string } | null
+
+  // 2. Récupère l'article depuis Supabase pour les champs GDS existants
+  const { data: articleRow } = await supabase
+    .from('seo_articles')
+    .select('gds_slug')
+    .eq('id', article.id)
+    .single()
+
+  const existingGdsSlug = (articleRow?.gds_slug as string | null) || null
+
+  // 3. Publie vers GDS
+  const result = await publishToGds({
+    articleId: article.id,
+    title: article.title || article.keyword,
+    slug: article.slug || article.keyword.toLowerCase().replace(/\s+/g, '-'),
+    metaDescription: article.meta_description,
+    keyword: article.keyword,
+    category: (article.seo_sites as { niche?: string } | null)?.niche || null,
+    personaName: persona?.name || null,
+    date: article.published_at
+      ? new Date(article.published_at).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0],
+    tags: article.keyword
+      .split(/\s+/)
+      .filter((w: string) => w.length >= 4)
+      .slice(0, 5),
+    contentBlocks,
+    heroImageUrl: (article as Record<string, unknown>).hero_image_url as string | null,
+    jsonLd: article.json_ld as Record<string, unknown> | null,
+    existingGdsSlug,
+    siteConfig: {
+      gdsUrl: siteRow.gds_url,
+      apiToken: siteRow.gds_api_token,
+      gdsAuthor: siteRow.gds_author || 'mathilde',
+      categoryMap: (siteRow.gds_category_map as Record<string, string>) || {},
+      siteDomain: siteRow.domain || undefined,
+    },
+  })
+
+  if (!result.success) {
+    return { success: false, runId: '', error: result.error || 'Erreur publication GDS' }
+  }
+
+  // 4. Persiste les champs GDS dans seo_articles
+  const now = new Date().toISOString()
+  await supabase
+    .from('seo_articles')
+    .update({
+      gds_slug: result.gdsSlug,
+      gds_url: result.gdsUrl,
+      gds_published_at: now,
+      published_at: article.published_at || now,
+    } as Record<string, unknown>)
+    .eq('id', article.id)
+
+  return {
+    success: true,
+    runId: '',
+    output: {
+      gdsSlug: result.gdsSlug,
+      gdsUrl: result.gdsUrl,
+      heroGdsPath: result.heroGdsPath,
+      publishedAt: now,
+    },
+  }
 }
 
 function estimateCost(tokensIn: number, tokensOut: number, model: string, thinkingTokens?: number): number {

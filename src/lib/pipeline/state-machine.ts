@@ -62,6 +62,18 @@ const TRANSITIONS: PipelineTransition[] = [
     to: 'published',
     step: 'publish',
   },
+  // Reviewing -> Published (push to GestionnaireDeSite — parallèle WordPress)
+  {
+    from: 'reviewing',
+    to: 'published',
+    step: 'publish_gds',
+  },
+  // Published -> Published (mise à jour d'un article GDS déjà publié)
+  {
+    from: 'published',
+    to: 'published',
+    step: 'publish_gds',
+  },
   // Published -> Refresh Needed (seasonal update)
   {
     from: 'published',
@@ -213,6 +225,7 @@ export function getStepLabel(step: PipelineStep): string {
     media: 'Generation media',
     seo: 'Optimisation SEO',
     publish: 'Publication WordPress',
+    publish_gds: 'Publication GestionnaireDeSite',
     refresh: 'Rafraichissement',
   }
   return labels[step] ?? step

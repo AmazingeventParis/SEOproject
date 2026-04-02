@@ -75,7 +75,7 @@ export async function GET(
   const { data, error } = await supabase
     .from("seo_articles")
     .select(
-      "*, seo_sites!seo_articles_site_id_fkey(name, domain, niche), seo_personas!seo_articles_persona_id_fkey(name, role, tone_description, bio)"
+      "*, seo_sites!seo_articles_site_id_fkey(name, domain, niche, gds_url, gds_author), seo_personas!seo_articles_persona_id_fkey(name, role, tone_description, bio)"
     )
     .eq("id", params.articleId)
     .single();
@@ -126,7 +126,7 @@ export async function PATCH(
     .update(parsed.data as ArticleUpdate)
     .eq("id", params.articleId)
     .select(
-      "*, seo_sites!seo_articles_site_id_fkey(name, domain, niche), seo_personas!seo_articles_persona_id_fkey(name, role, tone_description, bio)"
+      "*, seo_sites!seo_articles_site_id_fkey(name, domain, niche, gds_url, gds_author), seo_personas!seo_articles_persona_id_fkey(name, role, tone_description, bio)"
     )
     .single();
 

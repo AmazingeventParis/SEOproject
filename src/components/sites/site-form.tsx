@@ -40,6 +40,10 @@ export interface SiteFormData {
   editorial_angle_usp: string;
   editorial_angle_content_approach: string;
   editorial_angle_target_audience: string;
+  // GDS — GestionnaireDeSite (optionnel, parallèle WordPress)
+  gds_url: string;
+  gds_api_token: string;
+  gds_author: string;
 }
 
 interface SiteFormProps {
@@ -69,6 +73,9 @@ export function SiteForm({ site, onSubmit, submitLabel = "Enregistrer" }: SiteFo
     editorial_angle_usp: (site?.editorial_angle as Record<string, string> | null)?.unique_selling_point ?? "",
     editorial_angle_content_approach: (site?.editorial_angle as Record<string, string> | null)?.content_approach ?? "",
     editorial_angle_target_audience: (site?.editorial_angle as Record<string, string> | null)?.target_audience ?? "",
+    gds_url: (site as Record<string, unknown> | undefined)?.gds_url as string ?? "",
+    gds_api_token: (site as Record<string, unknown> | undefined)?.gds_api_token as string ?? "",
+    gds_author: (site as Record<string, unknown> | undefined)?.gds_author as string ?? "mathilde",
   });
 
   function handleChange(field: keyof SiteFormData, value: string) {
@@ -338,6 +345,48 @@ export function SiteForm({ site, onSubmit, submitLabel = "Enregistrer" }: SiteFo
             rows={2}
             className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           />
+        </div>
+      </div>
+
+      {/* GDS — GestionnaireDeSite (optionnel) */}
+      <div className="border-t pt-4 space-y-4">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">GestionnaireDeSite (optionnel)</p>
+          <p className="text-xs text-muted-foreground mt-1">Remplir pour activer la publication vers le site statique en parallèle de WordPress</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="gds_url">URL du GestionnaireDeSite</Label>
+          <Input
+            id="gds_url"
+            placeholder="https://admin.shootnbox.fr"
+            value={formData.gds_url}
+            onChange={(e) => handleChange("gds_url", e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="gds_api_token">Token API GDS</Label>
+          <Input
+            id="gds_api_token"
+            type="password"
+            placeholder="JWT token..."
+            value={formData.gds_api_token}
+            onChange={(e) => handleChange("gds_api_token", e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="gds_author">Auteur par défaut</Label>
+          <Select
+            value={formData.gds_author}
+            onValueChange={(value) => handleChange("gds_author", value)}
+          >
+            <SelectTrigger id="gds_author">
+              <SelectValue placeholder="Sélectionner un auteur" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="mathilde">Mathilde Séhault</SelectItem>
+              <SelectItem value="elise">Élise Durant</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

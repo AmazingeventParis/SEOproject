@@ -38,6 +38,10 @@ export function SiteDialog({ open, onOpenChange, site, onSuccess }: SiteDialogPr
             target_audience: data.editorial_angle_target_audience || '',
           }
         : null,
+      // GDS — normalise les vides en null
+      gds_url: data.gds_url || null,
+      gds_api_token: data.gds_api_token || null,
+      gds_author: data.gds_author || null,
     };
 
     try {

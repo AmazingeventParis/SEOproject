@@ -7,6 +7,7 @@ export type PipelineStep =
   | 'media'
   | 'seo'
   | 'publish'
+  | 'publish_gds'
   | 'refresh'
 
 export interface PipelineTransition {

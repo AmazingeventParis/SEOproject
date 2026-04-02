@@ -83,7 +83,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
 interface ArticleWithRelations extends Article {
-  seo_sites: { name: string; domain: string } | null;
+  seo_sites: { name: string; domain: string; niche?: string | null; gds_url?: string | null; gds_author?: string | null } | null;
   seo_personas: { name: string; role: string } | null;
 }
 
@@ -1883,19 +1883,38 @@ export default function ArticleDetailPage() {
               </Button>
             )}
             {article.status === "reviewing" && (
-              <Button
-                onClick={() =>
-                  runPipelineAction("publish", "Publication")
-                }
-                disabled={!!actionLoading}
-              >
-                {actionLoading === "Publication" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Globe className="mr-2 h-4 w-4" />
+              <>
+                <Button
+                  onClick={() =>
+                    runPipelineAction("publish", "Publication")
+                  }
+                  disabled={!!actionLoading}
+                >
+                  {actionLoading === "Publication" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Globe className="mr-2 h-4 w-4" />
+                  )}
+                  Publier sur WordPress
+                </Button>
+                {article.seo_sites?.gds_url && (
+                  <Button
+                    variant="outline"
+                    className="border-violet-400 text-violet-700 hover:bg-violet-50"
+                    onClick={() =>
+                      runPipelineAction("publish-gds", "Publication GDS")
+                    }
+                    disabled={!!actionLoading}
+                  >
+                    {actionLoading === "Publication GDS" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Globe className="mr-2 h-4 w-4" />
+                    )}
+                    Publier sur GDS
+                  </Button>
                 )}
-                Publier sur WordPress
-              </Button>
+              </>
             )}
             {article.status === "published" && (
               <>
@@ -1926,6 +1945,18 @@ export default function ArticleDetailPage() {
                     <Button variant="outline">
                       <ExternalLink className="mr-2 h-4 w-4" />
                       Voir sur WordPress
+                    </Button>
+                  </a>
+                )}
+                {(article as Record<string, unknown>).gds_url && (
+                  <a
+                    href={(article as Record<string, unknown>).gds_url as string}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button variant="outline" className="border-violet-400 text-violet-700 hover:bg-violet-50">
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Voir sur GDS
                     </Button>
                   </a>
                 )}
