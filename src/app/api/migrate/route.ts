@@ -2,12 +2,11 @@ import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
 const MIGRATION_SQL = `
--- 005-nuggets-multi-site: Add site_ids array for multi-site nuggets
-ALTER TABLE seo_nuggets ADD COLUMN IF NOT EXISTS site_ids text[] DEFAULT ARRAY[]::text[];
+-- 006-banned-phrases: Add banned_phrases to seo_personas
+ALTER TABLE seo_personas ADD COLUMN IF NOT EXISTS banned_phrases jsonb DEFAULT '[]'::jsonb;
 
--- Migrate existing site_id into site_ids for all nuggets that have a site_id
-UPDATE seo_nuggets SET site_ids = ARRAY[site_id::text]
-  WHERE site_id IS NOT NULL AND (site_ids IS NULL OR site_ids = ARRAY[]::text[]);
+-- 007-familiar-expressions: Add familiar_expressions to seo_personas
+ALTER TABLE seo_personas ADD COLUMN IF NOT EXISTS familiar_expressions jsonb DEFAULT '[]'::jsonb;
 `;
 
 // POST /api/migrate — Run pending schema migrations
@@ -51,7 +50,7 @@ export async function POST() {
       await pool.end();
       return NextResponse.json({
         status: "ok",
-        message: `Migration applied as ${user}@${host} — title_suggestions + seo_title + authority_link + theme_color + year_tag + youtube source_type.`,
+        message: `Migration applied as ${user}@${host} — banned_phrases + familiar_expressions columns added.`,
       });
     } catch (error) {
       await pool.end().catch(() => {});
