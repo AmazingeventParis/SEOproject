@@ -5,6 +5,7 @@ import { modelIdToOverride } from "@/lib/ai/router";
 import type { ContentBlock } from "@/lib/supabase/types";
 import { checkKeyIdeasCoverage } from "@/lib/pipeline/quality-checks";
 import { detectOverusedPhrases } from "@/lib/seo/phrase-dedup";
+import { fetchTemporalContext } from "@/lib/seo/serper";
 
 export const maxDuration = 300;
 
@@ -84,18 +85,23 @@ export async function POST(
 
       // Detect cross-article overused phrases once before writing
       let detectedTics: string[] = [];
+      let temporalContext = "";
       try {
         const { data: artForPersona } = await supabase
           .from("seo_articles")
-          .select("persona_id")
+          .select("persona_id, keyword")
           .eq("id", articleId)
           .single();
         if (artForPersona?.persona_id) {
           const overused = await detectOverusedPhrases(artForPersona.persona_id, articleId);
           detectedTics = overused.map(o => o.phrase);
         }
+        // Fetch temporal context (recent news) for this keyword
+        if (artForPersona?.keyword) {
+          temporalContext = await fetchTemporalContext(artForPersona.keyword);
+        }
       } catch (e) {
-        console.warn("[write-all] Failed to detect overused phrases:", e);
+        console.warn("[write-all] Failed to detect overused phrases or fetch temporal context:", e);
       }
 
       // Process blocks in parallel batches
@@ -109,6 +115,7 @@ export async function POST(
               blockIndex,
               usedNuggetIds: [...usedNuggetIds],
               detectedTics,
+              temporalContext,
               skipSave: true,
               ...modelOverrideInput,
             })

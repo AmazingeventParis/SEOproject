@@ -177,6 +177,47 @@ export async function analyzeSERP(
   }
 }
 
+// ---- Temporal context (news search) ----
+
+/**
+ * Fetch recent news/context about a keyword via Serper News API.
+ * Returns a short text summary of recent developments for injection into writing prompts.
+ * Fire-and-forget — returns empty string on any error.
+ */
+export async function fetchTemporalContext(keyword: string): Promise<string> {
+  try {
+    const apiKey = await getSerperApiKey()
+
+    const response = await fetch('https://google.serper.dev/news', {
+      method: 'POST',
+      headers: {
+        'X-API-KEY': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ q: keyword, gl: 'fr', hl: 'fr', num: 5 }),
+    })
+
+    if (!response.ok) return ''
+
+    const raw = await response.json()
+    const news = (raw.news ?? []) as { title: string; snippet: string; date: string }[]
+
+    if (news.length === 0) return ''
+
+    // Build a concise temporal context (max 3 items, ~200 chars each)
+    const items = news.slice(0, 3).map((n) => {
+      const title = (n.title || '').slice(0, 80)
+      const snippet = (n.snippet || '').slice(0, 150)
+      const date = n.date || ''
+      return `- [${date}] ${title} : ${snippet}`
+    })
+
+    return items.join('\n')
+  } catch {
+    return ''
+  }
+}
+
 // ---- Competitor insight extraction ----
 
 export interface CompetitorInsights {

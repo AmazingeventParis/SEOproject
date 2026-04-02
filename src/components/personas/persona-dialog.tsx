@@ -73,6 +73,16 @@ export function PersonaDialog({
         body.banned_phrases = [];
       }
 
+      // Parse familiar expressions (one per line) into JSON array
+      if (formData.familiar_expressions) {
+        body.familiar_expressions = formData.familiar_expressions
+          .split("\n")
+          .map((p) => p.trim())
+          .filter(Boolean);
+      } else {
+        body.familiar_expressions = [];
+      }
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },

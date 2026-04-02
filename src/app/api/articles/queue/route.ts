@@ -6,6 +6,7 @@ import { modelIdToOverride } from "@/lib/ai/router";
 import type { ContentBlock, TitleSuggestion, ArticleStatus } from "@/lib/supabase/types";
 import type { PipelineRunResult } from "@/lib/pipeline/types";
 import { detectOverusedPhrases } from "@/lib/seo/phrase-dedup";
+import { fetchTemporalContext } from "@/lib/seo/serper";
 
 export const maxDuration = 600; // 10 minutes
 
@@ -114,25 +115,29 @@ async function runArticlePipeline(
 
     if (pendingIndices.length > 0) {
       const usedNuggetIds: string[] = [];
-      // Detect cross-article overused phrases once
+      // Detect cross-article overused phrases + temporal context once
       let detectedTics: string[] = [];
+      let temporalContext = "";
       try {
         const { data: artP } = await supabase
           .from("seo_articles")
-          .select("persona_id")
+          .select("persona_id, keyword")
           .eq("id", articleId)
           .single();
         if (artP?.persona_id) {
           const overused = await detectOverusedPhrases(artP.persona_id, articleId);
           detectedTics = overused.map(o => o.phrase);
         }
-      } catch { /* continue without tics detection */ }
+        if (artP?.keyword) {
+          temporalContext = await fetchTemporalContext(artP.keyword);
+        }
+      } catch { /* continue without tics/temporal detection */ }
       for (const blockIndex of pendingIndices) {
         try {
           const result: PipelineRunResult = await executeStep(
             articleId,
             "write_block",
-            { blockIndex, usedNuggetIds, detectedTics, ...modelOverride }
+            { blockIndex, usedNuggetIds, detectedTics, temporalContext, ...modelOverride }
           );
           if (result.success) {
             const nuggetIds = (result.output?.nuggetIdsUsed as string[]) || [];

@@ -11,6 +11,7 @@ const createPersonaSchema = z.object({
   avatar_reference_url: z.string().url("L'URL doit etre valide").nullable().optional(),
   writing_style_examples: z.array(z.record(z.string(), z.unknown())).optional(),
   banned_phrases: z.array(z.string()).optional(),
+  familiar_expressions: z.array(z.string()).optional(),
 });
 
 // GET /api/personas - List all personas with their associated sites

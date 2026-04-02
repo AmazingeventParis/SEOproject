@@ -4,7 +4,7 @@ import type { PipelineStep, PipelineContext, PipelineRunResult } from './types'
 
 // Article with joined relations from Supabase query
 type ArticleWithRelations = Article & {
-  seo_personas: { name: string; role: string; tone_description: string | null; bio: string | null; avatar_reference_url: string | null; writing_style_examples: Record<string, unknown>[]; banned_phrases?: string[] } | null
+  seo_personas: { name: string; role: string; tone_description: string | null; bio: string | null; avatar_reference_url: string | null; writing_style_examples: Record<string, unknown>[]; banned_phrases?: string[]; familiar_expressions?: string[] } | null
   seo_sites: { name: string; domain: string; niche: string | null; theme_color: string | null; money_page_url: string | null; money_page_description: string | null } | null
 }
 import { validateTransition, getNextStatus } from './state-machine'
@@ -44,6 +44,8 @@ import {
   type ExtractedEntity,
 } from '@/lib/seo/semantic-analysis'
 import { detectOverusedPhrases } from '@/lib/seo/phrase-dedup'
+import { analyzeBurstiness, extractUsedConnectors, type BurstinessResult } from '@/lib/seo/burstiness'
+import { fetchTemporalContext } from '@/lib/seo/serper'
 
 /**
  * Extract and parse JSON from AI response text.
@@ -1033,6 +1035,15 @@ async function executeWriteBlock(
     })(),
     editorialContext: blockEditorialContext,
     bannedPhrases: bannedPhrases.length > 0 ? bannedPhrases : undefined,
+    saturatedConnectors: (() => {
+      // Extract connectors already overused in previous blocks
+      const saturated = (input?.saturatedConnectors as string[]) || extractUsedConnectors(contentBlocks.slice(0, blockIndex))
+      return saturated.length > 0 ? saturated : undefined
+    })(),
+    temporalContext: (input?.temporalContext as string) || undefined,
+    familiarExpressions: persona?.familiar_expressions && persona.familiar_expressions.length > 0
+      ? persona.familiar_expressions
+      : undefined,
   })
 
   const aiResponse = modelOverride
@@ -2307,6 +2318,15 @@ ${b.contentHtml}`).join('\n\n---\n\n')}`
     console.warn('[seo-audit] Readability analysis failed:', err)
   }
 
+  // 5b-quater. Burstiness scoring (AI detection fingerprint)
+  let burstinessResult: BurstinessResult | null = null
+  try {
+    burstinessResult = analyzeBurstiness(updatedBlocks)
+    console.log(`[seo-audit] Burstiness score: ${burstinessResult.score}/100 (stdDev: ${burstinessResult.sentenceLengthStdDev}, short ratio: ${burstinessResult.shortSentenceRatio}, overused connectors: ${burstinessResult.overusedConnectors.length})`)
+  } catch (err) {
+    console.warn('[seo-audit] Burstiness analysis failed:', err)
+  }
+
   // 5b-ter. Pre-compute semantic coverage for use in critique (Axes 1, 3, 4)
   let earlySemanticMissing: string[] = []
   let earlyEntityMissing: string[] = []
@@ -2864,6 +2884,16 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
       status: keywordDensityResult.status,
     },
     keywordInIntro,
+    ...(burstinessResult ? {
+      burstiness: {
+        score: burstinessResult.score,
+        sentenceLengthStdDev: burstinessResult.sentenceLengthStdDev,
+        avgSentenceLength: burstinessResult.avgSentenceLength,
+        shortSentenceRatio: burstinessResult.shortSentenceRatio,
+        overusedConnectors: burstinessResult.overusedConnectors,
+        issues: burstinessResult.issues,
+      },
+    } : {}),
     ...(readabilityResult ? {
       readability: {
         score: readabilityResult.score,
@@ -2984,6 +3014,12 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
           score: readabilityResult.score,
           avgSentenceLength: readabilityResult.avgSentenceLength,
           issuesCount: readabilityResult.issues.length,
+        } : null,
+        burstiness: burstinessResult ? {
+          score: burstinessResult.score,
+          stdDev: burstinessResult.sentenceLengthStdDev,
+          overusedConnectors: burstinessResult.overusedConnectors.length,
+          issuesCount: burstinessResult.issues.length,
         } : null,
         semanticCoverage: semanticCoverage ? {
           globalScore: semanticCoverage.globalScore,
