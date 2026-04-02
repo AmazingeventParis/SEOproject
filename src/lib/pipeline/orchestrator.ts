@@ -4,7 +4,7 @@ import type { PipelineStep, PipelineContext, PipelineRunResult } from './types'
 
 // Article with joined relations from Supabase query
 type ArticleWithRelations = Article & {
-  seo_personas: { name: string; role: string; tone_description: string | null; bio: string | null; avatar_reference_url: string | null; writing_style_examples: Record<string, unknown>[] } | null
+  seo_personas: { name: string; role: string; tone_description: string | null; bio: string | null; avatar_reference_url: string | null; writing_style_examples: Record<string, unknown>[]; banned_phrases?: string[]; familiar_expressions?: string[] } | null
   seo_sites: { name: string; domain: string; niche: string | null; theme_color: string | null; money_page_url: string | null; money_page_description: string | null } | null
 }
 import { validateTransition, getNextStatus } from './state-machine'
@@ -43,6 +43,9 @@ import {
   type MissingTermSuggestion,
   type ExtractedEntity,
 } from '@/lib/seo/semantic-analysis'
+import { detectOverusedPhrases } from '@/lib/seo/phrase-dedup'
+import { analyzeBurstiness, extractUsedConnectors, type BurstinessResult } from '@/lib/seo/burstiness'
+import { fetchTemporalContext } from '@/lib/seo/serper'
 
 /**
  * Extract and parse JSON from AI response text.
@@ -945,6 +948,27 @@ async function executeWriteBlock(
   // Extract writing directives relevant to this block from the block's writing_directive
   // The plan-architect assigns directives to blocks via writing_directive text
 
+  // --- Banned phrases: manual (persona config) + auto-detected cross-article tics ---
+  let bannedPhrases: string[] = []
+  // 1. Manual banned phrases from persona settings
+  if (persona?.banned_phrases && persona.banned_phrases.length > 0) {
+    bannedPhrases = [...persona.banned_phrases]
+  }
+  // 2. Auto-detected overused phrases (passed from write-all or computed on first block)
+  const cachedTics = (input?.detectedTics as string[]) || null
+  if (cachedTics) {
+    bannedPhrases = [...bannedPhrases, ...cachedTics.filter(t => !bannedPhrases.includes(t))]
+  } else if (blockIndex === 0 && article.persona_id) {
+    // First block: detect cross-article tics and they'll be passed to subsequent blocks
+    try {
+      const overused = await detectOverusedPhrases(article.persona_id, article.id)
+      const autoTics = overused.map(o => o.phrase)
+      bannedPhrases = [...bannedPhrases, ...autoTics.filter(t => !bannedPhrases.includes(t))]
+    } catch (e) {
+      console.warn('[orchestrator] Failed to detect overused phrases:', e)
+    }
+  }
+
   const prompt = buildBlockWriterPrompt({
     keyword: article.keyword,
     searchIntent: article.search_intent,
@@ -1013,6 +1037,16 @@ async function executeWriteBlock(
       return sd?.productComparison as any
     })(),
     editorialContext: blockEditorialContext,
+    bannedPhrases: bannedPhrases.length > 0 ? bannedPhrases : undefined,
+    saturatedConnectors: (() => {
+      // Extract connectors already overused in previous blocks
+      const saturated = (input?.saturatedConnectors as string[]) || extractUsedConnectors(contentBlocks.slice(0, blockIndex))
+      return saturated.length > 0 ? saturated : undefined
+    })(),
+    temporalContext: (input?.temporalContext as string) || undefined,
+    familiarExpressions: persona?.familiar_expressions && persona.familiar_expressions.length > 0
+      ? persona.familiar_expressions
+      : undefined,
   })
 
   const aiResponse = modelOverride
@@ -1807,6 +1841,12 @@ async function executeSeo(
   let linksInjected = 0
   let updatedBlocks = [...contentBlocks]
 
+  // Identify intro block index — intro is PROTECTED from all SEO auto-modifications
+  // (the user may have manually edited it)
+  const introBlockIndex = updatedBlocks.findIndex(
+    (b) => b.type === 'paragraph' && !b.heading && b.content_html
+  )
+
   // Pre-scan: extract slugs already linked by the AI during write-step
   const existingLinkSlugs = new Set<string>()
   const hrefRegex = /<a\s[^>]*href=["']([^"']+)["']/gi
@@ -2123,6 +2163,137 @@ async function executeSeo(
     headingIssues.push(`${h2Blocks.length} H2 detectes — maximum recommande : 8 (risque de dilution)`)
   }
 
+  // 5a-bis. SEO Audit — auto-split long H2 sections into H3 subsections
+  // Detect H2 blocks with >400 words that have no H3 children, then use AI to split them
+  let h2SplitCount = 0
+  try {
+    // Build a map of H2 index → next H2 index to find child blocks
+    const h2Indices = updatedBlocks
+      .map((b, i) => ({ index: i, type: b.type }))
+      .filter(b => b.type === 'h2')
+      .map(b => b.index)
+
+    const longH2Blocks: { blockIndex: number; heading: string; wordCount: number; contentHtml: string }[] = []
+
+    for (let hi = 0; hi < h2Indices.length; hi++) {
+      const h2Idx = h2Indices[hi]
+      const nextH2Idx = h2Indices[hi + 1] ?? updatedBlocks.length
+      const block = updatedBlocks[h2Idx]
+
+      // Skip intro-protected block
+      if (h2Idx === introBlockIndex) continue
+      if (!block.content_html || block.status === 'pending') continue
+
+      // Check if this H2 already has H3 children
+      const hasH3Children = updatedBlocks
+        .slice(h2Idx + 1, nextH2Idx)
+        .some(b => b.type === 'h3')
+
+      if (hasH3Children) continue
+
+      const wordCount = block.word_count || countWords(block.content_html)
+      if (wordCount > 400) {
+        longH2Blocks.push({
+          blockIndex: h2Idx,
+          heading: block.heading || '',
+          wordCount,
+          contentHtml: block.content_html,
+        })
+      }
+    }
+
+    if (longH2Blocks.length > 0 && persona) {
+      console.log(`[seo-audit] ${longH2Blocks.length} section(s) H2 trop longue(s) sans H3 — split en cours...`)
+
+      const splitPrompt = `Tu es un expert en architecture de contenu SEO.
+
+## MISSION
+Decoupe les sections H2 suivantes en sous-sections H3 semantiquement optimisees.
+
+## MOT-CLE PRINCIPAL
+"${article.keyword}"
+
+## REGLES
+- Chaque section H2 trop longue doit etre decoupee en 2-4 sous-sections H3
+- Chaque H3 doit avoir un heading semantiquement riche (contient un terme du champ lexical de "${article.keyword}")
+- Les H3 doivent etre MECE : mutuellement exclusifs, collectivement exhaustifs
+- Le contenu HTML existant doit etre reparti dans les H3 (pas de perte de contenu)
+- Garde le heading H2 original tel quel
+- Le premier H3 recoit le debut du contenu, le deuxieme la suite, etc.
+- Coupe aux frontieres naturelles : changement de sujet, nouveau paragraphe, nouvelle idee
+- Chaque H3 doit avoir au moins 100 mots
+- Conserve TOUS les liens, tableaux, listes, encarts existants sans modification
+- Retourne UNIQUEMENT un JSON valide
+
+## FORMAT DE REPONSE
+[
+  {
+    "original_block_index": 3,
+    "subsections": [
+      { "h3_heading": "Heading H3 optimise SEO", "content_html": "<p>Contenu...</p>" },
+      { "h3_heading": "Autre heading H3", "content_html": "<p>Suite...</p>" }
+    ]
+  }
+]
+
+## SECTIONS A DECOUPER
+${longH2Blocks.map(b => `### [Bloc ${b.blockIndex}] H2 : "${b.heading}" (${b.wordCount} mots)
+${b.contentHtml}`).join('\n\n---\n\n')}`
+
+      const splitResponse = await routeAI('generate_title', [
+        { role: 'user', content: splitPrompt },
+      ])
+
+      const splits = extractJSON<{ original_block_index: number; subsections: { h3_heading: string; content_html: string }[] }[]>(splitResponse.content)
+
+      if (Array.isArray(splits)) {
+        // Apply splits in reverse order to preserve indices
+        const sortedSplits = [...splits].sort((a, b) => b.original_block_index - a.original_block_index)
+
+        for (const split of sortedSplits) {
+          const idx = split.original_block_index
+          if (idx < 0 || idx >= updatedBlocks.length || !split.subsections || split.subsections.length < 2) continue
+
+          const originalBlock = updatedBlocks[idx]
+
+          // Build replacement blocks: keep H2 with first subsection content, then add H3 blocks
+          const replacementBlocks: ContentBlock[] = []
+
+          // First subsection goes into the original H2 block
+          const firstSub = split.subsections[0]
+          replacementBlocks.push({
+            ...originalBlock,
+            content_html: firstSub.content_html,
+            word_count: countWords(firstSub.content_html),
+          })
+
+          // Remaining subsections become new H3 blocks
+          for (let si = 1; si < split.subsections.length; si++) {
+            const sub = split.subsections[si]
+            replacementBlocks.push({
+              id: `${originalBlock.id}-h3-${si}`,
+              type: 'h3',
+              heading: sub.h3_heading,
+              content_html: sub.content_html,
+              word_count: countWords(sub.content_html),
+              status: 'written',
+              nugget_ids: [],
+              model_used: originalBlock.model_used,
+            })
+          }
+
+          // Splice: replace original block with replacement blocks
+          updatedBlocks.splice(idx, 1, ...replacementBlocks)
+          h2SplitCount++
+
+          console.log(`[seo-audit] H2 "${originalBlock.heading}" split en ${split.subsections.length} sous-sections`)
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[seo-audit] H2 split failed, skipping:', err)
+  }
+
   // 5b. SEO Audit — sub-step B: keyword density analysis
   const writtenHtml = updatedBlocks
     .filter((b) => b.content_html && b.status !== 'pending')
@@ -2148,6 +2319,15 @@ async function executeSeo(
     console.log(`[seo-audit] Readability score: ${readabilityResult.score}/100 (avg sentence: ${readabilityResult.avgSentenceLength} words, visual density: ${readabilityResult.visualDensity})`)
   } catch (err) {
     console.warn('[seo-audit] Readability analysis failed:', err)
+  }
+
+  // 5b-quater. Burstiness scoring (AI detection fingerprint)
+  let burstinessResult: BurstinessResult | null = null
+  try {
+    burstinessResult = analyzeBurstiness(updatedBlocks)
+    console.log(`[seo-audit] Burstiness score: ${burstinessResult.score}/100 (stdDev: ${burstinessResult.sentenceLengthStdDev}, short ratio: ${burstinessResult.shortSentenceRatio}, overused connectors: ${burstinessResult.overusedConnectors.length})`)
+  } catch (err) {
+    console.warn('[seo-audit] Burstiness analysis failed:', err)
   }
 
   // 5b-ter. Pre-compute semantic coverage for use in critique (Axes 1, 3, 4)
@@ -2373,6 +2553,7 @@ Retourne UNIQUEMENT un JSON valide :
       const blocksToCondense = updatedBlocks
         .map((b, i) => ({ ...b, originalIndex: i }))
         .filter((b) => {
+          if (b.originalIndex === introBlockIndex) return false // Intro protected
           if (b.type === 'image' || b.type === 'faq' || !b.content_html || b.status === 'pending') return false
           const contentIdx = contentBlocksOnly.indexOf(b as ContentBlock)
           if (contentIdx < lastThirdStart) return false
@@ -2405,6 +2586,7 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
         const condenseFixes = extractJSON<{ block_index: number; new_content_html: string }[]>(condenseResponse.content)
         if (Array.isArray(condenseFixes)) {
           for (const fix of condenseFixes) {
+            if (fix.block_index === introBlockIndex) continue // Intro protected
             if (fix.block_index >= 0 && fix.block_index < updatedBlocks.length && fix.new_content_html) {
               updatedBlocks[fix.block_index] = {
                 ...updatedBlocks[fix.block_index],
@@ -2443,7 +2625,7 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
           content_html: b.content_html || '',
           word_count: b.word_count || 0,
         }))
-        .filter((b) => b.content_html && b.type !== 'image')
+        .filter((b) => b.content_html && b.type !== 'image' && b.index !== introBlockIndex)
 
       const optimizePrompts = buildOptimizeBlocksPrompt({
         keyword: article.keyword,
@@ -2473,8 +2655,12 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
       const fixes = extractJSON<{ optimized_blocks: { block_index: number; reason: string; new_content_html: string }[] }>(optimizeResponse.content)
 
       if (fixes && Array.isArray(fixes.optimized_blocks) && fixes.optimized_blocks.length > 0) {
-        // Apply fixes to blocks
+        // Apply fixes to blocks — SKIP intro block (protected from auto-modification)
         for (const fix of fixes.optimized_blocks) {
+          if (fix.block_index === introBlockIndex) {
+            console.log(`[seo-audit] Skipping intro block #${fix.block_index} — protected from auto-optimization`)
+            continue
+          }
           if (fix.block_index >= 0 && fix.block_index < updatedBlocks.length && fix.new_content_html) {
             updatedBlocks[fix.block_index] = {
               ...updatedBlocks[fix.block_index],
@@ -2701,6 +2887,16 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
       status: keywordDensityResult.status,
     },
     keywordInIntro,
+    ...(burstinessResult ? {
+      burstiness: {
+        score: burstinessResult.score,
+        sentenceLengthStdDev: burstinessResult.sentenceLengthStdDev,
+        avgSentenceLength: burstinessResult.avgSentenceLength,
+        shortSentenceRatio: burstinessResult.shortSentenceRatio,
+        overusedConnectors: burstinessResult.overusedConnectors,
+        issues: burstinessResult.issues,
+      },
+    } : {}),
     ...(readabilityResult ? {
       readability: {
         score: readabilityResult.score,
@@ -2716,6 +2912,7 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
     ...(critiqueResult ? { critique: critiqueResult } : {}),
     ...(optimizationResult ? { optimization: optimizationResult } : {}),
     ...(personaConsistency ? { personaConsistency } : {}),
+    ...(h2SplitCount > 0 ? { h2Splits: { sectionsSplit: h2SplitCount, reason: 'Sections H2 >400 mots sans H3 — decoupees en sous-sections semantiques' } } : {}),
     ...(condensedCount > 0 ? { condensation: { blocksCondensed: condensedCount, reason: 'Blocs du dernier tiers trop longs (>350 mots)' } } : {}),
     ...(nuggetIntegration ? { nuggetIntegration } : {}),
     ...(brokenLinksResult ? { brokenLinks: brokenLinksResult } : {}),
@@ -2792,6 +2989,7 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
       seoAudit: {
         headingIssues: headingIssues.length,
         headingCorrections: headingCorrections.length,
+        h2Splits: h2SplitCount,
         keywordDensity: keywordDensityResult.density,
         keywordInIntro,
         critiqueScore: critiqueResult?.score ?? null,
@@ -2819,6 +3017,12 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
           score: readabilityResult.score,
           avgSentenceLength: readabilityResult.avgSentenceLength,
           issuesCount: readabilityResult.issues.length,
+        } : null,
+        burstiness: burstinessResult ? {
+          score: burstinessResult.score,
+          stdDev: burstinessResult.sentenceLengthStdDev,
+          overusedConnectors: burstinessResult.overusedConnectors.length,
+          issuesCount: burstinessResult.issues.length,
         } : null,
         semanticCoverage: semanticCoverage ? {
           globalScore: semanticCoverage.globalScore,

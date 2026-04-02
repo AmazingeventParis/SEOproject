@@ -212,6 +212,8 @@ export type Database = {
           bio: string | null
           avatar_reference_url: string | null
           writing_style_examples: Record<string, unknown>[]
+          banned_phrases: string[]
+          familiar_expressions: string[]
           created_at: string
           updated_at: string
         }
@@ -224,6 +226,8 @@ export type Database = {
           bio?: string | null
           avatar_reference_url?: string | null
           writing_style_examples?: Record<string, unknown>[]
+          banned_phrases?: string[]
+          familiar_expressions?: string[]
           created_at?: string
           updated_at?: string
         }
@@ -236,6 +240,8 @@ export type Database = {
           bio?: string | null
           avatar_reference_url?: string | null
           writing_style_examples?: Record<string, unknown>[]
+          banned_phrases?: string[]
+          familiar_expressions?: string[]
           created_at?: string
           updated_at?: string
         }

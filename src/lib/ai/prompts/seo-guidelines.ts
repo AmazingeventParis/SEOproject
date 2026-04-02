@@ -307,6 +307,37 @@ Style humain et accessible :
 - Adresses directes au lecteur (vous, votre)
 - Adopte un ton qui parle directement a la cible du persona
 
+MICRO-RUPTURES STYLISTIQUES (ANTI-IA — OBLIGATOIRE) :
+L'IA produit un texte trop lisse et regulier. Un humain casse le rythme. Tu DOIS integrer au moins 2-3 de ces techniques par bloc :
+- **Phrases ultra-courtes** (2-5 mots) pour l'impact : "Resultat ?", "Pas si simple.", "Et ca change tout.", "Bref.", "On y vient."
+- **Parentheses conversationnelles** qui ajoutent une remarque personnelle : "(oui, meme en ${new Date().getFullYear()})", "(spoiler : ca vaut le coup)", "(et croyez-moi, ca se sent sur la facture)"
+- **Phrases commencant par Et, Mais, Ou** : "Et c'est la que ca coince.", "Mais attention a un detail.", "Ou alors, vous pouvez..."
+- **Questions rhetoriques suivies d'une reponse directe** : "Est-ce que ca vaut le detour ? Clairement, oui — a condition de..."
+- **Apartees personnels** du persona : "J'ai teste, je sais de quoi je parle.", "C'est un piege que je vois encore trop souvent."
+- **Ruptures de registre** : une phrase un peu familiere au milieu d'un paragraphe technique. "Concretement, ca veut dire quoi ?" ou "Bon, la on entre dans le vif du sujet."
+- INTERDIT de placer ces ruptures de facon mecanique (pas une par paragraphe comme un robot). Place-les aux moments ou un humain marquerait naturellement une pause ou une insistance.
+
+VARIATION DE LONGUEUR DE PHRASES (BURSTINESS — CRITIQUE) :
+L'IA ecrit des phrases de longueur uniforme (12-18 mots). C'est le signal n°1 de contenu genere. Tu DOIS varier :
+- Alterne DRASTIQUEMENT : une phrase de 3 mots. Puis une de 25. Puis 8. Puis 20. Puis 4.
+- Au moins 10-15% de tes phrases doivent avoir 5 mots ou moins (phrases-choc, punchlines)
+- Au moins 5-10% doivent depasser 22 mots (phrases developpes avec nuances)
+- JAMAIS 3 phrases consecutives de longueur similaire (ecart < 3 mots entre elles)
+
+CONNECTEURS ET TRANSITIONS (ANTI-IA) :
+Les connecteurs formels sont la signature de l'IA. Regles strictes :
+- INTERDITS plus de 2 fois dans TOUT l'article : "en effet", "par ailleurs", "de plus", "en outre", "neanmoins", "toutefois", "cependant", "par consequent", "en revanche", "de ce fait", "qui plus est", "a cet egard", "dans cette optique"
+- Prefere des transitions IMPLICITES (enchainement logique sans connecteur) ou des transitions ORALES : "Bon,", "Du coup,", "Reste que", "Le hic,", "Autre point :", "Concretement,"
+- Si tu sens le besoin de mettre "en effet" ou "par ailleurs", SUPPRIME le connecteur et laisse la phrase vivre seule. Le lecteur comprend la logique sans qu'on lui tienne la main.
+
+OPINIONS TRANCHEES DU PERSONA (OBLIGATOIRE — 1 par section H2) :
+Un expert humain prend position. L'IA reste neutre et balanced. Pour chaque section H2, tu DOIS inclure :
+- AU MOINS 1 avis personnel tranche, relie a l'experience du persona
+- Format : affirmation forte + justification basee sur le vecu ("Franchement, a ce prix, je passe mon tour — j'en ai installe 3 et aucun n'a tenu plus de 2 ans.")
+- PAS de "d'un cote... de l'autre..." equilibre. Prends position. Un expert a un avis.
+- Si la bio mentionne un contexte precis, ANCRE l'opinion dedans ("Dans ma maison des annees 80, j'ai teste les deux — le verdict est sans appel.")
+- Ces opinions doivent sonner VECU, pas theorique. Utilise "j'ai vu", "j'ai teste", "dans mon experience", "chez mes clients".
+
 Ton mesure et credible (CRITIQUE) :
 - JAMAIS de jugements excessifs ou sensationnalistes : "pure arnaque", "catastrophique", "fuyez absolument", "c'est revolutionnaire", "c'est scandaleux", "incroyable", "hallucinant"
 - Prefere des formulations factuelles et nuancees : "le rapport qualite-prix reste discutable", "les performances sont en dessous de la moyenne", "cette option ne convainc pas sur ce critere"

@@ -130,6 +130,38 @@ L'article doit repondre a l'intention de recherche DES LE PREMIER H2. Le lecteur
 3. **Avant-dernier H2** : Section optionnelle (erreurs a eviter, conseils avances, etc.)
 4. **Dernier bloc (optionnel)** : FAQ (si PAA disponibles et pertinent pour l'intention)
 
+## VARIATION STRUCTURELLE ANTI-IA (OBLIGATOIRE)
+
+Google detecte les articles qui suivent tous le meme squelette. Tu DOIS varier la structure d'un article a l'autre.
+
+### Variations d'ouverture (CHOISIS UNE au hasard pour chaque article)
+- **Chiffre-choc** : l'intro commence par une statistique surprenante ou un fait marquant
+- **Anecdote persona** : l'intro raconte une experience concrete du persona (1-2 phrases de vecu)
+- **Question directe** : l'intro interpelle le lecteur avec une question ("Vous hesitez entre X et Y ?")
+- **Contre-intuition** : l'intro contredit une idee recue ("Contrairement a ce qu'on lit partout, ...")
+- **Constat terrain** : l'intro part d'une observation du persona ("Ce que je vois chez 90% de mes clients, c'est...")
+NE PAS toujours commencer par une definition ou une reformulation du mot-cle.
+
+### Variations de structure (CHOISIS UN profil au hasard)
+- **Profil A — Classique** : 4-5 H2 + FAQ (le standard)
+- **Profil B — Deep dive** : 6-7 H2 sans FAQ, chaque section plus courte et specialisee
+- **Profil C — Tableau first** : le premier H2 commence par un tableau comparatif/recapitulatif, puis les H2 suivants detaillent
+- **Profil D — Experience first** : le premier H2 est un retour d'experience du persona, puis les H2 approfondissent
+- **Profil E — Problem/Solution** : alterne sections "probleme" et "solution" (H2 par paire)
+
+### Variations de cloture (avant la FAQ si presente)
+- Parfois : section "erreurs a eviter"
+- Parfois : section "retour d'experience / bilan apres X mois"
+- Parfois : section "checklist / aide a la decision" (format tableau ou liste)
+- Parfois : section "pour aller plus loin / ressources"
+- NE PAS toujours finir par "erreurs a eviter" — varier.
+
+### Nombre de H2
+- Ne fixe PAS toujours le meme nombre de H2. Varie entre 4 et 7 selon la profondeur du sujet.
+- Un article court (1500 mots) = 4 H2. Un article long (3000 mots) = 6-7 H2.
+
+Indique dans ta reponse JSON le profil de structure choisi dans la writing_directive du premier bloc : "PROFIL STRUCTUREL : [A/B/C/D/E] — [variation d'ouverture choisie]"
+
 ### INTERDIT en premier H2
 - "Qu'est-ce que..." / "Definition de..."
 - "Introduction a..."

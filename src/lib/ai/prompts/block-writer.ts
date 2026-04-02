@@ -69,6 +69,10 @@ interface BlockWriterParams {
     articleAngle?: string
     writingDirectives?: string[]
   }
+  bannedPhrases?: string[]
+  saturatedConnectors?: string[]
+  temporalContext?: string
+  familiarExpressions?: string[]
 }
 
 interface BlockWriterPrompt {
@@ -85,7 +89,7 @@ interface BlockWriterPrompt {
 export function buildBlockWriterPrompt(
   params: BlockWriterParams
 ): BlockWriterPrompt {
-  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleDigest, articleTitle, internalLinkTargets, siteDomain, authorityLink, tableStyleIndex, calloutStyleIndex, blockPosition, articleOutline, blockKeyIdeas } = params
+  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleDigest, articleTitle, internalLinkTargets, siteDomain, authorityLink, tableStyleIndex, calloutStyleIndex, blockPosition, articleOutline, blockKeyIdeas, bannedPhrases, saturatedConnectors, temporalContext, familiarExpressions } = params
 
   // ---- System prompt ----
   const system = `Tu es un redacteur web expert en SEO, specialise dans la creation de contenu de haute qualite optimise pour le referencement naturel.
@@ -110,7 +114,28 @@ Tu dois ecrire EXACTEMENT comme cette personne parlerait - avec sa voix, son exp
 ${SEO_WRITING_STYLE_RULES}
 
 ${SEO_ANTI_AI_PATTERNS}
-
+${bannedPhrases && bannedPhrases.length > 0 ? `
+### EXPRESSIONS INTERDITES POUR CE PERSONA (TICS DE LANGAGE)
+Les expressions suivantes sont des tics repetitifs detectes dans les articles precedents de ${persona.name}.
+Tu ne dois JAMAIS les utiliser, meme reformulees ou avec des variantes proches :
+${bannedPhrases.map(p => `- "${p}"`).join('\n')}
+Si tu te surprends a ecrire une de ces tournures, SUPPRIME-LA et reformule completement avec une approche differente.
+` : ''}${saturatedConnectors && saturatedConnectors.length > 0 ? `
+### CONNECTEURS SATURES (DEJA TROP UTILISES DANS CET ARTICLE)
+Ces connecteurs ont deja ete utilises 2+ fois dans les blocs precedents. Tu ne dois PLUS les utiliser dans ce bloc :
+${saturatedConnectors.map(c => `- "${c}"`).join('\n')}
+Utilise des transitions implicites ou orales a la place : "Bon,", "Du coup,", "Reste que", "Le hic,", "Concretement,".
+` : ''}${temporalContext ? `
+### ANCRAGE TEMPOREL (ACTUALITE DU SECTEUR)
+Voici des elements d'actualite recente a integrer naturellement (1-2 references max dans ce bloc, SI pertinent) :
+${temporalContext}
+Ne force PAS l'integration si ca n'a rien a voir avec cette section. Mais si c'est pertinent, ancre ton propos dans le reel.
+` : ''}${familiarExpressions && familiarExpressions.length > 0 ? `
+### PALETTE D'EXPRESSIONS FAMILIERES DU PERSONA
+${persona.name} utilise ces tournures familieres dans son style naturel. Pioche-en 1-2 par bloc pour humaniser le texte :
+${familiarExpressions.map(e => `- "${e}"`).join('\n')}
+N'utilise PAS plus de 2 expressions familieres par bloc. Elles doivent sonner spontanees, pas forcees.
+` : ''}
 ### SEO — Placement strategique du mot-cle
 Le placement du mot-cle depend de la POSITION du bloc dans l'article :
 

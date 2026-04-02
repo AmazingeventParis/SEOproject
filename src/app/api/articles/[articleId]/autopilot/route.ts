@@ -4,6 +4,8 @@ import { executeStep, preGenerateArticleImages } from "@/lib/pipeline/orchestrat
 import { modelIdToOverride } from "@/lib/ai/router";
 import type { ContentBlock, TitleSuggestion, ArticleStatus } from "@/lib/supabase/types";
 import { checkKeyIdeasCoverage } from "@/lib/pipeline/quality-checks";
+import { detectOverusedPhrases } from "@/lib/seo/phrase-dedup";
+import { fetchTemporalContext } from "@/lib/seo/serper";
 
 export const maxDuration = 600; // 10 minutes for full pipeline
 
@@ -239,6 +241,26 @@ export async function POST(
               const usedNuggetIds: string[] = [];
               let progressCounter = 0;
 
+              // Detect cross-article overused phrases once before writing
+              let detectedTics: string[] = [];
+              let temporalContext = "";
+              try {
+                const { data: artForPersona } = await supabase
+                  .from("seo_articles")
+                  .select("persona_id, keyword")
+                  .eq("id", articleId)
+                  .single();
+                if (artForPersona?.persona_id) {
+                  const overused = await detectOverusedPhrases(artForPersona.persona_id, articleId);
+                  detectedTics = overused.map(o => o.phrase);
+                }
+                if (artForPersona?.keyword) {
+                  temporalContext = await fetchTemporalContext(artForPersona.keyword);
+                }
+              } catch (e) {
+                console.warn("[autopilot] Failed to detect overused phrases:", e);
+              }
+
               // Process blocks in parallel batches
               for (let batchStart = 0; batchStart < pendingIndices.length; batchStart += WRITE_BATCH_SIZE) {
                 const batchIndices = pendingIndices.slice(batchStart, batchStart + WRITE_BATCH_SIZE);
@@ -249,6 +271,8 @@ export async function POST(
                     executeStep(articleId, "write_block", {
                       blockIndex,
                       usedNuggetIds: [...usedNuggetIds],
+                      detectedTics,
+                      temporalContext,
                       skipSave: true,
                       ...modelOverride,
                     })
