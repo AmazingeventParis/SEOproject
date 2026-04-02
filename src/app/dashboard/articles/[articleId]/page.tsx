@@ -1948,6 +1948,21 @@ export default function ArticleDetailPage() {
                     </Button>
                   </a>
                 )}
+                {article.seo_sites?.gds_url && (
+                  <Button
+                    variant="outline"
+                    className="border-violet-400 text-violet-700 hover:bg-violet-50"
+                    onClick={() => runPipelineAction("publish-gds", "Publication GDS")}
+                    disabled={!!actionLoading}
+                  >
+                    {actionLoading === "Publication GDS" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Globe className="mr-2 h-4 w-4" />
+                    )}
+                    Publier sur GDS
+                  </Button>
+                )}
                 {(article as Record<string, unknown>).gds_url && (
                   <a
                     href={(article as Record<string, unknown>).gds_url as string}
