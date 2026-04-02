@@ -1,0 +1,345 @@
+"use client";
+
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Link from "@tiptap/extension-link";
+import Underline from "@tiptap/extension-underline";
+import { Table } from "@tiptap/extension-table";
+import { TableRow } from "@tiptap/extension-table-row";
+import { TableCell } from "@tiptap/extension-table-cell";
+import { TableHeader } from "@tiptap/extension-table-header";
+import { useEffect, useCallback, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Bold,
+  Italic,
+  Underline as UnderlineIcon,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
+  Quote,
+  Table2,
+  Undo,
+  Redo,
+  Loader2,
+} from "lucide-react";
+import { TableBuilderDialog } from "@/components/table-builder-dialog";
+
+interface RichTextEditorProps {
+  content: string;
+  onChange: (html: string) => void;
+}
+
+function stripTableWrappers(html: string): string {
+  return html.replace(
+    /<div class="table-container">\s*(<table[\s\S]*?<\/table>)\s*<\/div>/g,
+    "$1"
+  );
+}
+
+function wrapTablesWithContainer(html: string): string {
+  return html.replace(
+    /(<table[\s\S]*?<\/table>)/g,
+    '<div class="table-container">$1</div>'
+  );
+}
+
+export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
+  const lastEmittedHtml = useRef<string>("");
+  const [tableDialogOpen, setTableDialogOpen] = useState(false);
+  const [selectedText, setSelectedText] = useState("");
+  const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const [generatingTable, setGeneratingTable] = useState(false);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: false,
+      }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          rel: "noopener noreferrer",
+        },
+      }),
+      Underline,
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableCell,
+      TableHeader,
+    ],
+    content: stripTableWrappers(content),
+    onUpdate: ({ editor }) => {
+      const html = wrapTablesWithContainer(editor.getHTML());
+      lastEmittedHtml.current = html;
+      onChange(html);
+    },
+  });
+
+  useEffect(() => {
+    if (editor && content !== lastEmittedHtml.current) {
+      editor.commands.setContent(stripTableWrappers(content));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content]);
+
+  const setLink = useCallback(() => {
+    if (!editor) return;
+    const previousUrl = editor.getAttributes("link").href;
+    const url = window.prompt("URL du lien :", previousUrl);
+    if (url === null) return;
+    if (url === "") {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      return;
+    }
+    editor
+      .chain()
+      .focus()
+      .extendMarkRange("link")
+      .setLink({ href: url })
+      .run();
+  }, [editor]);
+
+  const openTableBuilder = useCallback(() => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    const text = editor.state.doc.textBetween(from, to, "\n");
+    setSelectedText(text);
+    setTableDialogOpen(true);
+  }, [editor]);
+
+  // Close context menu on click anywhere or Escape
+  useEffect(() => {
+    if (!contextMenuPos) return;
+    const handleClose = () => setContextMenuPos(null);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setContextMenuPos(null);
+    };
+    document.addEventListener("mousedown", handleClose);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClose);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [contextMenuPos]);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (!editor) return;
+      const { from, to } = editor.state.selection;
+      if (from === to) return; // No selection → native menu
+      e.preventDefault();
+      // Clamp position so menu stays on screen
+      const x = Math.min(e.clientX, window.innerWidth - 220);
+      const y = Math.min(e.clientY, window.innerHeight - 50);
+      setContextMenuPos({ x, y });
+    },
+    [editor]
+  );
+
+  const handleTableInsert = useCallback(
+    (tableHtml: string) => {
+      if (!editor) return;
+      editor.chain().focus().deleteSelection().insertContent(tableHtml).run();
+    },
+    [editor]
+  );
+
+  const generateTableFromSelection = useCallback(async () => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    const text = editor.state.doc.textBetween(from, to, "\n");
+    if (!text.trim()) return;
+
+    setGeneratingTable(true);
+    try {
+      const res = await fetch("/api/ai/generate-table", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur");
+      editor.chain().focus().deleteSelection().insertContent(data.html).run();
+    } catch (err) {
+      console.error("[generate-table]", err);
+      alert("Erreur lors de la generation du tableau : " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setGeneratingTable(false);
+    }
+  }, [editor]);
+
+  if (!editor) return null;
+
+  return (
+    <div className="border rounded-md overflow-hidden relative">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-0.5 border-b bg-muted/50 p-1">
+        <Button
+          type="button"
+          size="sm"
+          variant={editor.isActive("bold") ? "default" : "ghost"}
+          className="h-7 w-7 p-0"
+          onClick={() => editor.chain().focus().toggleBold().run()}
+          title="Gras"
+        >
+          <Bold className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={editor.isActive("italic") ? "default" : "ghost"}
+          className="h-7 w-7 p-0"
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+          title="Italique"
+        >
+          <Italic className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={editor.isActive("underline") ? "default" : "ghost"}
+          className="h-7 w-7 p-0"
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          title="Souligne"
+        >
+          <UnderlineIcon className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={editor.isActive("link") ? "default" : "ghost"}
+          className="h-7 w-7 p-0"
+          onClick={setLink}
+          title="Lien"
+        >
+          <LinkIcon className="h-3.5 w-3.5" />
+        </Button>
+
+        <div className="w-px h-5 bg-border mx-1" />
+
+        <Button
+          type="button"
+          size="sm"
+          variant={editor.isActive("bulletList") ? "default" : "ghost"}
+          className="h-7 w-7 p-0"
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          title="Liste a puces"
+        >
+          <List className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={editor.isActive("orderedList") ? "default" : "ghost"}
+          className="h-7 w-7 p-0"
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          title="Liste numerotee"
+        >
+          <ListOrdered className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={editor.isActive("blockquote") ? "default" : "ghost"}
+          className="h-7 w-7 p-0"
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          title="Citation"
+        >
+          <Quote className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={editor.isActive("table") ? "default" : "ghost"}
+          className="h-7 w-7 p-0"
+          onClick={openTableBuilder}
+          title="Tableau"
+        >
+          <Table2 className="h-3.5 w-3.5" />
+        </Button>
+
+        <div className="w-px h-5 bg-border mx-1" />
+
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 w-7 p-0"
+          onClick={() => editor.chain().focus().undo().run()}
+          disabled={!editor.can().undo()}
+          title="Annuler"
+        >
+          <Undo className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 w-7 p-0"
+          onClick={() => editor.chain().focus().redo().run()}
+          disabled={!editor.can().redo()}
+          title="Retablir"
+        >
+          <Redo className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {/* Editor content */}
+      <div onContextMenu={handleContextMenu}>
+        <EditorContent
+          editor={editor}
+          className="prose prose-sm max-w-none p-3 min-h-[200px] focus-within:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[180px]"
+        />
+      </div>
+
+      {/* Loading overlay */}
+      {generatingTable && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/60 rounded-md">
+          <div className="flex items-center gap-2 bg-popover border rounded-lg px-4 py-2 shadow-lg">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Generation du tableau...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Context menu */}
+      {contextMenuPos && (
+        <div
+          className="fixed z-50 min-w-[180px] bg-popover text-popover-foreground border rounded-lg shadow-lg p-1 animate-in fade-in duration-150"
+          style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
+          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+        >
+          <button
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
+            onClick={() => {
+              setContextMenuPos(null);
+              editor.chain().focus().toggleBlockquote().run();
+            }}
+          >
+            <Quote className="h-4 w-4" />
+            Mettre en citation
+          </button>
+          <button
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
+            onClick={() => {
+              setContextMenuPos(null);
+              generateTableFromSelection();
+            }}
+          >
+            <Table2 className="h-4 w-4" />
+            Convertir en tableau
+          </button>
+        </div>
+      )}
+
+      {/* Table builder dialog */}
+      <TableBuilderDialog
+        open={tableDialogOpen}
+        selectedText={selectedText}
+        onInsert={handleTableInsert}
+        onClose={() => setTableDialogOpen(false)}
+      />
+    </div>
+  );
+}

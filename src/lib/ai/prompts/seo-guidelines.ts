@@ -1,0 +1,909 @@
+// ============================================================
+// SEO Guidelines — Shared constants for all AI prompts
+// Single source of truth for SEO rules used by:
+// - block-writer.ts (content writing)
+// - plan-architect.ts (article planning)
+// - critique.ts (content evaluation)
+// ============================================================
+
+/**
+ * E-E-A-T (Experience, Expertise, Authority, Trust) rules.
+ * Used by: block-writer, plan-architect, critique
+ */
+export const SEO_EEAT_RULES = `- Montre l'EXPERIENCE personnelle du persona (anecdotes, cas concrets, vecu terrain)
+- UTILISE LA BIO DU PERSONA : si le persona a une backstory (maison, situation, parcours), ancre le contenu dedans. Exemple : un persona qui vit dans une maison des annees 80 doit partager des retours d'experience concrets lies a cette realite. La bio n'est pas decorative — c'est la preuve vivante de l'expertise.
+- Demontre l'EXPERTISE avec des donnees precises, des analyses approfondies
+- Renforce l'AUTORITE en citant des sources, des etudes, des references
+- Assure la FIABILITE avec des informations exactes, a jour et equilibrees
+- Donne des conseils actionables et concrets, pas d'affirmations vagues
+
+Penalites E-E-A-T :
+- Contenu generique sans valeur ajoutee
+- Absence d'exemples ou de cas concrets
+- Affirmations non etayees
+- Style impersonnel / "IA" evident
+- Persona present dans la bio mais JAMAIS cite ou ancre dans le contenu`
+
+/**
+ * FAQ accordion style presets per site domain.
+ * Modern accordion with inline styles for WordPress compatibility.
+ */
+export interface FaqStylePreset {
+  accentColor: string    // Gradient start + icon bg
+  accentLight: string    // Gradient end + hover bg
+  bgColor: string        // Wrapper background
+  borderColor: string    // Wrapper + item borders
+  titleColor: string     // H2 color
+  textColor: string      // Answer text
+  arrowColor: string     // Expand/collapse arrow
+}
+
+export const SITE_FAQ_STYLES: Record<string, FaqStylePreset> = {
+  'smakk.fr': {
+    accentColor: '#0A6CFF',
+    accentLight: '#3B8AFF',
+    bgColor: '#F8FAFF',
+    borderColor: '#DBEAFE',
+    titleColor: '#00052F',
+    textColor: '#334155',
+    arrowColor: '#0A6CFF',
+  },
+  'mon-habitat-durable.fr': {
+    accentColor: '#2D5A27',
+    accentLight: '#3D7A35',
+    bgColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+    titleColor: '#14532D',
+    textColor: '#334155',
+    arrowColor: '#2D5A27',
+  },
+  'shootnbox.fr': {
+    accentColor: '#18181B',
+    accentLight: '#3F3F46',
+    bgColor: '#FAFAFA',
+    borderColor: '#E4E4E7',
+    titleColor: '#18181B',
+    textColor: '#3F3F46',
+    arrowColor: '#EAB308',
+  },
+  'kiftabox.fr': {
+    accentColor: '#7C3AED',
+    accentLight: '#8B5CF6',
+    bgColor: '#FAF5FF',
+    borderColor: '#E9D5FF',
+    titleColor: '#5B21B6',
+    textColor: '#334155',
+    arrowColor: '#7C3AED',
+  },
+}
+
+export const DEFAULT_FAQ_STYLE: FaqStylePreset = {
+  accentColor: '#1e293b',
+  accentLight: '#334155',
+  bgColor: '#f8fafc',
+  borderColor: '#e2e8f0',
+  titleColor: '#1e293b',
+  textColor: '#334155',
+  arrowColor: '#3b82f6',
+}
+
+export function getFaqStyleForSite(siteDomain: string | undefined): FaqStylePreset {
+  const domain = (siteDomain || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '')
+  return SITE_FAQ_STYLES[domain] || DEFAULT_FAQ_STYLE
+}
+
+/**
+ * Build the FAQ accordion HTML template with full inline styles.
+ * Modern design: rounded corners, smooth transitions, per-site colors.
+ */
+export function buildFaqTemplate(style: FaqStylePreset): string {
+  return `<div style="margin:40px 0;padding:0;background:${style.bgColor};border:1px solid ${style.borderColor};border-radius:16px;overflow:hidden">
+  <h2 style="margin:0;padding:22px 28px 18px;font-size:1.35rem;font-weight:800;color:${style.titleColor};border-bottom:2px solid ${style.borderColor}">H2 SEO optimise : [Mot-cle] — Questions frequentes</h2>
+  <div itemscope itemtype="https://schema.org/FAQPage" style="padding:8px 0">
+    <details style="border-bottom:1px solid ${style.borderColor};margin:0" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+      <summary style="padding:16px 28px;font-weight:600;font-size:1rem;color:${style.titleColor};cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;-webkit-appearance:none" itemprop="name">
+        Question optimisee ici ?
+        <span style="flex-shrink:0;font-size:1.3rem;color:${style.arrowColor};transition:transform 0.2s">+</span>
+      </summary>
+      <div style="padding:0 28px 18px;color:${style.textColor};line-height:1.7;font-size:0.95rem" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+        <div itemprop="text">
+          <p style="margin:0">Reponse directe en 2-3 phrases. Commence par LA reponse, puis precise si besoin.</p>
+        </div>
+      </div>
+    </details>
+    <!-- Repeter <details> pour chaque question (3-6 questions) -->
+  </div>
+</div>`
+}
+
+/**
+ * FAQ format and rules (HTML accordion + Schema.org).
+ * Used by: block-writer, plan-architect
+ */
+export function buildFaqRules(style: FaqStylePreset): string {
+  return `Format HTML : le bloc FAQ est un ACCORDION MODERNE avec balisage Schema.org FAQPage.
+Structure COMPLETE a generer (copie les styles inline EXACTEMENT) :
+
+${buildFaqTemplate(style)}
+
+REGLES FAQ STRICTES :
+1. **H2 SEO OPTIMISE** : le <h2> inclut le mot-cle principal + "Questions frequentes" ou variante naturelle. Exemples :
+   - "Thermostat connecte Heatzy : vos questions frequentes"
+   - "FAQ : tout savoir sur le comparatif des box cuisine"
+   - NE PAS ecrire "Questions frequentes" seul (trop generique, zero signal SEO)
+2. **BALISAGE FAQPage** : le <div> wrapper DOIT avoir itemscope itemtype="https://schema.org/FAQPage". Chaque <details> = Question, chaque reponse = Answer
+3. **ACCORDION HTML NATIF** : utilise <details>/<summary> (pas de JS). Chaque question s'ouvre/ferme au clic
+4. **STYLES INLINE OBLIGATOIRES** : copie EXACTEMENT les styles du template ci-dessus (padding, couleurs, border-radius, etc.)
+5. **SUMMARY sans marqueur natif** : ajoute list-style:none et -webkit-appearance:none sur chaque <summary>. Le "+" en <span> fait office de fleche
+6. **REPONSES COURTES** : 2-3 phrases MAX par reponse. Commence par LA reponse directe (optimise featured snippet). Pas de intro, pas de "En effet...", pas de bavardage
+7. **3-6 QUESTIONS** basees sur les "People Also Ask" et le sujet. Questions naturelles que le lecteur se pose reellement
+8. **PAS DE HEADING DANS LES REPONSES** : uniquement du <p> dans le div itemprop="text". Pas de <h3>, pas de <strong> excessif
+9. Le wrapper a border-radius:16px et background:${style.bgColor}. Les items ont border-bottom:1px solid ${style.borderColor}
+10. La DERNIERE question n'a PAS de border-bottom (ajoute style="border-bottom:none" sur le dernier <details>)`
+}
+
+// Legacy constant for backward compatibility — uses default style
+export const SEO_FAQ_RULES = buildFaqRules(DEFAULT_FAQ_STYLE)
+
+/**
+ * Forbidden AI-sounding patterns.
+ * Used by: block-writer, critique
+ */
+export const SEO_ANTI_AI_PATTERNS = `Formulations INTERDITES (style ChatGPT/IA generique) :
+- "dans cet article" (sous TOUTES ses formes : "dans cet article nous allons", "dans cet article vous decouvrirez", "cet article vous explique", "cet article explore", etc.)
+- "Il est important de noter que..."
+- "Il convient de..."
+- "Force est de constater..."
+- "Dans un premier temps..."
+- "Voyons maintenant..."
+- "Dans cette section..."
+- "Depuis la nuit des temps..."
+- "Comme nous l'avons vu..."
+- "En conclusion..." / "En resume..." / "En definitive..." / "Ainsi..." (en debut de phrase conclusive)
+- "Au fil de cet article..." / "Tout au long de cet article..."
+- Toute formulation generique ou bateau reconnaissable comme generee par IA
+- Toute hyperbole ou jugement excessif : "pure arnaque", "absolument genial", "catastrophique", "fuyez", "revolutionnaire", "hallucinant", "scandaleux"
+
+Ponctuation et typographie INTERDITES :
+- PAS de guillemets francais (\u00ab \u00bb) ni typographiques (\u201c \u201d)
+- PAS de tiret cadratin (\u2014) ni demi-cadratin (\u2013) — utilise le tiret simple (-) ou reformule
+- PAS de points de suspension excessifs (...)
+- PAS de guillemets autour de mots ou expressions dans le texte courant (ex: INTERDIT d'ecrire les "experts", un "vrai" probleme, la "meilleure" solution). Ecris directement sans guillemets. Les guillemets sont reserves UNIQUEMENT aux citations directes d'une personne.
+- Utilise uniquement le tiret simple (-)`
+
+/**
+ * Keyword density and placement rules.
+ * Used by: block-writer, critique
+ */
+export const SEO_KEYWORD_RULES = `- Densite du mot-cle principal : 0.5-2.5% (naturelle, jamais forcee)
+- JAMAIS de keyword stuffing — chaque occurrence doit sonner naturelle
+- Si une phrase semble forcee pour placer un mot-cle, REFORMULE-LA jusqu'a ce que l'insertion soit invisible
+- AU MOINS un H2 doit contenir le mot-cle principal ou une variante tres proche
+- Le mot-cle doit apparaitre dans les 100 premiers mots de l'article
+- Utilise des variantes, synonymes et mots-cles de longue traine pour enrichir le signal semantique
+- Champ semantique riche et varie dans tous les blocs — les termes connexes doivent etre integres de maniere invisible
+- Structure le contenu pour faciliter la lecture (paragraphes courts, listes quand adapte)`
+
+/**
+ * Semantic field enrichment rules.
+ * Used by: block-writer, critique
+ */
+export const SEO_SEMANTIC_FIELD_RULES = `- Champ semantique riche : utilise des mots-cles lies (LSI) et des termes co-occurrents
+- Integre le vocabulaire TF-IDF du domaine naturellement dans le texte
+- Varie le vocabulaire : synonymes, expressions proches, termes du champ lexical
+- Ne te limite pas au mot-cle exact — enrichis avec l'ecosysteme semantique du sujet`
+
+/**
+ * Heading hierarchy rules (H2/H3/H4 structure).
+ * Used by: plan-architect, critique
+ */
+export const SEO_HEADING_STRUCTURE_RULES = `## OPTIMISATION SEMANTIQUE DES Hn — REGLES CRITIQUES
+
+### Principe fondamental
+Les titres H2/H3/H4 sont les signaux semantiques les PLUS PUISSANTS de l'article pour Google. Un bon heading = mot-cle ou variante sémantique + qualificateur concret + intention utilisateur. Google utilise les Hn pour comprendre la STRUCTURE THEMATIQUE de la page. Chaque Hn doit enrichir le signal semantique global.
+
+### Regles de formulation semantique des H2
+- **Mot-cle + qualificateur** : chaque H2 doit contenir SOIT le mot-cle principal, SOIT une variante semantique proche (synonyme, terme LSI, cooccurrence forte). JAMAIS de H2 generique sans ancrage semantique
+- **AU MOINS 2 H2** doivent contenir le mot-cle principal ou une variante TRES proche (pas juste un mot du champ semantique)
+- **Chaque H2 restant** doit contenir au minimum un terme du champ semantique ou un terme TF-IDF pertinent
+- Chaque H2 doit etre une QUESTION ou une PROMESSE claire (pas de titres vagues)
+- Chaque H2 doit etre comprehensible DE FACON ISOLEE (pense featured snippet Google)
+- Utilise des VERBES D'ACTION qui ancrent l'intention : Comparer, Choisir, Eviter, Calculer, Installer, Optimiser, Reparer...
+- 3 a 6 sections H2 par article
+- MAX 80 caracteres par titre H2/H3/H4 — si plus long, reformule
+
+### Technique de construction d'un H2 optimise
+1. Pars de l'INTENTION utilisateur pour cette section (que cherche-t-il ?)
+2. Integre le mot-cle principal OU un terme TF-IDF/semantique du domaine
+3. Ajoute un qualificateur concret : chiffre, annee, comparatif, question, benefice
+4. Verifie que le H2 SEUL pourrait etre un titre de featured snippet
+
+**Formules qui fonctionnent :**
+- "[Verbe d'action] + [mot-cle/variante] + [qualificateur]" → "Calculer le cout d'un poele de masse en 2026"
+- "[Question mot-cle] + [precision]" → "Quel rendement attendre d'un poele de masse a accumulation ?"
+- "[Comparatif/Superlatif] + [mot-cle] + [critere]" → "Les 5 meilleurs materiaux pour un poele de masse"
+- "[Mot-cle] + [vs/ou/face a] + [alternative]" → "Poele de masse ou poele a granules : quelle difference ?"
+- "[Comment/Pourquoi] + [mot-cle] + [objectif]" → "Comment entretenir un poele de masse pour durer 30 ans"
+
+**INTERDIT en H2 (zero signal semantique) :**
+- Titres generiques : "Le budget", "Les avantages", "Notre avis", "Conseils pratiques", "Ce qu'il faut savoir"
+- Titres narratifs : "Parlons argent", "Introduction", "Notre analyse", "Focus sur..."
+- Titres sans mot-cle NI terme semantique : "A retenir", "En pratique", "Les erreurs", "Notre verdict"
+
+**Exemples concrets :**
+- MAUVAIS : "Les avantages" → BON : "5 avantages concrets du poele de masse face au chauffage electrique"
+- MAUVAIS : "Notre avis" → BON : "Poele de masse : notre verdict apres 3 hivers d'utilisation"
+- MAUVAIS : "Le budget" → BON : "Quel budget prevoir pour installer un poele de masse en 2026 ?"
+- MAUVAIS : "Conseils pratiques" → BON : "Comment choisir l'emplacement ideal pour un poele de masse ?"
+- MAUVAIS : "Comparatif" → BON : "Poele de masse vs insert a bois : performances et prix compares"
+
+### Enrichissement semantique via donnees SERP
+- Les **termes TF-IDF** fournis indiquent les mots que Google ATTEND dans un article sur ce sujet. Integre-les dans les H2/H3 quand c'est naturel
+- Les **questions PAA** (People Also Ask) sont des formulations EXACTES que les utilisateurs tapent. Reprends-les telles quelles en H2 ou H3 quand elles correspondent a une section
+- Les **recherches associees** contiennent des variantes longue traine du mot-cle. Utilise-les dans les H3
+- Les **H2 des concurrents** montrent les angles deja couverts — couvre-les TOUS et ajoute des angles uniques
+
+### Regles H3
+- Chaque H3 = sous-aspect CONCRET du H2 parent
+- Chaque H3 doit contenir une **variante semantique** du mot-cle OU un terme TF-IDF specifique au sous-sujet
+- 1 a 3 H3 par H2 maximum
+- Ne saute JAMAIS un niveau (pas de H3 sans H2 parent)
+- Utilise des H3 pour decouper les sections H2 longues (>400 mots) en sous-parties lisibles
+- Les H3 ciblent les requetes longue traine : reprends les recherches associees et PAA specifiques
+
+### Regles H4
+- Chaque H4 = detail precis sous un H3 parent
+- 1 a 3 H4 par H3 maximum
+- Utilise des H4 quand un H3 couvre plusieurs points distincts qui meritent un titre
+- Ne saute JAMAIS un niveau (pas de H4 sans H3 parent)
+- Optionnel : n'utilise des H4 que si le contenu est suffisamment dense pour le justifier`
+
+/**
+ * Internal linking strategy rules.
+ * Used by: block-writer, plan-architect
+ */
+export const SEO_INTERNAL_LINKING_RULES = `- L'ancre ne doit JAMAIS etre le titre exact, ni l'URL, ni le slug de la page cible
+- L'ancre = expression naturelle de 2-6 mots integree dans la phrase
+- JAMAIS de "cliquez ici" ou "en savoir plus" comme ancre
+- Max 2-3 liens internes par section H2 (pas de sur-optimisation)
+- Un meme target_slug ne peut apparaitre qu'1 fois dans tout l'article
+- REGLE CRITIQUE — ZERO HORS-SUJET POUR LE MAILLAGE : un lien interne = UNE balise <a> glissee dans une phrase qui parle DEJA du sujet de l'article en cours. Tu ne dois JAMAIS ecrire de phrase, de paragraphe ou de transition dont le but est d'introduire le sujet de l'article cible. Si le sujet de l'article cible n'a aucun rapport naturel avec la phrase en cours, NE PLACE PAS le lien. Mieux vaut 0 lien interne qu'un paragraphe hors-sujet.
+- Le lien doit etre INVISIBLE pour le lecteur : il doit tomber sur un mot ou une expression qui fait deja partie du discours, pas sur un detour thematique force`
+
+/**
+ * Writing style and readability rules.
+ * Used by: block-writer, critique
+ */
+export const SEO_WRITING_STYLE_RULES = `- Ecris dans un style naturel, fluide et engageant
+- Phrases courtes et percutantes. UNE IDEE PAR PHRASE. Pas de phrases a rallonge.
+- Alterne phrases courtes (impact) et moyennes (explication). Evite les phrases longues (>25 mots).
+- Integre des exemples concrets, des chiffres, des cas pratiques quand c'est pertinent
+- Utilise des transitions naturelles entre les paragraphes
+- Paragraphes courts (2-3 lignes max) pour une lecture facile sur ecran — un paragraphe de 5+ lignes est TROP LONG, decoupe-le
+- Pas de formulations generiques ou bateaux
+- Pas de repetitions excessives, pas de style monotone
+- Zero fluff : chaque phrase doit apporter de l'information ou de la valeur. Supprime tout remplissage.
+- RYTHME VISUEL OBLIGATOIRE — ZERO MUR DE TEXTE :
+  * Alterne SYSTEMATIQUEMENT : prose courte (2-3 lignes) → liste a puces OU tableau → prose courte → element visuel. Le lecteur ne doit JAMAIS voir plus de 4 lignes de prose continue sans respiration visuelle.
+  * REGLE DES 150 MOTS : tout passage de prose depassant 150 mots DOIT etre coupe par une liste a puces (<ul>/<ol>) ou un tableau recapitulatif. Pas d'exception.
+  * TABLEAUX OBLIGATOIRES : chaque article de 1500+ mots doit contenir au MINIMUM 2 tableaux HTML (comparatif, recapitulatif, criteres, specs...). Les tableaux sont le format le plus scannable pour le lecteur presse.
+  * LISTES A PUCES : des que tu enumeres 3+ elements (avantages, etapes, criteres, conseils), utilise une liste <ul> ou <ol> avec <strong> sur le point cle. JAMAIS de liste "cachee" dans un paragraphe de prose.
+  * Le lecteur doit pouvoir SCANNER la page en 10 secondes et comprendre les points cles grace aux elements visuels (tableaux, listes, mots en gras).
+
+- EMOJIS SUR LES LISTES A PUCES :
+  * Chaque item <li> DOIT commencer par un emoji pertinent suivi d'un espace avant le texte
+  * Choisis des emojis THEMATIQUES lies au contenu de l'item (pas toujours le meme emoji)
+  * Exemples : "✅ <strong>Avantage cle</strong> : ...", "⚠️ <strong>Point d'attention</strong> : ...", "💡 <strong>Astuce</strong> : ...", "📊 <strong>Chiffre cle</strong> : ...", "🔧 <strong>Outil</strong> : ...", "💰 <strong>Budget</strong> : ..."
+  * Pour les listes <ol> numerotees, l'emoji vient APRES le numero automatique : "<li>🎯 <strong>Etape 1</strong> : ..."
+  * Varie les emojis au sein d'une meme liste — INTERDIT d'utiliser le meme emoji pour tous les items
+  * Les emojis rendent la liste scannable et ajoutent de la couleur visuelle sur mobile
+  * TAILLE MEDIUM OBLIGATOIRE : chaque <ul> et <ol> DOIT avoir style="font-size:1.125rem;line-height:1.8" et chaque <li> DOIT avoir style="margin-bottom:8px;font-size:1.125rem". Cela correspond a la taille "Medium" de WordPress pour une meilleure lisibilite.
+
+Style humain et accessible :
+- Ecris comme un humain expert qui parle a un autre humain
+- Vocabulaire simple et direct, accessible a tous
+- Tournures actives plutot que passives
+- Mots concrets plutot qu'abstractions
+- Adresses directes au lecteur (vous, votre)
+- Adopte un ton qui parle directement a la cible du persona
+
+Ton mesure et credible (CRITIQUE) :
+- JAMAIS de jugements excessifs ou sensationnalistes : "pure arnaque", "catastrophique", "fuyez absolument", "c'est revolutionnaire", "c'est scandaleux", "incroyable", "hallucinant"
+- Prefere des formulations factuelles et nuancees : "le rapport qualite-prix reste discutable", "les performances sont en dessous de la moyenne", "cette option ne convainc pas sur ce critere"
+- Un expert credible ne crie pas — il constate, il argumente, il chiffre. Les superlatifs et les jugements a l'emporte-piece font amateur et generent de la mefiance chez le lecteur averti
+- Evite aussi l'enthousiasme excessif : "absolument genial", "tout simplement parfait", "le meilleur du marche sans conteste" → prefere "une option solide", "un excellent rapport qualite-prix", "parmi les meilleurs de sa categorie"
+- Ton professionnel : affirmatif mais jamais agressif, honnete mais jamais dramatique
+- Les avis tranches sont permis UNIQUEMENT s'ils sont immediatement suivis d'un argument factuel (chiffre, comparaison, critere mesurable)`
+
+/**
+ * Table style presets per site domain.
+ * Each site has 2 styles that alternate within an article for visual variety.
+ * Style 1 = even tables (0, 2, 4...), Style 2 = odd tables (1, 3, 5...)
+ */
+export interface TableStylePreset {
+  name: string
+  thBg: string
+  thColor: string
+  thBorder?: string
+  trAltBg: string
+  tdBorder: string
+  accentColor?: string
+  containerBorder?: string
+}
+
+export const SITE_TABLE_STYLES: Record<string, [TableStylePreset, TableStylePreset]> = {
+  'smakk.fr': [
+    {
+      name: 'Impact',
+      thBg: 'linear-gradient(135deg,#00052F 0%,#0A2463 100%)',
+      thColor: '#FFFFFF',
+      trAltBg: '#F0F6FC',
+      tdBorder: '#E2E8F0',
+      accentColor: '#0A6CFF',
+      containerBorder: '1px solid #E2E8F0',
+    },
+    {
+      name: 'Epure',
+      thBg: 'linear-gradient(135deg,#EFF6FF 0%,#DBEAFE 100%)',
+      thColor: '#00052F',
+      thBorder: '2px solid #0A6CFF',
+      trAltBg: '#FAFBFF',
+      tdBorder: '#E2E8F0',
+      accentColor: '#FB8E28',
+      containerBorder: '1px solid #DBEAFE',
+    },
+  ],
+  'mon-habitat-durable.fr': [
+    {
+      name: 'Nature',
+      thBg: 'linear-gradient(135deg,#2D5A27 0%,#3D7A35 100%)',
+      thColor: '#FFFFFF',
+      trAltBg: '#F0FDF4',
+      tdBorder: '#E2E8F0',
+      accentColor: '#26BD26',
+      containerBorder: '1px solid #E2E8F0',
+    },
+    {
+      name: 'Eco',
+      thBg: 'linear-gradient(135deg,#ECFDF5 0%,#D1FAE5 100%)',
+      thColor: '#166534',
+      thBorder: '2px solid #26BD26',
+      trAltBg: '#F7FEE7',
+      tdBorder: '#E2E8F0',
+      accentColor: '#16A34A',
+      containerBorder: '1px solid #D1FAE5',
+    },
+  ],
+  'shootnbox.fr': [
+    {
+      name: 'Studio',
+      thBg: 'linear-gradient(135deg,#18181B 0%,#27272A 100%)',
+      thColor: '#FFFFFF',
+      trAltBg: '#FAFAFA',
+      tdBorder: '#E4E4E7',
+      accentColor: '#EAB308',
+      containerBorder: '1px solid #E4E4E7',
+    },
+    {
+      name: 'Flash',
+      thBg: 'linear-gradient(135deg,#FEF9C3 0%,#FEF08A 100%)',
+      thColor: '#18181B',
+      thBorder: '2px solid #EAB308',
+      trAltBg: '#FFFBEB',
+      tdBorder: '#E4E4E7',
+      accentColor: '#CA8A04',
+      containerBorder: '1px solid #FEF08A',
+    },
+  ],
+  'kiftabox.fr': [
+    {
+      name: 'Tendance',
+      thBg: 'linear-gradient(135deg,#7C3AED 0%,#8B5CF6 100%)',
+      thColor: '#FFFFFF',
+      trAltBg: '#FAF5FF',
+      tdBorder: '#E2E8F0',
+      accentColor: '#A855F7',
+      containerBorder: '1px solid #E2E8F0',
+    },
+    {
+      name: 'Pop',
+      thBg: 'linear-gradient(135deg,#F5F3FF 0%,#EDE9FE 100%)',
+      thColor: '#5B21B6',
+      thBorder: '2px solid #8B5CF6',
+      trAltBg: '#FAFAFE',
+      tdBorder: '#E2E8F0',
+      accentColor: '#7C3AED',
+      containerBorder: '1px solid #EDE9FE',
+    },
+  ],
+}
+
+/** Default table styles for sites not in the registry */
+export const DEFAULT_TABLE_STYLES: [TableStylePreset, TableStylePreset] = [
+  {
+    name: 'Moderne',
+    thBg: 'linear-gradient(135deg,#1e293b 0%,#334155 100%)',
+    thColor: '#FFFFFF',
+    trAltBg: '#f8fafc',
+    tdBorder: '#e2e8f0',
+    accentColor: '#3b82f6',
+    containerBorder: '1px solid #e2e8f0',
+  },
+  {
+    name: 'Clair',
+    thBg: 'linear-gradient(135deg,#f1f5f9 0%,#e2e8f0 100%)',
+    thColor: '#1e293b',
+    thBorder: '2px solid #3b82f6',
+    trAltBg: '#fafbff',
+    tdBorder: '#e2e8f0',
+    accentColor: '#f59e0b',
+    containerBorder: '1px solid #e2e8f0',
+  },
+]
+
+/**
+ * Get the table style for a given site domain and table index.
+ * Alternates between Style 1 (even index) and Style 2 (odd index).
+ */
+export function getTableStyleForSite(siteDomain: string | undefined, tableIndex: number): TableStylePreset {
+  // Normalize domain: remove protocol, www, trailing slashes
+  const domain = (siteDomain || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '')
+  const styles = SITE_TABLE_STYLES[domain] || DEFAULT_TABLE_STYLES
+  return styles[tableIndex % 2]
+}
+
+/**
+ * Build the full table HTML template for the AI prompt based on the style preset.
+ * Modern design: rounded corners, gradient headers, proper spacing, responsive.
+ */
+export function buildTablePromptTemplate(style: TableStylePreset): string {
+  const containerBorder = style.containerBorder ? `;border:${style.containerBorder}` : ''
+  const thBorder = style.thBorder ? `;border-bottom:${style.thBorder}` : ''
+  // First th gets top-left radius, last th gets top-right radius
+  const thBaseStyle = `background:${style.thBg};color:${style.thColor};padding:14px 18px;font-weight:700;text-align:left;font-size:0.95rem;letter-spacing:0.01em${thBorder}`
+
+  return `<div class="table-container" style="width:100%;overflow-x:auto;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.06);margin:28px 0${containerBorder}">
+  <table style="width:100%;border-collapse:collapse;min-width:480px;font-size:0.95rem;line-height:1.6">
+    <thead>
+      <tr>
+        <th style="${thBaseStyle};border-top-left-radius:12px">En-tete 1</th>
+        <th style="${thBaseStyle}">En-tete 2</th>
+        <th style="${thBaseStyle};border-top-right-radius:12px">En-tete 3</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:13px 18px;border-bottom:1px solid ${style.tdBorder};font-size:0.95rem"><strong>Donnee importante</strong></td>
+        <td style="padding:13px 18px;border-bottom:1px solid ${style.tdBorder};font-size:0.95rem">Valeur</td>
+        <td style="padding:13px 18px;border-bottom:1px solid ${style.tdBorder};font-size:0.95rem">Detail</td>
+      </tr>
+      <tr style="background:${style.trAltBg}">
+        <td style="padding:13px 18px;border-bottom:1px solid ${style.tdBorder};font-size:0.95rem"><strong>Autre donnee</strong></td>
+        <td style="padding:13px 18px;border-bottom:1px solid ${style.tdBorder};font-size:0.95rem">Valeur</td>
+        <td style="padding:13px 18px;border-bottom:1px solid ${style.tdBorder};font-size:0.95rem">Detail</td>
+      </tr>
+      <tr>
+        <td style="padding:13px 18px;font-size:0.95rem;border-bottom-left-radius:12px"><strong>Derniere ligne</strong></td>
+        <td style="padding:13px 18px;font-size:0.95rem">Valeur</td>
+        <td style="padding:13px 18px;font-size:0.95rem;border-bottom-right-radius:12px">Detail</td>
+      </tr>
+    </tbody>
+  </table>
+</div>`
+}
+
+/**
+ * Build the table style rules description for the AI prompt.
+ */
+export function buildTableStyleRules(style: TableStylePreset): string {
+  const thBorderRule = style.thBorder ? `, border-bottom ${style.thBorder}` : ''
+  const containerBorderRule = style.containerBorder ? `, border ${style.containerBorder}` : ''
+  const accentRule = style.accentColor ? `\n- Accent (donnees importantes, badges, chiffres cles) : color ${style.accentColor} ou font-weight 700` : ''
+
+  return `REGLES DE STYLE TABLEAU (OBLIGATOIRE — copie ces styles exactement) :
+- Container <div> : border-radius 12px, box-shadow 0 4px 12px rgba(0,0,0,0.06), overflow-x auto, margin 28px 0${containerBorderRule}
+- <table> : width 100%, border-collapse collapse, min-width 480px, font-size 0.95rem, line-height 1.6
+- <th> : background ${style.thBg}, color ${style.thColor}, padding 14px 18px, font-weight 700, font-size 0.95rem, letter-spacing 0.01em${thBorderRule}
+- Premier <th> : border-top-left-radius 12px. Dernier <th> : border-top-right-radius 12px
+- <td> : padding 13px 18px, border-bottom 1px solid ${style.tdBorder}, font-size 0.95rem
+- Lignes paires <tr> : style="background:${style.trAltBg}" (zebra-striping)
+- Premiere colonne <td> : utilise <strong> pour les labels (premiere cellule de chaque ligne)
+- Derniere ligne <tbody> : PAS de border-bottom sur les <td>, premier td border-bottom-left-radius 12px, dernier td border-bottom-right-radius 12px
+- Max 4-5 colonnes (lisibilite mobile). Headers courts (1-3 mots)${accentRule}`
+}
+
+/**
+ * Callout/encart style presets per site domain.
+ * Used for "Mon Avis", "Mes Astuces", expert tips with author photo.
+ * Each site has 2 styles that alternate (like tables).
+ */
+export interface CalloutStylePreset {
+  name: string
+  borderColor: string
+  bgColor: string
+  accentColor: string
+  titleColor: string
+  iconBg: string
+  iconBorderColor?: string
+}
+
+export const SITE_CALLOUT_STYLES: Record<string, [CalloutStylePreset, CalloutStylePreset]> = {
+  'smakk.fr': [
+    {
+      name: 'Avis Expert',
+      borderColor: '#0A6CFF',
+      bgColor: '#F0F6FC',
+      accentColor: '#00052F',
+      titleColor: '#00052F',
+      iconBg: '#00052F',
+    },
+    {
+      name: 'Astuce Pro',
+      borderColor: '#FB8E28',
+      bgColor: '#FFF8F0',
+      accentColor: '#FB8E28',
+      titleColor: '#00052F',
+      iconBg: '#FFFFFF',
+      iconBorderColor: '#FB8E28',
+    },
+  ],
+  'mon-habitat-durable.fr': [
+    {
+      name: 'Avis Expert',
+      borderColor: '#2D5A27',
+      bgColor: '#E8F5E9',
+      accentColor: '#2D5A27',
+      titleColor: '#2D5A27',
+      iconBg: '#2D5A27',
+    },
+    {
+      name: 'Astuce Pro',
+      borderColor: '#26BD26',
+      bgColor: '#F1F8E9',
+      accentColor: '#26BD26',
+      titleColor: '#2D5A27',
+      iconBg: '#FFFFFF',
+      iconBorderColor: '#26BD26',
+    },
+  ],
+}
+
+export const DEFAULT_CALLOUT_STYLES: [CalloutStylePreset, CalloutStylePreset] = [
+  {
+    name: 'Avis Expert',
+    borderColor: '#3b82f6',
+    bgColor: '#eff6ff',
+    accentColor: '#1e40af',
+    titleColor: '#1e293b',
+    iconBg: '#1e293b',
+  },
+  {
+    name: 'Astuce Pro',
+    borderColor: '#f59e0b',
+    bgColor: '#fffbeb',
+    accentColor: '#f59e0b',
+    titleColor: '#1e293b',
+    iconBg: '#FFFFFF',
+    iconBorderColor: '#f59e0b',
+  },
+]
+
+/**
+ * Get the callout style for a given site domain and callout index.
+ */
+export function getCalloutStyleForSite(siteDomain: string | undefined, calloutIndex: number): CalloutStylePreset {
+  const domain = siteDomain?.toLowerCase().replace(/^www\./, '') || ''
+  const styles = SITE_CALLOUT_STYLES[domain] || DEFAULT_CALLOUT_STYLES
+  return styles[calloutIndex % 2]
+}
+
+/**
+ * Build the full callout HTML template for the AI prompt.
+ */
+export function buildCalloutPromptTemplate(
+  style: CalloutStylePreset,
+  personaName: string,
+  personaRole: string,
+  avatarUrl: string | null,
+): string {
+  const avatarBorder = style.iconBorderColor ? `border:2px solid ${style.iconBorderColor}` : `border:2px solid ${style.borderColor}`
+  const avatarBg = style.iconBg
+  const avatarHtml = avatarUrl
+    ? `<img src="${avatarUrl}" alt="${personaName}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;${avatarBorder}" />`
+    : `<div style="width:52px;height:52px;border-radius:50%;background:${avatarBg};${avatarBorder};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.2rem;color:${style.accentColor}">${personaName.charAt(0).toUpperCase()}</div>`
+
+  return `<div class="expert-callout" style="display:flex;gap:16px;align-items:flex-start;padding:20px 24px;background:${style.bgColor};border-left:4px solid ${style.borderColor};border-radius:8px;margin:24px 0;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+  <div style="flex-shrink:0;padding-top:2px">
+    ${avatarHtml}
+</div>
+<div style="flex:1;min-width:0">
+    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
+      <strong style="font-size:1rem;color:${style.titleColor}">TITRE DE L'ENCART</strong>
+    </div>
+Le contenu de l'encart ici. 2-4 phrases maximum, avis tranche ou astuce actionable.
+</div>
+</div>`
+}
+
+/**
+ * Thematic callout box types (info, conseil, attention, chiffre cle).
+ * These are simpler callouts without avatar — used for visual breaks and key info.
+ * All styles use inline CSS for WordPress compatibility.
+ */
+export interface ThematicCalloutType {
+  name: string
+  emoji: string
+  borderColor: string
+  bgColor: string
+  titleColor: string
+  iconBg: string
+}
+
+export const THEMATIC_CALLOUT_TYPES: Record<string, ThematicCalloutType> = {
+  info: {
+    name: 'Le saviez-vous ?',
+    emoji: '💡',
+    borderColor: '#3b82f6',
+    bgColor: '#eff6ff',
+    titleColor: '#1e40af',
+    iconBg: '#dbeafe',
+  },
+  conseil: {
+    name: 'Conseil pratique',
+    emoji: '✅',
+    borderColor: '#22c55e',
+    bgColor: '#f0fdf4',
+    titleColor: '#166534',
+    iconBg: '#dcfce7',
+  },
+  attention: {
+    name: 'Point d\'attention',
+    emoji: '⚠️',
+    borderColor: '#f59e0b',
+    bgColor: '#fffbeb',
+    titleColor: '#92400e',
+    iconBg: '#fef3c7',
+  },
+  chiffre: {
+    name: 'Chiffre cle',
+    emoji: '📊',
+    borderColor: '#8b5cf6',
+    bgColor: '#f5f3ff',
+    titleColor: '#5b21b6',
+    iconBg: '#ede9fe',
+  },
+}
+
+/**
+ * Build HTML template for a thematic callout box.
+ */
+export function buildThematicCalloutTemplate(type: ThematicCalloutType): string {
+  return `<div style="display:flex;gap:14px;align-items:flex-start;padding:18px 22px;background:${type.bgColor};border-left:4px solid ${type.borderColor};border-radius:8px;margin:24px 0;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+  <div style="flex-shrink:0;width:40px;height:40px;border-radius:50%;background:${type.iconBg};display:flex;align-items:center;justify-content:center;font-size:1.3rem">${type.emoji}</div>
+  <div style="flex:1;min-width:0">
+    <strong style="display:block;font-size:0.95rem;color:${type.titleColor};margin-bottom:6px">${type.name}</strong>
+    <p style="margin:0;line-height:1.6;color:#334155">Contenu de l'encart ici. 1-3 phrases percutantes.</p>
+  </div>
+</div>`
+}
+
+/**
+ * Build HTML template for a CTA "Lire aussi" box (internal link promotion).
+ */
+export function buildCtaLireAussiTemplate(): string {
+  return `<a href="URL_ARTICLE" style="display:block;text-decoration:none;margin:32px 0;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.08);border:1px solid #e2e8f0">
+  <div style="display:flex;flex-wrap:wrap;align-items:stretch;min-height:80px">
+    <div style="flex-shrink:0;width:6px;background:linear-gradient(180deg,#3b82f6 0%,#8b5cf6 100%)"></div>
+    <div style="flex:1;min-width:0;padding:20px 24px;display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#ffffff 0%,#f8fafc 100%)">
+      <div style="flex-shrink:0;width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%);display:flex;align-items:center;justify-content:center;font-size:1.4rem">📖</div>
+      <div style="flex:1;min-width:0">
+        <span style="display:block;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;font-weight:700;margin-bottom:4px">A lire aussi</span>
+        <span style="display:block;color:#1e293b;font-weight:700;font-size:1.05rem;line-height:1.4;overflow:hidden;text-overflow:ellipsis">Titre de l'article lie</span>
+      </div>
+      <div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center">
+        <span style="color:#3b82f6;font-size:1.2rem;font-weight:700">&#8250;</span>
+      </div>
+    </div>
+  </div>
+</a>`
+}
+
+/**
+ * Intent-specific strategies for plan, writing, and critique.
+ * Each search intent has radically different structure, style, and SEO techniques.
+ * Used by: plan-architect, block-writer, critique
+ */
+export const INTENT_STRATEGIES: Record<string, { plan: string; writing: string; critique: string }> = {
+  traffic: {
+    plan: `Strategie "traffic" — Ranker en position 1-3 SERP :
+- Bloc intro (OBLIGATOIRE, type "paragraph", heading null) : annonce la reponse directe en 100-140 mots, contient le mot-cle principal
+- Pyramide inversee STRICTE. Premier H2 = reponse directe optimisee featured snippet
+- 2000-3000 mots. Couverture exhaustive du sujet
+- H2 clairs et autonomes (chaque H2 = mini-reponse pour featured snippet)
+- FAQ obligatoire basee sur PAA
+- format_hint prioritaire : "mixed" et "prose"`,
+    writing: `Strategie d'ecriture "traffic" — Objectif : featured snippet + position 1-3 :
+- Densite semantique maximale, variantes LSI, expressions en gras (<strong>)
+- Paragraphes courts (3-4 lignes). Chaque H2 = reponse autonome
+- Pas de suspense — reponse IMMEDIATE des la premiere phrase du bloc
+- Phrases concises, chiffres quand possible
+- Mets en gras les termes-cles et les donnees importantes`,
+    critique: `Criteres specifiques "traffic" :
+- Couverture sujet exhaustive vs concurrents (toutes les sous-questions traitees ?)
+- Densite semantique suffisante (variantes LSI presentes ?)
+- Chaque H2 est-il "featured-snippet-ready" (reponse autonome en 2-3 phrases) ?
+- Objectif 2000-3000 mots atteint ?
+- FAQ basee sur PAA presente ?`,
+  },
+
+  review: {
+    plan: `Strategie "review" — Ranker + GEO (Generative Engine Optimization) :
+- Bloc intro (OBLIGATOIRE, type "paragraph", heading null) : annonce le verdict en 100-140 mots, contient le mot-cle principal
+- Premier H2 = verdict rapide / "Mon avis en bref" avec note
+- Structure : verdict → criteres detailles avec scores → avantages/inconvenients → a qui ca s'adresse → verdict final
+- Mots-cles GEO obligatoires dans H2 : "meilleur", "avis", "test", "top N"
+- format_hint : "bullets" pour avantages/inconvenients, "mixed" pour criteres
+- 1800-2500 mots
+- PAS de H2 "Qu'est-ce que..." en ouverture — commence par le verdict`,
+    writing: `Strategie d'ecriture "review" — Objectif : avis expert + GEO :
+- Ton expert testeur, avis TRANCHE (pas neutre — prends position clairement)
+- Formulations GEO : "meilleur [X] en 2026", "notre avis sur [X]", "top [N] des..."
+- Listes puces avec check/croix dans le texte pour pros/cons (ex: "✓ Excellent rapport qualite-prix" / "✗ Interface peu intuitive")
+- Sections "A qui s'adresse ce produit" et "Pour qui ce n'est PAS fait"
+- Note / score sur 10 ou sur 5 etoiles (ex: "⭐ 4.2/5" ou "Note : 8.5/10")
+- Chaque critere evalue doit avoir un score ou une appreciation claire`,
+    critique: `Criteres specifiques "review" :
+- Presence des mots-cles GEO dans les H2 ("meilleur", "avis", "test") ?
+- Verdict clair et tranche des le premier H2 (pas de reponse tiede) ?
+- Avantages et inconvenients clairement listes ?
+- Note ou score present ?
+- Avis personnel et expertise perceptibles (pas un resume neutre) ?`,
+  },
+
+  comparison: {
+    plan: `Strategie "comparison" — Ranker sur "[A] vs [B]" :
+- Bloc intro (OBLIGATOIRE, type "paragraph", heading null) : pose le contexte du comparatif en 100-140 mots, contient le mot-cle principal
+- Premier H2 = tableau comparatif DIRECT (pas d'intro "qu'est-ce que")
+- Structure OBLIGATOIRE : intro courte (1 paragraphe contexte) → tableau comparatif → analyse par critere → verdict "Lequel choisir selon votre profil"
+- Le tableau utilise <div class="table-container"><table>...</table></div> avec colonnes produits
+- format_hint : "table" pour le bloc comparatif principal, "prose" pour les analyses
+- 1500-2500 mots
+- Le dernier H2 avant FAQ = "Lequel choisir ?" avec verdict personnalise par profil
+- Si des DONNEES PRODUITS sont fournies, le tableau comparatif DOIT utiliser UNIQUEMENT ces donnees. INTERDIT d'inventer des specs, prix ou notes. Chaque cellule de spec doit avoir un code couleur (vert=above, orange=average, rouge=below) via styles inline.
+- Les liens d'affiliation ne sont inseres QUE pour les produits avec affiliate_enabled=true`,
+    writing: `Strategie d'ecriture "comparison" — Objectif : comparatif objectif + verdict :
+- Tableau HTML dans <div class="table-container"><table> avec <thead> Critere | Produit A | Produit B
+- CODE COULEUR OBLIGATOIRE sur chaque cellule de spec : vert (above average), orange (average), rouge (below average) via styles inline sur les <td>
+- Design epure avec styles inline (compatible WordPress) : border-collapse, padding, font-weight
+- Apres le tableau : analyse prose de chaque critere important
+- Ton objectif et factuel, chiffres precis — UNIQUEMENT les donnees fournies
+- Verdict personnalise : "Si vous cherchez X → Produit A / Si votre priorite est Y → Produit B"
+- Ne favorise pas un produit arbitrairement — argumente chaque recommandation
+- Boutons CTA affilies : uniquement pour les produits avec lien d'affiliation actif, attribut rel="nofollow sponsored"`,
+    critique: `Criteres specifiques "comparison" :
+- Tableau comparatif present avec code couleur (vert/orange/rouge) sur les cellules ?
+- Equilibre entre les produits compares (pas de biais visible) ?
+- Les donnees du tableau correspondent-elles EXACTEMENT aux donnees produits fournies (pas d'invention) ?
+- Verdict "lequel choisir selon votre profil" present ?
+- Format standardise (tableau + analyses par critere) respecte ?
+- Liens d'affiliation avec rel="nofollow sponsored" uniquement sur les produits actives ?`,
+  },
+
+  discover: {
+    plan: `Strategie "discover" — Google Discover / actualite chaude :
+- Bloc intro (OBLIGATOIRE, type "paragraph", heading null) : accroche journalistique en 100-140 mots, contient le mot-cle principal
+- Structure "news hook" avec suspense
+- Premier H2 = accroche forte + contexte actualite (SANS reveler l'info principale)
+- H2 suivants = montee en tension, contexte, enjeux
+- Info cruciale = dans l'avant-dernier H2 seulement (apres 60-70% de l'article)
+- Dernier H2 = consequences / analyse / "et maintenant ?"
+- PAS de FAQ (format news — ne mets PAS de bloc type "faq")
+- 1200-1800 mots (plus court, plus punchy)
+- generate_image: true sur TOUS les H2 (images fortes accrocheuses)`,
+    writing: `Strategie d'ecriture "discover" — Objectif : retention + Google Discover :
+- Style journalistique news, phrases d'accroche percutantes
+- Creer curiosite sans clickbait malhonnete
+- Structure suspense : contexte → tension → revelation → consequences
+- Paragraphes TRES courts (2-3 lignes max)
+- Questions rhetoriques pour maintenir l'attention
+- Mots emotionnellement charges dans les formulations
+- NE PAS reveler l'info cle trop tot — la placer apres 60% du contenu`,
+    critique: `Criteres specifiques "discover" :
+- L'info cle n'est PAS dans le premier H2 (suspense respecte) ?
+- Accroche forte et engageante des le debut ?
+- Rythme news (paragraphes courts, phrases percutantes) ?
+- Retention : le lecteur a-t-il envie de continuer a lire ?
+- Objectif 1200-1800 mots respecte (pas trop long) ?
+- Pas de FAQ (format news) ?`,
+  },
+
+  lead_gen: {
+    plan: `Strategie "lead_gen" — Money page / conversion :
+- Bloc intro (OBLIGATOIRE, type "paragraph", heading null) : identifie le probleme du lecteur en 100-140 mots, contient le mot-cle principal
+- Premier H2 = identification du probleme du lecteur (pain point)
+- H2 suivants = solution + benefices concrets + social proof
+- Bloc "callout" type callout-important avec CTA principal apres les benefices
+- Formulaire HTML <form class="lead-form"> avec champs pertinents dans un bloc dedie
+- FAQ orientee objections (lever les freins a la conversion)
+- CTA repartis (au moins 2-3 dans l'article, pas juste en fin)
+- 1500-2500 mots`,
+    writing: `Strategie d'ecriture "lead_gen" — Objectif : conversion :
+- Copywriting conversion. Adresse le lecteur directement ("vous")
+- Framework PAS : Probleme → Agitation → Solution
+- Benefices > caracteristiques (pas "notre outil fait X" mais "vous gagnez Y")
+- Urgence subtile, chiffres de resultats concrets
+- Formulaire HTML : <form class="lead-form"> avec <input>, <select>, <button type="submit">
+- CTA en <div class="callout callout-important"> avec bouton d'action
+- Temoignages en <blockquote class="testimonial">
+- Chaque section doit ramener vers la conversion sans etre agressif`,
+    critique: `Criteres specifiques "lead_gen" :
+- Presence de CTA multiples (au moins 2-3 repartis dans l'article) ?
+- Formulaire present avec class="lead-form" ?
+- Social proof (temoignages, chiffres, resultats) ?
+- Framework PAS respecte (Probleme → Agitation → Solution) ?
+- Focus sur les benefices plutot que les caracteristiques ?
+- FAQ orientee objections (leve les freins) ?`,
+  },
+
+  opinion: {
+    plan: `Strategie "opinion" — Avis critique independant, ton tranche :
+- Bloc intro (OBLIGATOIRE, type "paragraph", heading null) : pose la question controversee en 100-140 mots, interpelle le lecteur ("Faut-il vraiment... ?", "Est-ce une arnaque ?"), contient le mot-cle principal
+- Titre H1 PROVOCATEUR : question directe, affirmation a contre-courant ou promesse de verite ("Tuiles solaires : fausse bonne idee ?", "[Produit] : on vous dit TOUT ce qu'on ne vous dit pas", "[Sujet] : pourquoi je deconseille en 2026")
+- Premier H2 = VERDICT FRANC des le depart, pas de suspense. Le persona prend position clairement ("Mon avis honnete apres X mois", "Ce que personne ne dit sur [sujet]")
+- H2 suivants = arguments structures POUR et CONTRE avec preuves, chiffres, vecu terrain
+- Un H2 "Les points qui fachent" ou "Ce qu'on ne vous dit pas" obligatoire — c'est le coeur de la valeur ajoutee
+- Un H2 "A qui ca s'adresse vraiment ?" pour nuancer et etre honnete
+- Ton critique mais JUSTE : pas de demolissage gratuit, chaque critique est argumentee avec des faits ou du vecu
+- FAQ orientee doutes et objections courantes
+- 1800-2800 mots
+- format_hint : "mixed" (prose + listes + tableaux pour comparer)
+- generate_image sur les H2 cles (verdict, points qui fachent)`,
+    writing: `Strategie d'ecriture "opinion" — Objectif : avis critique independant qui inspire confiance :
+- Le persona parle en son nom propre, avec son VECU et ses EXPERIENCES concretes (la bio du persona est ta source principale)
+- Ton DIRECT et TRANCHE : prends position clairement, pas de "ca depend" mou. Dis "je deconseille" ou "je recommande" avec conviction
+- Style conversationnel expert : comme un ami qui s'y connait et qui te dit la verite sans filtre
+- Arguments TOUJOURS etayes : chiffres, retours terrain, comparaisons concretes, cout reel vs cout annonce
+- Formulations percutantes : "La realite, c'est que...", "Ce qu'on oublie de vous dire...", "Sur le papier c'est seduisant, mais en pratique..."
+- Avantages ET inconvenients traites avec la MEME honnetete — pas de biais commercial
+- Si le produit/sujet est bon : le dire clairement MAIS avec les reserves
+- Si le produit/sujet est mauvais : le dire clairement MAIS reconnaitre les cas ou ca peut convenir
+- Listes "Pour" / "Contre" avec des points concrets (pas des generalites)
+- Mets en gras les verdicts forts et les chiffres cles
+- ZERO langue de bois, ZERO formule corporate, ZERO "il est important de noter que"`,
+    critique: `Criteres specifiques "opinion" :
+- Le persona prend-il position clairement (verdict tranche, pas tiede) ?
+- Les critiques sont-elles argumentees avec des faits, chiffres ou vecu ?
+- Y a-t-il un equilibre honnetete (avantages ET inconvenients traites) ?
+- Le ton est-il authentique et expert (pas un copier-coller marketing) ?
+- Section "points qui fachent" / "ce qu'on ne vous dit pas" presente ?
+- Section "a qui ca s'adresse vraiment" presente ?
+- Le vecu terrain du persona est-il perceptible dans les arguments ?
+- Les recommandations sont-elles nuancees par profil utilisateur ?`,
+  },
+
+  informational: {
+    plan: `Strategie "informational" — Guide pedagogique / reference :
+- Bloc intro (OBLIGATOIRE, type "paragraph", heading null) : pose le sujet de maniere accessible en 100-140 mots, contient le mot-cle principal
+- Premier H2 = definition / explication principale claire
+- H2 suivants = approfondissement progressif (simple → complexe)
+- Exemples concrets dans chaque section
+- H2 "Erreurs courantes" ou "Pieges a eviter" recommande
+- FAQ pedagogique
+- 2000-3500 mots (le plus long)
+- format_hint : "mixed" et "prose" principalement`,
+    writing: `Strategie d'ecriture "informational" — Objectif : guide de reference :
+- Ton pedagogique, progressif, accessible
+- Du simple vers le complexe (chaque section monte d'un cran)
+- Exemples concrets dans CHAQUE section, analogies pour les concepts difficiles
+- Encadres "A retenir" en <div class="callout callout-tip"> pour les points cles
+- Vocabulaire technique defini a la premiere occurrence (entre parentheses ou en incise)
+- Transitions douces entre sections pour guider le lecteur`,
+    critique: `Criteres specifiques "informational" :
+- Progression pedagogique respectee (simple → complexe) ?
+- Exemples concrets dans chaque section ?
+- Definitions presentes pour le vocabulaire technique ?
+- Accessibilite du vocabulaire (pas trop technique sans explication) ?
+- Objectif 2000-3500 mots atteint ?
+- Section "erreurs courantes" ou "pieges a eviter" presente ?`,
+  },
+}
