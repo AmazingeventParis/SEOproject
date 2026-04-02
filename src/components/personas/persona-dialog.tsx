@@ -63,6 +63,16 @@ export function PersonaDialog({
         body.writing_style_examples = [];
       }
 
+      // Parse banned phrases (one per line) into JSON array
+      if (formData.banned_phrases) {
+        body.banned_phrases = formData.banned_phrases
+          .split("\n")
+          .map((p) => p.trim())
+          .filter(Boolean);
+      } else {
+        body.banned_phrases = [];
+      }
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },

@@ -17,6 +17,7 @@ export interface PersonaFormData {
   bio: string;
   avatar_reference_url: string;
   writing_style_examples: string;
+  banned_phrases: string;
 }
 
 interface PersonaWithSites extends Persona {
@@ -53,6 +54,13 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
         .map((ex) => (ex as Record<string, unknown>).text || "")
         .filter(Boolean)
         .join("\n\n---\n\n");
+    }
+    return "";
+  });
+
+  const [bannedPhrases, setBannedPhrases] = useState(() => {
+    if (persona?.banned_phrases && persona.banned_phrases.length > 0) {
+      return persona.banned_phrases.join("\n");
     }
     return "";
   });
@@ -98,6 +106,11 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
       } else {
         setWritingExamples("");
       }
+      setBannedPhrases(
+        persona.banned_phrases && persona.banned_phrases.length > 0
+          ? persona.banned_phrases.join("\n")
+          : ""
+      );
     }
   }, [persona]);
 
@@ -138,6 +151,7 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
       bio: bio.trim(),
       avatar_reference_url: avatarUrl.trim(),
       writing_style_examples: writingExamples.trim(),
+      banned_phrases: bannedPhrases.trim(),
     });
   }
 
@@ -247,6 +261,21 @@ export function PersonaForm({ persona, onSubmit, loading }: PersonaFormProps) {
           onChange={(e) => setWritingExamples(e.target.value)}
           placeholder={"Premier extrait de texte du persona...\n\n---\n\nDeuxieme extrait..."}
           rows={6}
+        />
+      </div>
+
+      {/* Banned phrases */}
+      <div className="space-y-2">
+        <Label htmlFor="banned_phrases">Expressions interdites (tics de langage)</Label>
+        <p className="text-xs text-muted-foreground">
+          Une expression par ligne. Ces tournures ne seront JAMAIS utilisees lors de la redaction.
+        </p>
+        <Textarea
+          id="banned_phrases"
+          value={bannedPhrases}
+          onChange={(e) => setBannedPhrases(e.target.value)}
+          placeholder={"On va pas se mentir\nLe bon sens paysan\nSoyons honnetes"}
+          rows={4}
         />
       </div>
 

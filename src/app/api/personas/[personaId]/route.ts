@@ -10,6 +10,7 @@ const updatePersonaSchema = z.object({
   bio: z.string().nullable().optional(),
   avatar_reference_url: z.string().url("L'URL doit etre valide").nullable().optional(),
   writing_style_examples: z.array(z.record(z.string(), z.unknown())).optional(),
+  banned_phrases: z.array(z.string()).optional(),
 });
 
 interface RouteParams {

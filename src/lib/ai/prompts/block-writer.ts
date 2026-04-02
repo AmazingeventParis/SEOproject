@@ -69,6 +69,7 @@ interface BlockWriterParams {
     articleAngle?: string
     writingDirectives?: string[]
   }
+  bannedPhrases?: string[]
 }
 
 interface BlockWriterPrompt {
@@ -85,7 +86,7 @@ interface BlockWriterPrompt {
 export function buildBlockWriterPrompt(
   params: BlockWriterParams
 ): BlockWriterPrompt {
-  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleDigest, articleTitle, internalLinkTargets, siteDomain, authorityLink, tableStyleIndex, calloutStyleIndex, blockPosition, articleOutline, blockKeyIdeas } = params
+  const { keyword, searchIntent, persona, block, nuggets, previousHeadings, previousBlockContent, articleDigest, articleTitle, internalLinkTargets, siteDomain, authorityLink, tableStyleIndex, calloutStyleIndex, blockPosition, articleOutline, blockKeyIdeas, bannedPhrases } = params
 
   // ---- System prompt ----
   const system = `Tu es un redacteur web expert en SEO, specialise dans la creation de contenu de haute qualite optimise pour le referencement naturel.
@@ -110,7 +111,13 @@ Tu dois ecrire EXACTEMENT comme cette personne parlerait - avec sa voix, son exp
 ${SEO_WRITING_STYLE_RULES}
 
 ${SEO_ANTI_AI_PATTERNS}
-
+${bannedPhrases && bannedPhrases.length > 0 ? `
+### EXPRESSIONS INTERDITES POUR CE PERSONA (TICS DE LANGAGE)
+Les expressions suivantes sont des tics repetitifs detectes dans les articles precedents de ${persona.name}.
+Tu ne dois JAMAIS les utiliser, meme reformulees ou avec des variantes proches :
+${bannedPhrases.map(p => `- "${p}"`).join('\n')}
+Si tu te surprends a ecrire une de ces tournures, SUPPRIME-LA et reformule completement avec une approche differente.
+` : ''}
 ### SEO — Placement strategique du mot-cle
 Le placement du mot-cle depend de la POSITION du bloc dans l'article :
 

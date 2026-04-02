@@ -5,6 +5,7 @@ import { executeStep } from "@/lib/pipeline/orchestrator";
 import { modelIdToOverride } from "@/lib/ai/router";
 import type { ContentBlock, TitleSuggestion, ArticleStatus } from "@/lib/supabase/types";
 import type { PipelineRunResult } from "@/lib/pipeline/types";
+import { detectOverusedPhrases } from "@/lib/seo/phrase-dedup";
 
 export const maxDuration = 600; // 10 minutes
 
@@ -113,12 +114,25 @@ async function runArticlePipeline(
 
     if (pendingIndices.length > 0) {
       const usedNuggetIds: string[] = [];
+      // Detect cross-article overused phrases once
+      let detectedTics: string[] = [];
+      try {
+        const { data: artP } = await supabase
+          .from("seo_articles")
+          .select("persona_id")
+          .eq("id", articleId)
+          .single();
+        if (artP?.persona_id) {
+          const overused = await detectOverusedPhrases(artP.persona_id, articleId);
+          detectedTics = overused.map(o => o.phrase);
+        }
+      } catch { /* continue without tics detection */ }
       for (const blockIndex of pendingIndices) {
         try {
           const result: PipelineRunResult = await executeStep(
             articleId,
             "write_block",
-            { blockIndex, usedNuggetIds, ...modelOverride }
+            { blockIndex, usedNuggetIds, detectedTics, ...modelOverride }
           );
           if (result.success) {
             const nuggetIds = (result.output?.nuggetIdsUsed as string[]) || [];

@@ -4,6 +4,7 @@ import { executeStep } from "@/lib/pipeline/orchestrator";
 import { modelIdToOverride } from "@/lib/ai/router";
 import type { ContentBlock } from "@/lib/supabase/types";
 import { checkKeyIdeasCoverage } from "@/lib/pipeline/quality-checks";
+import { detectOverusedPhrases } from "@/lib/seo/phrase-dedup";
 
 export const maxDuration = 300;
 
@@ -81,6 +82,22 @@ export async function POST(
       // Track used nugget IDs across blocks to prevent repetition
       const usedNuggetIds: string[] = [];
 
+      // Detect cross-article overused phrases once before writing
+      let detectedTics: string[] = [];
+      try {
+        const { data: artForPersona } = await supabase
+          .from("seo_articles")
+          .select("persona_id")
+          .eq("id", articleId)
+          .single();
+        if (artForPersona?.persona_id) {
+          const overused = await detectOverusedPhrases(artForPersona.persona_id, articleId);
+          detectedTics = overused.map(o => o.phrase);
+        }
+      } catch (e) {
+        console.warn("[write-all] Failed to detect overused phrases:", e);
+      }
+
       // Process blocks in parallel batches
       for (let batchStart = 0; batchStart < pendingIndices.length; batchStart += WRITE_BATCH_SIZE) {
         const batchIndices = pendingIndices.slice(batchStart, batchStart + WRITE_BATCH_SIZE);
@@ -91,6 +108,7 @@ export async function POST(
             executeStep(articleId, "write_block", {
               blockIndex,
               usedNuggetIds: [...usedNuggetIds],
+              detectedTics,
               skipSave: true,
               ...modelOverrideInput,
             })
