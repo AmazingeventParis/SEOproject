@@ -1963,9 +1963,9 @@ export default function ArticleDetailPage() {
                     Publier sur GDS
                   </Button>
                 )}
-                {(article as Record<string, unknown>).gds_url && (
+                {(article as unknown as Record<string, unknown>).gds_url && (
                   <a
-                    href={(article as Record<string, unknown>).gds_url as string}
+                    href={(article as unknown as Record<string, unknown>).gds_url as string}
                     target="_blank"
                     rel="noopener noreferrer"
                   >

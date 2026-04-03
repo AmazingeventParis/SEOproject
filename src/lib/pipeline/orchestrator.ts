@@ -45,7 +45,6 @@ import {
 } from '@/lib/seo/semantic-analysis'
 import { detectOverusedPhrases } from '@/lib/seo/phrase-dedup'
 import { analyzeBurstiness, extractUsedConnectors, type BurstinessResult } from '@/lib/seo/burstiness'
-import { fetchTemporalContext } from '@/lib/seo/serper'
 
 /**
  * Extract and parse JSON from AI response text.
@@ -951,8 +950,9 @@ async function executeWriteBlock(
   // --- Banned phrases: manual (persona config) + auto-detected cross-article tics ---
   let bannedPhrases: string[] = []
   // 1. Manual banned phrases from persona settings
-  if (persona?.banned_phrases && persona.banned_phrases.length > 0) {
-    bannedPhrases = [...persona.banned_phrases]
+  const personaAny = persona as Record<string, unknown> | undefined
+  if (personaAny?.banned_phrases && Array.isArray(personaAny.banned_phrases) && (personaAny.banned_phrases as string[]).length > 0) {
+    bannedPhrases = [...(personaAny.banned_phrases as string[])]
   }
   // 2. Auto-detected overused phrases (passed from write-all or computed on first block)
   const cachedTics = (input?.detectedTics as string[]) || null
@@ -1044,8 +1044,8 @@ async function executeWriteBlock(
       return saturated.length > 0 ? saturated : undefined
     })(),
     temporalContext: (input?.temporalContext as string) || undefined,
-    familiarExpressions: persona?.familiar_expressions && persona.familiar_expressions.length > 0
-      ? persona.familiar_expressions
+    familiarExpressions: personaAny?.familiar_expressions && Array.isArray(personaAny.familiar_expressions) && (personaAny.familiar_expressions as string[]).length > 0
+      ? (personaAny.familiar_expressions as string[])
       : undefined,
   })
 
@@ -3724,11 +3724,12 @@ async function executeGdsPublish(
   const supabase = getServerClient()
 
   // 1. Récupère la config GDS du site (colonnes ajoutées par sql/006-gds.sql)
-  const { data: siteRow } = await supabase
+  const { data: siteRowRaw } = await supabase
     .from('seo_sites')
     .select('gds_url, gds_api_token, gds_author, gds_category_map, domain, publication_target')
     .eq('id', article.site_id)
     .single()
+  const siteRow = siteRowRaw as Record<string, unknown> | null
 
   if (!siteRow?.gds_url || !siteRow?.gds_api_token) {
     return {
@@ -3744,11 +3745,12 @@ async function executeGdsPublish(
   const persona = article.seo_personas as { name?: string } | null
 
   // 2. Récupère l'article depuis Supabase pour les champs GDS existants
-  const { data: articleRow } = await supabase
+  const { data: articleRowRaw } = await supabase
     .from('seo_articles')
     .select('gds_slug')
     .eq('id', article.id)
     .single()
+  const articleRow = articleRowRaw as Record<string, unknown> | null
 
   const existingGdsSlug = (articleRow?.gds_slug as string | null) || null
 
@@ -3773,11 +3775,11 @@ async function executeGdsPublish(
     jsonLd: article.json_ld as Record<string, unknown> | null,
     existingGdsSlug,
     siteConfig: {
-      gdsUrl: siteRow.gds_url,
-      apiToken: siteRow.gds_api_token,
-      gdsAuthor: siteRow.gds_author || 'mathilde',
+      gdsUrl: siteRow.gds_url as string,
+      apiToken: siteRow.gds_api_token as string,
+      gdsAuthor: (siteRow.gds_author as string) || 'mathilde',
       categoryMap: (siteRow.gds_category_map as Record<string, string>) || {},
-      siteDomain: siteRow.domain || undefined,
+      siteDomain: (siteRow.domain as string) || undefined,
     },
   })
 

@@ -51,7 +51,6 @@ export function WritingDirectivesCard({
   articleId,
   currentDirectives,
   onSave,
-  hasAnalysis,
 }: WritingDirectivesCardProps) {
   const { toast } = useToast();
   const [directives, setDirectives] = useState<WritingDirective[]>(

@@ -97,7 +97,7 @@ export async function PATCH(
   if (error) {
     // If editorial_angle column doesn't exist, retry without it
     if (error.message?.includes('editorial_angle')) {
-      const { editorial_angle: _ea, ...payloadWithout } = updatePayload;
+      const { editorial_angle: _ea, ...payloadWithout } = updatePayload; // eslint-disable-line @typescript-eslint/no-unused-vars
       const { data: d2, error: e2 } = await supabase
         .from("seo_sites")
         .update(payloadWithout as SiteUpdate)

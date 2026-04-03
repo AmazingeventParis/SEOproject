@@ -86,13 +86,6 @@ export function ArticleAngleCard({
     setAngle(suggestions[idx].angle);
   }
 
-  const CATEGORY_COLORS: Record<string, string> = {
-    experience: "bg-blue-100 text-blue-800",
-    donnees: "bg-green-100 text-green-800",
-    "contre-pied": "bg-orange-100 text-orange-800",
-    expert: "bg-purple-100 text-purple-800",
-  };
-
   return (
     <Card>
       <CardHeader className="pb-3">

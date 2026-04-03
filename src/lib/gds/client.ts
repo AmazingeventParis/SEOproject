@@ -102,7 +102,7 @@ export async function gdsUploadImage(
   const url = `${gdsUrl.replace(/\/$/, '')}/api/media/upload`
 
   const form = new FormData()
-  const blob = new Blob([imageBuffer], { type: mimeType })
+  const blob = new Blob([new Uint8Array(imageBuffer)], { type: mimeType })
   form.append('file', blob, filename)
 
   const res = await fetch(url, {

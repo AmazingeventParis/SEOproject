@@ -108,7 +108,7 @@ export async function detectOverusedPhrases(
     const articleGrams = new Map<string, Set<string>>()
 
     // Track which n-grams appear in this article
-    for (const [gram] of ngrams) {
+    for (const [gram] of Array.from(ngrams)) {
       if (!articleGrams.has(gram)) {
         articleGrams.set(gram, new Set())
       }
@@ -122,11 +122,11 @@ export async function detectOverusedPhrases(
   const globalCounts = new Map<string, Set<string>>()
 
   for (const articleMap of articleNgrams) {
-    for (const [gram, articleIds] of articleMap) {
+    for (const [gram, articleIds] of Array.from(articleMap)) {
       if (!globalCounts.has(gram)) {
         globalCounts.set(gram, new Set())
       }
-      for (const id of articleIds) {
+      for (const id of Array.from(articleIds)) {
         globalCounts.get(gram)!.add(id)
       }
     }
@@ -136,7 +136,7 @@ export async function detectOverusedPhrases(
   const minArticles = Math.min(3, Math.ceil(articles.length * 0.3))
   const overused: OverusedPhrase[] = []
 
-  for (const [gram, articleIds] of globalCounts) {
+  for (const [gram, articleIds] of Array.from(globalCounts)) {
     if (articleIds.size >= minArticles) {
       overused.push({ phrase: gram, count: articleIds.size })
     }
