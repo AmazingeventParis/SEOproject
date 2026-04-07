@@ -70,10 +70,20 @@ async function getAccessToken(): Promise<string> {
   const signInput = `${encodedHeader}.${encodedClaim}`
 
   // Sign with the private key using Web Crypto API
-  // Handle literal \n (2-char sequence backslash+n from env vars like Coolify)
-  // We need to match the actual backslash character followed by 'n'
-  const literalBackslashN = String.fromCharCode(92) + 'n' // backslash + n
-  const cleanedKey = privateKey.split(literalBackslashN).join('\n')
+  // Handle multiple formats of private key storage:
+  // 1. Literal \n (2-char sequence backslash+n from env vars / Coolify / DB text fields)
+  // 2. JSON-encoded strings with escaped quotes
+  // 3. Extra whitespace or surrounding quotes
+  let cleanedKey = privateKey.trim()
+  // Strip surrounding quotes if present (JSON storage artifact)
+  if ((cleanedKey.startsWith('"') && cleanedKey.endsWith('"')) || (cleanedKey.startsWith("'") && cleanedKey.endsWith("'"))) {
+    cleanedKey = cleanedKey.slice(1, -1)
+  }
+  // Replace literal \n sequences (backslash + n as 2 chars) with real newlines
+  const literalBackslashN = String.fromCharCode(92) + 'n'
+  cleanedKey = cleanedKey.split(literalBackslashN).join('\n')
+  // Also handle \\n (double-escaped from JSON)
+  cleanedKey = cleanedKey.replace(/\\n/g, '\n')
   const key = await importPrivateKey(cleanedKey)
   const signature = await sign(key, signInput)
   const jwt = `${signInput}.${signature}`
@@ -90,6 +100,13 @@ async function getAccessToken(): Promise<string> {
 
   if (!tokenRes.ok) {
     const errBody = await tokenRes.text().catch(() => 'unknown')
+    if (errBody.includes('invalid_grant')) {
+      throw new Error(
+        `GSC authentification echouee: la cle privee du service account est invalide ou mal formatee. ` +
+        `Verifiez dans Settings > Google Indexing API que la cle commence par "-----BEGIN PRIVATE KEY-----" ` +
+        `et se termine par "-----END PRIVATE KEY-----". Detail: ${errBody}`
+      )
+    }
     throw new Error(`GSC token exchange failed (${tokenRes.status}): ${errBody}`)
   }
 
@@ -120,9 +137,9 @@ function arrayBufferToBase64url(buffer: ArrayBuffer): string {
 
 async function importPrivateKey(pem: string): Promise<CryptoKey> {
   const pemContents = pem
-    .replace(/-----BEGIN (RSA )?PRIVATE KEY-----/g, '')
-    .replace(/-----END (RSA )?PRIVATE KEY-----/g, '')
-    .replace(/[\s"]/g, '')
+    .replace(/-----BEGIN [A-Z ]*KEY-----/g, '')
+    .replace(/-----END [A-Z ]*KEY-----/g, '')
+    .replace(/[\s"']/g, '')
 
   // Use Buffer.from (Node.js) which is more tolerant than atob
   const buf = Buffer.from(pemContents, 'base64')

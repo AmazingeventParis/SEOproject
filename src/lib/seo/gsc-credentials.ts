@@ -25,13 +25,18 @@ export async function getGscCredentials(): Promise<GscCredentials> {
   }
 
   const clientEmail = dbConfig['gsc_client_email'] || process.env.GSC_CLIENT_EMAIL || ''
-  const privateKey = dbConfig['gsc_private_key'] || process.env.GSC_PRIVATE_KEY || ''
+  let privateKey = dbConfig['gsc_private_key'] || process.env.GSC_PRIVATE_KEY || ''
 
   if (!clientEmail || !privateKey) {
     throw new Error(
       'GSC non configure. Ajoutez le Client Email et la Private Key dans Settings > Google Indexing API. ' +
       'Le compte de service doit avoir le role "Owner" dans la Search Console.'
     )
+  }
+
+  // Handle JSONB storage: Supabase may store the value as a JSON string with extra quotes
+  if (typeof privateKey === 'object') {
+    privateKey = String(privateKey)
   }
 
   return { clientEmail, privateKey }
