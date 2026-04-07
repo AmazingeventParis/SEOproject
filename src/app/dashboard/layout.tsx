@@ -17,6 +17,7 @@ import {
   BarChart3,
   RefreshCw,
   Link2,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,7 @@ const navSections: NavSection[] = [
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { label: "Articles", href: "/dashboard/articles", icon: FileText },
+      { label: "Mots-cles", href: "/dashboard/keywords", icon: Search },
       { label: "Revamp", href: "/dashboard/revamp", icon: RefreshCw },
       { label: "Nuggets", href: "/dashboard/nuggets", icon: Gem },
       { label: "Discover", href: "/dashboard/discover", icon: Compass },
