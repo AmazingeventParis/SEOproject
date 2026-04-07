@@ -110,6 +110,7 @@ export async function createPost(
   if (input.tags) body.tags = input.tags
   if (input.featured_media) body.featured_media = input.featured_media
   if (input.meta) body.meta = input.meta
+  if (input.author) body.author = input.author
 
   const response = await fetch(`${apiBase(creds)}/posts`, {
     method: 'POST',
@@ -333,6 +334,55 @@ export async function getCategories(siteId: string): Promise<WPCategory[]> {
 
   const categories: WPCategory[] = await response.json()
   return categories
+}
+
+/**
+ * Find a WordPress user by name (for author assignment).
+ * Searches existing users and returns the best match ID, or null if no match.
+ * Does NOT create new users (requires admin privileges that may not be available).
+ */
+export async function findAuthorByName(
+  siteId: string,
+  personaName: string,
+): Promise<number | null> {
+  try {
+    const creds = await getWPCredentials(siteId)
+    const response = await fetch(
+      `${apiBase(creds)}/users?search=${encodeURIComponent(personaName)}&per_page=10&context=edit`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: buildAuthHeader(creds),
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(5000),
+      }
+    )
+
+    if (!response.ok) return null
+
+    const users: { id: number; name: string; slug: string }[] = await response.json()
+    if (users.length === 0) return null
+
+    // Try exact name match (case-insensitive)
+    const normalizedName = personaName.toLowerCase().trim()
+    const exactMatch = users.find(u => u.name.toLowerCase().trim() === normalizedName)
+    if (exactMatch) return exactMatch.id
+
+    // Try first name match
+    const firstName = normalizedName.split(/\s+/)[0]
+    const firstNameMatch = users.find(u => u.name.toLowerCase().startsWith(firstName))
+    if (firstNameMatch) return firstNameMatch.id
+
+    // Try slug match
+    const slug = normalizedName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-')
+    const slugMatch = users.find(u => u.slug === slug)
+    if (slugMatch) return slugMatch.id
+
+    return null
+  } catch {
+    return null
+  }
 }
 
 /**

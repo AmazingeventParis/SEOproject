@@ -2,22 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerClient } from "@/lib/supabase/client";
 import { routeAI } from "@/lib/ai/router";
 import { analyzeSERP } from "@/lib/seo/serper";
+import { isAuthorityDomain } from "@/lib/seo/authority-domains";
 import type { AuthorityLinkSuggestion } from "@/lib/supabase/types";
 
 interface RouteContext {
   params: { articleId: string };
-}
-
-const AUTHORITY_PATTERNS = [
-  "wikipedia.org", "gouv.fr", "service-public.fr",
-  ".edu", "who.int", "europa.eu", "legifrance.gouv.fr",
-  "insee.fr", "has-sante.fr", "ademe.fr",
-  "nature.com", "sciencedirect.com", "springer.com",
-  "lemonde.fr", "lefigaro.fr",
-];
-
-function isAuthority(url: string): boolean {
-  return AUTHORITY_PATTERNS.some((p) => url.includes(p));
 }
 
 // POST /api/articles/[articleId]/suggest-authority-links
@@ -51,7 +40,7 @@ export async function POST(
 
     // 1. Filter authority domains from existing SERP
     let candidates = organicResults
-      .filter((r) => r.link && isAuthority(r.link))
+      .filter((r) => r.link && isAuthorityDomain(r.link, article.keyword))
       .map((r) => ({
         url: r.link,
         title: r.title || "",
@@ -71,7 +60,7 @@ export async function POST(
         }[];
         const existingUrls = new Set(candidates.map((c) => c.url));
         const newCandidates = suppResults
-          .filter((r) => r.link && isAuthority(r.link) && !existingUrls.has(r.link))
+          .filter((r) => r.link && isAuthorityDomain(r.link, article.keyword) && !existingUrls.has(r.link))
           .map((r) => ({
             url: r.link,
             title: r.title || "",

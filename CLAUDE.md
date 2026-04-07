@@ -6,6 +6,12 @@
 - **Repo** : https://github.com/AmazingeventParis/SEOproject
 - **Branche** : main
 
+## Deploiement
+- **Coolify** : auto-deploy sur push GitHub (webhook)
+- **Serveur SEO** : 217.182.89.133 (OVH)
+- **Git auth** : token GitHub configure dans le remote URL
+- **Workflow** : modifs → commit → `git push` → Coolify build + deploy automatique
+
 ## Statut actuel
 Phases 1-4 terminées. Projet en production.
 

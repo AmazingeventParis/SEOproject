@@ -47,6 +47,7 @@ export interface WPCreatePostInput {
   tags?: number[]
   featured_media?: number
   meta?: Record<string, unknown>
+  author?: number // WordPress user ID for author assignment (E-E-A-T)
 }
 
 export interface WPUpdatePostInput {
@@ -60,6 +61,7 @@ export interface WPUpdatePostInput {
   featured_media?: number
   meta?: Record<string, unknown>
   date?: string // ISO 8601 – updates the WP publication date
+  author?: number // WordPress user ID for author assignment (E-E-A-T)
 }
 
 export interface WPUploadMediaInput {

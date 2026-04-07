@@ -16,6 +16,15 @@ export interface ArticleSchemaParams {
   updatedAt: string
   wordCount: number
   imageUrl?: string
+  personaBio?: string
+  personaAvatarUrl?: string
+  personaSameAs?: string[]
+}
+
+export interface ClaimReviewItem {
+  claimText: string
+  sourceUrl: string
+  sourceName: string
 }
 
 // ---- Article schema ----
@@ -40,19 +49,28 @@ export function generateArticleSchema(
     updatedAt,
     wordCount,
     imageUrl,
+    personaBio,
+    personaAvatarUrl,
+    personaSameAs,
   } = params
 
   const articleUrl = `https://${siteDomain}/${slug}`
+
+  // Build enriched author object for E-E-A-T
+  const author: Record<string, unknown> = {
+    '@type': 'Person',
+    name: personaName,
+    jobTitle: personaRole,
+  }
+  if (personaBio) author.description = personaBio
+  if (personaAvatarUrl) author.image = personaAvatarUrl
+  if (personaSameAs && personaSameAs.length > 0) author.sameAs = personaSameAs
 
   const schema: Record<string, unknown> = {
     '@type': 'Article',
     headline: title,
     description,
-    author: {
-      '@type': 'Person',
-      name: personaName,
-      jobTitle: personaRole,
-    },
+    author,
     datePublished: publishedAt ?? updatedAt,
     dateModified: updatedAt,
     wordCount,
@@ -223,6 +241,161 @@ export function generateReviewSchema(
       name: authorName,
     },
   }
+}
+
+// ---- ClaimReview schema ----
+
+/**
+ * Generate Schema.org ClaimReview JSON-LD objects from sourced claims in the article.
+ * Detects external links that cite factual claims and generates ClaimReview markup.
+ *
+ * @param contentHtml   Full article HTML
+ * @param authorName    The reviewer/persona name
+ * @param siteDomain    The site domain for the review publisher
+ * @returns             Array of ClaimReview schema objects
+ */
+export function generateClaimReviewSchemas(
+  contentHtml: string,
+  authorName: string,
+  siteDomain: string,
+): Record<string, unknown>[] {
+  const schemas: Record<string, unknown>[] = []
+
+  // Find paragraphs that contain both an external link and factual language patterns
+  // Pattern: text with a claim indicator + an <a> linking to an external source
+  const factualPatterns = [
+    /selon\s+(?:une\s+)?(?:etude|enquete|rapport|sondage|analyse|recherche)/i,
+    /d['']apres\s+(?:une\s+)?(?:etude|enquete|rapport|les\s+donnees|les\s+chiffres)/i,
+    /(?:une\s+)?etude\s+(?:publiee|realisee|menee|de\s+\d{4})/i,
+    /(?:les\s+)?(?:chiffres|donnees|statistiques)\s+(?:de|du|montrent|indiquent|revelent)/i,
+    /(\d+[\s,.]?\d*)\s*%\s+(?:des?|du|de\s+la)/i,
+    /(?:INSEE|OMS|WHO|ADEME|ANSES|HAS|Eurostat)\s/i,
+  ]
+
+  // Split into blocks around <p> tags
+  const paragraphs = contentHtml.match(/<p[^>]*>[\s\S]*?<\/p>/gi) || []
+
+  for (const para of paragraphs) {
+    const plainText = para.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+
+    // Check if paragraph has a factual claim pattern
+    const hasFactualClaim = factualPatterns.some(p => p.test(plainText))
+    if (!hasFactualClaim) continue
+
+    // Extract external links from the paragraph
+    const linkRegex = /<a\s+[^>]*href=["'](https?:\/\/[^"']+)["'][^>]*>([^<]+)<\/a>/gi
+    let linkMatch
+    while ((linkMatch = linkRegex.exec(para)) !== null) {
+      const sourceUrl = linkMatch[1]
+      const anchorText = linkMatch[2].trim()
+
+      // Skip internal links
+      if (sourceUrl.includes(siteDomain)) continue
+
+      // Extract the claim sentence (sentence containing the link or the factual pattern)
+      const sentences = plainText.split(/(?<=[.!?])\s+/)
+      const claimSentence = sentences.find(s =>
+        factualPatterns.some(p => p.test(s)) || s.includes(anchorText)
+      )
+      if (!claimSentence || claimSentence.length < 20) continue
+
+      // Extract source name from URL
+      let sourceName = ''
+      try {
+        sourceName = new URL(sourceUrl).hostname.replace(/^www\./, '')
+      } catch { continue }
+
+      schemas.push({
+        '@type': 'ClaimReview',
+        claimReviewed: claimSentence.slice(0, 200),
+        author: {
+          '@type': 'Person',
+          name: authorName,
+        },
+        reviewRating: {
+          '@type': 'Rating',
+          ratingValue: 5,
+          bestRating: 5,
+          worstRating: 1,
+          alternateName: 'Vrai',
+        },
+        itemReviewed: {
+          '@type': 'Claim',
+          author: {
+            '@type': 'Organization',
+            name: sourceName,
+          },
+          appearance: {
+            '@type': 'WebPage',
+            url: sourceUrl,
+          },
+        },
+      })
+
+      // Max 3 ClaimReview per article
+      if (schemas.length >= 3) break
+    }
+    if (schemas.length >= 3) break
+  }
+
+  return schemas
+}
+
+// ---- Citation density analyzer ----
+
+/**
+ * Analyze citation/source density in the article content.
+ * Counts external links, study references, data points per 1000 words.
+ */
+export function analyzeCitationDensity(
+  contentHtml: string,
+  wordCount: number,
+): {
+  externalLinkCount: number
+  studyReferenceCount: number
+  dataPointCount: number
+  densityPer1000: number
+  status: 'excellent' | 'good' | 'low' | 'none'
+} {
+  const plainText = contentHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ')
+
+  // Count external links (exclude internal anchors)
+  const externalLinks = (contentHtml.match(/<a\s+[^>]*href=["']https?:\/\/[^"']+["']/gi) || [])
+  const externalLinkCount = externalLinks.length
+
+  // Count study/research references
+  const studyPatterns = [
+    /(?:etude|enquete|rapport|sondage|recherche|meta-analyse)\s+(?:publiee|realisee|menee|de\s+\d{4})/gi,
+    /selon\s+(?:une\s+)?(?:etude|enquete|rapport)/gi,
+    /d['']apres\s+(?:une\s+)?(?:etude|les\s+donnees|les\s+chiffres)/gi,
+    /(?:source|ref\.?|reference)\s*:/gi,
+  ]
+  let studyReferenceCount = 0
+  for (const pattern of studyPatterns) {
+    const matches = plainText.match(pattern)
+    if (matches) studyReferenceCount += matches.length
+  }
+
+  // Count data points (percentages, precise numbers with units)
+  const dataPatterns = [
+    /\d+[\s,.]?\d*\s*%/g,
+    /\d+[\s,.]?\d*\s*(?:euros?|€|\$|millions?|milliards?|kg|km|m2|m²|kWh|litres?)/gi,
+  ]
+  let dataPointCount = 0
+  for (const pattern of dataPatterns) {
+    const matches = plainText.match(pattern)
+    if (matches) dataPointCount += matches.length
+  }
+
+  const totalSignals = externalLinkCount + studyReferenceCount + dataPointCount
+  const densityPer1000 = wordCount > 0 ? Math.round((totalSignals / wordCount) * 1000 * 10) / 10 : 0
+
+  let status: 'excellent' | 'good' | 'low' | 'none' = 'none'
+  if (densityPer1000 >= 5) status = 'excellent'
+  else if (densityPer1000 >= 2) status = 'good'
+  else if (totalSignals > 0) status = 'low'
+
+  return { externalLinkCount, studyReferenceCount, dataPointCount, densityPer1000, status }
 }
 
 // ---- Graph assembler ----

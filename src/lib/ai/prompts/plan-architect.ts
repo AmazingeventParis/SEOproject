@@ -188,6 +188,15 @@ Chaque bloc DOIT avoir :
 - **writing_directive** : 1-2 phrases expliquant COMMENT maximiser la transmission d'info pour ce bloc specifique. Pour les blocs "mixed" ou "table", PRECISE quel type de tableau ou liste inclure. Ex: "Presente un tableau recapitulatif 3 colonnes (critere, avantage, inconvenient) + 2 paragraphes d'analyse." ou "Liste a puces des 5 etapes + tableau comparatif des options."
 - **format_hint** : le format recommande parmi 'prose', 'bullets', 'table', 'mixed'
 
+### Signaux E-E-A-T dans les directives (OBLIGATOIRE — au moins 3 blocs doivent en avoir)
+Chaque writing_directive DOIT inclure AU MOINS UN signal E-E-A-T parmi :
+- **Experience** : "Inclure un retour d'experience terrain du persona" / "Raconter une situation vecue concrete" / "Partager un avant/apres vecu"
+- **Expertise** : "Citer une donnee chiffree precise et sourcee" / "Inclure une analyse technique detaillee" / "Mentionner un outil/methode professionnel specifique"
+- **Autorite** : "Citer une source externe reconnue (etude, institution, organisme)" / "Mentionner une reference de l'industrie" / "Appuyer avec une statistique officielle"
+- **Fiabilite** : "Preciser les limites ou cas ou ce conseil ne s'applique pas" / "Comparer avec une alternative en toute transparence" / "Indiquer la date de derniere verification de l'info"
+
+Repartis ces signaux dans l'article : au moins 1 bloc "Experience", 1 bloc "Autorite" (source externe), 1 bloc "Expertise" (donnee chiffree). L'intro et la FAQ n'ont pas besoin de signal E-E-A-T explicite.
+
 ### Regles de choix du format_hint — LE FORMAT PAR DEFAUT EST "mixed", PAS "prose"
 - **'table'** : si la section compare >2 elements OU liste >4 criteres avec des donnees structurees. OBLIGATOIRE pour tout bloc contenant des prix, specs, notes, comparaisons.
 - **'bullets'** : si la section enumere des etapes, avantages, inconvenients, ou une liste d'elements

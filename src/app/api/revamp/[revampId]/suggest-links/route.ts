@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { getServerClient } from '@/lib/supabase/client'
 import { analyzeSERP } from '@/lib/seo/serper'
 import { routeAI } from '@/lib/ai/router'
+import { isAuthorityDomain } from '@/lib/seo/authority-domains'
 import type {
   RevampAuthorityLinkSuggestion,
   RevampInternalLinkSuggestion,
@@ -10,18 +11,6 @@ import type {
 
 interface RouteContext {
   params: { revampId: string }
-}
-
-const AUTHORITY_PATTERNS = [
-  'wikipedia.org', 'gouv.fr', 'service-public.fr',
-  '.edu', 'who.int', 'europa.eu', 'legifrance.gouv.fr',
-  'insee.fr', 'has-sante.fr', 'ademe.fr',
-  'nature.com', 'sciencedirect.com', 'springer.com',
-  'lemonde.fr', 'lefigaro.fr',
-]
-
-function isAuthority(url: string): boolean {
-  return AUTHORITY_PATTERNS.some(p => url.includes(p))
 }
 
 /**
@@ -101,7 +90,7 @@ async function generateAuthoritySuggestions(
 
   // Filter competitors for authority domains
   for (const comp of competitors) {
-    if (comp.url && isAuthority(comp.url)) {
+    if (comp.url && isAuthorityDomain(comp.url)) {
       try {
         candidates.push({
           url: comp.url,
@@ -125,7 +114,7 @@ async function generateAuthoritySuggestions(
       }[]
       const existingUrls = new Set(candidates.map(c => c.url))
       const newCandidates = suppResults
-        .filter(r => r.link && isAuthority(r.link) && !existingUrls.has(r.link))
+        .filter(r => r.link && isAuthorityDomain(r.link) && !existingUrls.has(r.link))
         .map(r => ({
           url: r.link,
           title: r.title || '',

@@ -19,9 +19,10 @@ import { buildBlockWriterPrompt } from '@/lib/ai/prompts/block-writer'
 import { generateImage, buildImagePrompt, generateHeroImage, ContentPolicyError } from '@/lib/media/fal-ai'
 import { optimizeForWeb } from '@/lib/media/sharp-processor'
 import { generateSeoFilename, generateAltText, generateImageTitle } from '@/lib/media/seo-rename'
-import { generateArticleSchema, generateFAQSchema, generateBreadcrumbSchema, generateHowToSchema, generateReviewSchema, assembleJsonLd } from '@/lib/seo/json-ld'
+import { generateArticleSchema, generateFAQSchema, generateBreadcrumbSchema, generateHowToSchema, generateReviewSchema, generateClaimReviewSchemas, analyzeCitationDensity, assembleJsonLd } from '@/lib/seo/json-ld'
+import { isAuthorityDomain } from '@/lib/seo/authority-domains'
 import { generateInternalLinks, injectLinksIntoHtml } from '@/lib/seo/internal-links'
-import { createPost, updatePost, uploadMedia, findBestCategory, findOrCreateTags, getAllPublishedPosts } from '@/lib/wordpress/client'
+import { createPost, updatePost, uploadMedia, findBestCategory, findOrCreateTags, getAllPublishedPosts, findAuthorByName } from '@/lib/wordpress/client'
 import { analyzeKeywordDensity } from '@/lib/seo/keyword-analysis'
 import { buildCritiquePrompt, validateCritiqueResult } from '@/lib/ai/prompts/critique'
 import { buildOptimizeBlocksPrompt } from '@/lib/ai/prompts/optimize-blocks'
@@ -656,19 +657,11 @@ async function executePlan(
   try {
     const organicResults = (serpDataRaw?.serp?.organic || []) as { title: string; link: string; snippet?: string; domain?: string }[]
 
-    const AUTHORITY_PATTERNS = [
-      'wikipedia.org', 'gouv.fr', 'service-public.fr',
-      '.edu', 'who.int', 'europa.eu', 'legifrance.gouv.fr',
-      'insee.fr', 'has-sante.fr', 'ademe.fr',
-      'nature.com', 'sciencedirect.com', 'springer.com',
-      'lemonde.fr', 'lefigaro.fr',
-    ]
+    const siteNiche = (article.seo_sites as Record<string, unknown> | null)?.niche as string | undefined
 
-    const isAuthority = (url: string) => AUTHORITY_PATTERNS.some(p => url.includes(p))
-
-    // 1. Filter authority domains from existing SERP
+    // 1. Filter authority domains from existing SERP (niche-aware)
     let candidates = organicResults
-      .filter(r => r.link && isAuthority(r.link))
+      .filter(r => r.link && isAuthorityDomain(r.link, article.keyword, siteNiche))
       .map(r => ({
         url: r.link,
         title: r.title || '',
@@ -683,7 +676,7 @@ async function executePlan(
         const suppResults = (suppSerp?.organic || []) as { title: string; link: string; snippet?: string; domain?: string }[]
         const existingUrls = new Set(candidates.map(c => c.url))
         const newCandidates = suppResults
-          .filter(r => r.link && isAuthority(r.link) && !existingUrls.has(r.link))
+          .filter(r => r.link && isAuthorityDomain(r.link, article.keyword, siteNiche) && !existingUrls.has(r.link))
           .map(r => ({
             url: r.link,
             title: r.title || '',
@@ -1751,7 +1744,8 @@ async function executeSeo(
   // 1. Generate JSON-LD schemas
   const schemas: Record<string, unknown>[] = []
 
-  // Article schema
+  // Article schema (enriched author for E-E-A-T)
+  const personaAny = persona as Record<string, unknown> | null
   const articleSchema = generateArticleSchema({
     title: article.title || article.keyword,
     description: article.meta_description || '',
@@ -1763,6 +1757,9 @@ async function executeSeo(
     updatedAt: article.updated_at,
     wordCount: article.word_count,
     imageUrl: (article as Record<string, unknown>).hero_image_url as string | undefined,
+    personaBio: (personaAny?.bio as string) || undefined,
+    personaAvatarUrl: (personaAny?.avatar_reference_url as string) || undefined,
+    personaSameAs: (personaAny?.social_links as string[]) || undefined,
   })
   schemas.push(articleSchema)
 
@@ -1834,6 +1831,21 @@ async function executeSeo(
     )
     schemas.push(reviewSchema)
   }
+
+  // ClaimReview schemas — detect sourced factual claims for Trustworthiness
+  const allContentHtml = contentBlocks
+    .filter(b => b.content_html && b.status !== 'pending')
+    .map(b => b.content_html)
+    .join('\n')
+  const claimReviews = generateClaimReviewSchemas(
+    allContentHtml,
+    persona?.name || 'Expert',
+    site?.domain || '',
+  )
+  schemas.push(...claimReviews)
+
+  // Citation density analysis for E-E-A-T audit
+  const citationDensity = analyzeCitationDensity(allContentHtml, article.word_count)
 
   const jsonLd = assembleJsonLd(schemas)
 
@@ -2955,6 +2967,14 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
         })),
       },
     } : {}),
+    citationDensity: {
+      externalLinkCount: citationDensity.externalLinkCount,
+      studyReferenceCount: citationDensity.studyReferenceCount,
+      dataPointCount: citationDensity.dataPointCount,
+      densityPer1000: citationDensity.densityPer1000,
+      status: citationDensity.status,
+    },
+    ...(claimReviews.length > 0 ? { claimReviewCount: claimReviews.length } : {}),
   }
 
   // 6. Update article
@@ -3315,6 +3335,18 @@ async function executePublish(
     // Tag assignment is optional
   }
 
+  // 4c. Find WP author matching the persona for E-E-A-T byline
+  let authorId: number | undefined
+  try {
+    const personaName = (article.seo_personas as { name: string } | null)?.name
+    if (personaName) {
+      const wpAuthorId = await findAuthorByName(article.site_id, personaName)
+      if (wpAuthorId) authorId = wpAuthorId
+    }
+  } catch {
+    // Author assignment is optional — continue without it
+  }
+
   // 5. Build SEO meta for Yoast/Rank Math + Open Graph + Elementor cleanup
   const seoMeta: Record<string, unknown> = {}
   if (article.seo_title) {
@@ -3394,6 +3426,7 @@ async function executePublish(
       categories: categoryIds,
       tags: tagIds,
       ...(hasSeoMeta ? { meta: seoMeta } : {}),
+      ...(authorId ? { author: authorId } : {}),
     })
     wpPostId = wpPost.id
     wpUrl = wpPost.link
@@ -3409,6 +3442,7 @@ async function executePublish(
       categories: categoryIds,
       tags: tagIds,
       ...(hasSeoMeta ? { meta: seoMeta } : {}),
+      ...(authorId ? { author: authorId } : {}),
     })
     wpPostId = result.wpPostId
     wpUrl = result.wpUrl
