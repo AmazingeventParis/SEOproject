@@ -624,11 +624,18 @@ Pour les produits SANS lien d'affiliation, NE PAS generer de CTA.`
     }
   }
 
-  user += `\n\n## 4 REGLES STRICTES
-**REGLE 1 — TRANSITION** : La premiere phrase doit creer un pont naturel avec la section precedente. Pas de "Voyons maintenant", mais une transition logique qui montre pourquoi on passe a ce nouveau point.
+  user += `\n\n## 5 REGLES STRICTES
+**REGLE 1 — ACCROCHE D'OUVERTURE** : La premiere phrase de chaque section H2 doit etre une ACCROCHE, pas une definition ou un contexte plat. Choisis UNE technique parmi :
+  - Chiffre-choc : "85% des installations presentent ce defaut."
+  - Question directe : "Vous pensez que votre isolation est suffisante ?"
+  - Constat terrain : "Ce que je vois chez 9 clients sur 10, c'est toujours la meme erreur."
+  - Affirmation contre-intuitive : "Le modele le plus cher n'est pas le plus rentable."
+  - Micro-anecdote : "La semaine derniere, un client m'a appele en panique."
+JAMAIS commencer un H2 par "Le/La/Les [nom]..." ou une definition Wikipedia. Le lecteur doit etre ACCROCHE des la premiere ligne.
 **REGLE 2 — ZERO REDITE** : Ne repete AUCUN argument, exemple, chiffre ou conseil deja present dans les sections precedentes (voir le plan et le texte de la section precedente). Si un point a deja ete traite, passe-le. Apporte uniquement des idees NOUVELLES.
 **REGLE 3 — PAS DE CONCLUSION** : Ne conclus PAS cette section. Pas de phrase de synthese en fin de section ("En resume...", "Ainsi...", "En definitive..."). La derniere phrase doit rester dans le vif du sujet ou ouvrir vers la section suivante.
 **REGLE 4 — DENSITE MAXIMALE** : Chaque phrase doit apporter une information NOUVELLE ou une valeur concrete. Supprime mentalement toute phrase qui ne fait que "remplir" ou reformuler ce qui a deja ete dit dans le meme bloc. Un paragraphe de 2-3 lignes percutantes vaut mieux qu'un paragraphe de 6 lignes dilue. Objectif : zero phrase inutile.
+**REGLE 5 — RYTHME HUMAIN** : Relis ton bloc avant de le valider. Verifie : (a) au moins 1 phrase de ≤4 mots, (b) au moins 2 "vous/votre", (c) au moins 1 paragraphe d'une seule phrase, (d) aucune sequence de 3 paragraphes de meme taille. Si un de ces criteres manque, corrige avant de retourner le HTML.
 
 ## RAPPEL
 - Objectif : ~${block.word_count} mots — c'est une CIBLE, pas un minimum. Si tu peux transmettre toute l'info en moins de mots, FAIS-LE. Un bloc concis et dense est meilleur qu'un bloc long et dilue.
