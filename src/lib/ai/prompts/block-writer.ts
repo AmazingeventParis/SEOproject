@@ -73,6 +73,8 @@ interface BlockWriterParams {
   saturatedConnectors?: string[]
   temporalContext?: string
   familiarExpressions?: string[]
+  lsiTerms?: string[]
+  tfidfTerms?: { term: string; score: number }[]
 }
 
 interface BlockWriterPrompt {
@@ -161,6 +163,48 @@ ${SEO_KEYWORD_RULES}
 ### E-E-A-T
 ${SEO_EEAT_RULES}
 
+### MISE EN GRAS STRATEGIQUE (OBLIGATOIRE)
+Chaque paragraphe <p> de 2+ phrases DOIT contenir au moins 1 balise <strong> sur un terme important :
+- **Priorite 1** : le mot-cle principal "${keyword}" ou une de ses variantes (1 fois en gras par section max)
+- **Priorite 2** : les mots-cles secondaires (LSI) et termes du champ semantique
+- **Priorite 3** : les termes techniques, noms de marques, chiffres cles, conseils actionables
+- Ne mets PAS en gras des mots vides ou generiques ("important", "il faut", "en effet")
+- Ne mets PAS en gras des phrases entieres — uniquement des GROUPES DE 1 A 4 MOTS significatifs
+- Objectif : le lecteur qui SCANNE la page en diagonale doit comprendre les points cles grace au gras
+- Vise 2-4 occurrences de <strong> par tranche de 150 mots (prose uniquement, pas dans les listes qui ont deja du gras)
+
+### NUANCE ET CONTRADICTION — STYLE "OUI, MAIS" (ANTI-IA)
+Un vrai expert ne donne pas d'avis monolithique. Il nuance, il relativise, il pose des limites.
+- Dans chaque article, AU MOINS 1 bloc intermediaire (pas l'intro, pas la FAQ) doit contenir une NUANCE explicite
+- Patterns a utiliser naturellement :
+  * "C'est vrai dans la majorite des cas, mais attention si..." / "Le revers de la medaille, c'est que..."
+  * "Sur le papier c'est seduisant. En pratique, [experience terrain contraire]"
+  * "La plupart des guides recommandent X. Personnellement, apres [experience], je nuancerais : ..."
+  * "Oui, [avantage]. Mais il faut aussi compter avec [limite/risque/cout cache]"
+- La nuance doit etre SINCERE et basee sur l'expertise du persona, pas une fausse objectivite
+- Ca casse le ton lisse des textes IA classiques et renforce la credibilite (Trustworthiness E-E-A-T)
+
+### VARIANTES NATURELLES DU MOT-CLE (REGLE CRITIQUE)
+Le mot-cle "${keyword}" est ce que l'utilisateur tape sur Google. Mais un texte naturel ne repete PAS la requete telle quelle.
+- INTERDIT de copier-coller la requete exacte plus de 2 fois dans tout l'article
+- Reformule TOUJOURS en langage naturel. Exemples :
+  * "pompe a chaleur air eau prix" → "le prix d'une pompe a chaleur air-eau" / "combien coute une PAC air-eau" / "le budget a prevoir pour une pompe a chaleur"
+  * "meilleur aspirateur robot 2026" → "les aspirateurs robots les plus performants en 2026" / "quel robot aspirateur choisir cette annee"
+  * "isolation combles perdus" → "isoler ses combles perdus" / "l'isolation des combles non amenages"
+- Chaque occurrence du mot-cle doit etre integree dans une phrase grammaticalement correcte et fluide
+- Si le mot-cle est un groupe nominal sans article (ex: "renovation salle de bain"), ajoute TOUJOURS l'article ou la preposition manquante
+- Varie les formes : nominale ("l'isolation"), verbale ("isoler"), adjectivale ("isole"), interrogative ("comment isoler ?")
+${params.lsiTerms && params.lsiTerms.length > 0 ? `
+### TERMES SEMANTIQUES LSI A INTEGRER (MINIMUM 5 OBLIGATOIRES)
+Voici les mots-cles secondaires (LSI) et termes du champ semantique a utiliser dans ce bloc.
+Tu DOIS en integrer au moins 5 differents, de maniere naturelle dans le texte :
+${params.lsiTerms.map(t => `- ${t}`).join('\n')}
+Ne les force PAS — integre-les la ou ils enrichissent le propos. Mets les plus importants en <strong>.
+` : ''}${params.tfidfTerms && params.tfidfTerms.length > 0 ? `
+### TERMES TF-IDF DES CONCURRENTS (ENRICHISSEMENT SEMANTIQUE)
+Ces termes sont utilises par les articles concurrents bien positionnes. Integre les plus pertinents :
+${params.tfidfTerms.map(t => `- "${t.term}" (importance: ${t.score > 0.01 ? 'haute' : t.score > 0.005 ? 'moyenne' : 'basse'})`).join('\n')}
+` : ''}
 ### Integration des nuggets
 - Les nuggets sont des contenus authentiques du persona (citations, anecdotes, observations)
 - Integre-les NATURELLEMENT dans le texte, comme si le persona les disait spontanement

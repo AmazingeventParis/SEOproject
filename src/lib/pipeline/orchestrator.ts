@@ -1040,6 +1040,18 @@ async function executeWriteBlock(
     familiarExpressions: personaAny?.familiar_expressions && Array.isArray(personaAny.familiar_expressions) && (personaAny.familiar_expressions as string[]).length > 0
       ? (personaAny.familiar_expressions as string[])
       : undefined,
+    // LSI + TF-IDF terms for semantic enrichment
+    lsiTerms: (() => {
+      const serpData = article.serp_data as Record<string, unknown> | null
+      const semAnalysis = serpData?.semanticAnalysis as { semanticField?: string[] } | undefined
+      return semAnalysis?.semanticField?.slice(0, 15) || undefined
+    })(),
+    tfidfTerms: (() => {
+      const serpData = article.serp_data as Record<string, unknown> | null
+      const compData = serpData?.competitorContent as { tfidfKeywords?: { term: string; tfidf: number }[] } | undefined
+      const terms = compData?.tfidfKeywords?.slice(0, 15)
+      return terms?.map(t => ({ term: t.term, score: t.tfidf })) || undefined
+    })(),
   })
 
   const aiResponse = modelOverride
