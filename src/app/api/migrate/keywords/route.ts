@@ -36,6 +36,9 @@ CREATE INDEX IF NOT EXISTS idx_kw_research_keyword_trgm ON seo_keyword_research 
 
 -- 009-growth-phase: Add growth phase to sites
 ALTER TABLE seo_sites ADD COLUMN IF NOT EXISTS growth_phase text DEFAULT 'sandbox' CHECK (growth_phase IN ('sandbox', 'authority', 'monetization'));
+
+-- 010-revamp-semantic-data: Add semantic_data to revamps for CSV keywords + manual instructions
+ALTER TABLE seo_revamps ADD COLUMN IF NOT EXISTS semantic_data jsonb DEFAULT NULL;
 `;
 
 export async function POST() {

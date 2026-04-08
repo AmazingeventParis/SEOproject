@@ -17,7 +17,13 @@ interface SerperResult {
 /**
  * Fetch top 5 SERP results for a keyword using Serper.dev.
  */
-async function fetchSERPResults(keyword: string): Promise<SerperResult[]> {
+interface SerperFullResult {
+  organic: SerperResult[]
+  paaQuestions: string[]
+  relatedSearches: string[]
+}
+
+async function fetchSERPResults(keyword: string): Promise<SerperFullResult> {
   const apiKey = await getSerperApiKey()
 
   const res = await fetch('https://google.serper.dev/search', {
@@ -30,7 +36,7 @@ async function fetchSERPResults(keyword: string): Promise<SerperResult[]> {
       q: keyword,
       gl: 'fr',
       hl: 'fr',
-      num: 5,
+      num: 10,
     }),
   })
 
@@ -39,11 +45,15 @@ async function fetchSERPResults(keyword: string): Promise<SerperResult[]> {
   }
 
   const data = await res.json()
-  return (data.organic || []).slice(0, 5).map((r: Record<string, string>) => ({
-    title: r.title || '',
-    link: r.link || '',
-    snippet: r.snippet || '',
-  }))
+  return {
+    organic: (data.organic || []).slice(0, 5).map((r: Record<string, string>) => ({
+      title: r.title || '',
+      link: r.link || '',
+      snippet: r.snippet || '',
+    })),
+    paaQuestions: (data.peopleAlsoAsk || []).map((p: Record<string, string>) => p.question || '').filter(Boolean),
+    relatedSearches: (data.relatedSearches || []).map((r: Record<string, string>) => r.query || '').filter(Boolean),
+  }
 }
 
 /**
@@ -55,8 +65,9 @@ export async function compareWithSERP(
   originalBlocks: ContentBlock[],
   gscData: RevampGSCData,
 ): Promise<RevampSERPComparison> {
-  // Fetch SERP results
-  const serpResults = await fetchSERPResults(keyword)
+  // Fetch SERP results with PAA + related searches
+  const serpFull = await fetchSERPResults(keyword)
+  const serpResults = serpFull.organic
 
   // Build a summary of the old article
   const oldArticleSummary = originalBlocks
@@ -83,6 +94,14 @@ export async function compareWithSERP(
     .map(k => `"${k.query}" (pos ${k.position.toFixed(0)}, ${k.impressions} impressions)`)
     .join(', ')
 
+  // PAA & related searches for the prompt
+  const paaStr = serpFull.paaQuestions.length > 0
+    ? serpFull.paaQuestions.map(q => `- ${q}`).join('\n')
+    : 'Aucune'
+  const relatedStr = serpFull.relatedSearches.length > 0
+    ? serpFull.relatedSearches.join(', ')
+    : 'Aucune'
+
   const prompt = `Tu es un expert SEO francais. Analyse cet article existant et compare-le aux resultats SERP actuels pour le mot-cle "${keyword}".
 
 ## ARTICLE ACTUEL
@@ -93,6 +112,12 @@ ${serpSummary}
 
 ## MOTS-CLES OPPORTUNITES (GSC)
 ${opportunityKws || 'Aucun'}
+
+## QUESTIONS "AUTRES QUESTIONS POSEES" (PAA Google)
+${paaStr}
+
+## RECHERCHES ASSOCIEES
+${relatedStr}
 
 ## TACHE
 Compare l'article actuel aux concurrents SERP et identifie :
@@ -134,6 +159,8 @@ Reponds en JSON strict :
       missingTopics: (parsed.missingTopics || []) as string[],
       outdatedSections: (parsed.outdatedSections || []) as string[],
       strengthsToKeep: (parsed.strengthsToKeep || []) as string[],
+      paaQuestions: serpFull.paaQuestions,
+      relatedSearches: serpFull.relatedSearches,
     }
   } catch {
     // Fallback if JSON parsing fails
@@ -150,6 +177,8 @@ Reponds en JSON strict :
       missingTopics: [],
       outdatedSections: [],
       strengthsToKeep: [],
+      paaQuestions: serpFull.paaQuestions,
+      relatedSearches: serpFull.relatedSearches,
     }
   }
 }

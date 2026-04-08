@@ -20,7 +20,7 @@ export async function auditContent(
   preservedLinks: { url: string; anchor: string; isInternal: boolean }[],
   preservedCTAs: string[],
 ): Promise<RevampAudit> {
-  // Build block summary
+  // Build block summary — include MORE content for rewrite directives to reference
   const blocksSummary = originalBlocks
     .map((b, i) => {
       const heading = b.heading || '(sans heading)'
@@ -30,7 +30,7 @@ export async function auditContent(
         .replace(/<[^>]*>/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
-        .slice(0, 300)
+        .slice(0, 500) // Extended from 300 to 500 chars for better context
       const hasLinks = /<a\s/i.test(b.content_html)
       return `BLOC ${i} [${type}] "${heading}" (${wc} mots)${hasLinks ? ' [contient liens]' : ''}\n${content}...`
     })
@@ -90,6 +90,12 @@ ${opKws || 'Aucun'}
 6. AJOUTER de nouvelles sections pour couvrir les sujets manquants
 7. Integrer les mots-cles opportunites GSC dans les nouvelles sections
 8. Chaque nouvelle section doit avoir des key_ideas MECE (3-5 idees exclusives)
+
+## REGLES SPECIFIQUES REVAMP (CRITIQUE)
+9. Pour chaque bloc a REECRIRE, la directive DOIT mentionner les INFOS UTILES du contenu original a conserver (chiffres, exemples, donnees factuelles, noms propres). Ne pas perdre la valeur informative originale — juste ameliorer le style et l'optimisation.
+   Exemple de bonne directive : "Reecrire en gardant le chiffre de 85% cite dans l'original + l'exemple du client X. Integrer le mot-cle 'pompe a chaleur air eau'. Ajouter un tableau comparatif."
+10. DETECTION CONTENU IA : si un bloc "kept" semble genere par IA (phrases uniformes, connecteurs formels comme "en effet/par ailleurs/neanmoins", pas de phrases courtes, pas d'opinion tranchee), le BASCULER en "rewrite" avec directive "Reformuler en style humain : varier les longueurs de phrases, ajouter des opinions, supprimer les connecteurs formels."
+11. Pour les blocs KEPT, verifier qu'ils ne contiennent pas d'annees perimees. Si oui → basculer en rewrite.
 
 ## FORMAT JSON STRICT
 {

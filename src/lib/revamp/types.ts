@@ -51,6 +51,14 @@ export interface RevampSERPComparison {
   missingTopics: string[]
   outdatedSections: string[]
   strengthsToKeep: string[]
+  paaQuestions?: string[]
+  relatedSearches?: string[]
+}
+
+export interface RevampSemanticData {
+  csvKeywords?: { keyword: string; volume: number; position: number; traffic: number }[]
+  lsiTerms?: string[]
+  manualInstructions?: string
 }
 
 export interface RevampAudit {
@@ -139,6 +147,7 @@ export interface RevampProject {
   preserved_links: { url: string; anchor: string; isInternal: boolean }[]
   preserved_ctas: string[]
   link_suggestions: RevampLinkSuggestions | null
+  semantic_data: RevampSemanticData | null
   error: string | null
   created_at: string
   updated_at: string

@@ -86,6 +86,9 @@ export default function RevampDetailPage() {
   const [customAuthorityTitle, setCustomAuthorityTitle] = useState("");
   const [customAuthorityAnchor, setCustomAuthorityAnchor] = useState("");
   const [showCustomAuthority, setShowCustomAuthority] = useState(false);
+  const [manualInstructions, setManualInstructions] = useState("");
+  const [csvText, setCsvText] = useState<string | null>(null);
+  const [csvFileName, setCsvFileName] = useState<string | null>(null);
 
   const fetchRevamp = useCallback(async () => {
     try {
@@ -115,10 +118,17 @@ export default function RevampDetailPage() {
     setActionLoading("approve");
     setError(null);
     try {
-      const res = await fetch(`/api/revamp/${revampId}/approve`, { method: "POST" });
+      const body: Record<string, unknown> = {};
+      if (manualInstructions.trim()) body.manualInstructions = manualInstructions.trim();
+      if (csvText) body.csvText = csvText;
+
+      const res = await fetch(`/api/revamp/${revampId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      // Update status locally immediately so the button switches
       setRevamp(prev => prev ? { ...prev, status: "approved" } : prev);
       await fetchRevamp();
     } catch (err) {
@@ -613,6 +623,53 @@ export default function RevampDetailPage() {
                   </span>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Manual Instructions + CSV Keywords */}
+      {(revamp.status === "analyzed" || revamp.status === "approved" || revamp.status === "failed") && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Instructions & mots-cles secondaires</CardTitle>
+            <CardDescription>Instructions manuelles prioritaires et CSV Semrush pour les mots-cles a integrer</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Instructions prioritaires (optionnel)</label>
+              <textarea
+                value={manualInstructions}
+                onChange={(e) => setManualInstructions(e.target.value)}
+                placeholder="Ex: Insister sur le rapport qualite-prix. Mentionner la marque Daikin. Utiliser un ton plus technique. Ne pas parler de climatisation reversible..."
+                className="w-full border rounded-md p-3 text-sm min-h-[80px] resize-y"
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground mt-1">Ces instructions seront injectees dans CHAQUE bloc a reecrire, en priorite.</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">CSV Semrush — mots-cles secondaires (optionnel)</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const text = await file.text();
+                      setCsvText(text);
+                      setCsvFileName(file.name);
+                    }
+                  }}
+                  className="text-sm"
+                />
+                {csvFileName && (
+                  <Badge variant="outline" className="text-xs">
+                    {csvFileName}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Les top 30 mots-cles du CSV seront utilises comme termes LSI/secondaires dans la redaction.</p>
             </div>
           </CardContent>
         </Card>

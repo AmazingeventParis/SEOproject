@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server'
 import { getServerClient } from '@/lib/supabase/client'
 import type { SearchIntent } from '@/lib/supabase/types'
-import type { RevampLinkSuggestions } from '@/lib/revamp/types'
+import type { RevampLinkSuggestions, RevampSemanticData } from '@/lib/revamp/types'
+import { parseSemrushCsv } from '@/lib/keywords/csv-parser'
 
 interface RouteContext {
   params: { revampId: string }
@@ -43,13 +44,27 @@ export async function POST(
     )
   }
 
-  // Parse optional body for audit updates and persona selection
+  // Parse optional body for audit updates, persona, instructions, CSV
   let updatedAudit = revamp.audit
   let personaId: string | null = null
+  let manualInstructions: string | null = null
+  let csvKeywords: { keyword: string; volume: number; position: number; traffic: number }[] | null = null
   try {
     const body = await request.json()
     if (body?.audit) updatedAudit = body.audit
     if (body?.personaId) personaId = body.personaId
+    if (body?.manualInstructions) manualInstructions = body.manualInstructions
+    // Parse CSV keywords if provided
+    if (body?.csvText) {
+      try {
+        const parsed = parseSemrushCsv(body.csvText)
+        csvKeywords = parsed
+          .filter(k => k.volume > 0)
+          .sort((a, b) => b.volume - a.volume)
+          .slice(0, 30)
+          .map(k => ({ keyword: k.keyword, volume: k.volume, position: 0, traffic: 0 }))
+      } catch { /* CSV parsing failed — skip */ }
+    }
   } catch {
     // No body — use existing audit
   }
@@ -115,9 +130,16 @@ export async function POST(
     .filter(n => n.score >= 4)
     .sort((a, b) => b.score - a.score)
 
-  // Enrich blocks with internal_link_targets for the writer
+  // Inject manual instructions into pending block directives
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const newBlocks = (revamp.new_blocks || []) as any[]
+  if (manualInstructions) {
+    for (const block of newBlocks) {
+      if (block.status === 'pending') {
+        block.writing_directive = `${block.writing_directive || ''}\n\nINSTRUCTIONS PRIORITAIRES DE L'UTILISATEUR :\n${manualInstructions}`.trim()
+      }
+    }
+  }
 
   // Assign nuggets to pending blocks (rewrite + new sections)
   // Each nugget assigned to at most 1 block, max 2 nuggets per block
@@ -190,10 +212,31 @@ export async function POST(
   // Build selected authority link for the article (used by block-writer)
   const selectedAuthorityLink = linkSuggestions?.selectedAuthority || null
 
+  // Build semantic data (CSV keywords + manual instructions → stored in article's serp_data)
+  const semanticData: RevampSemanticData = {}
+  if (csvKeywords && csvKeywords.length > 0) {
+    semanticData.csvKeywords = csvKeywords
+    semanticData.lsiTerms = csvKeywords.slice(0, 15).map(k => k.keyword)
+  }
+  if (manualInstructions) {
+    semanticData.manualInstructions = manualInstructions
+  }
+
   // Extract meta data from audit
   const auditData = updatedAudit as Record<string, unknown> | null
   const suggestedTitle = (auditData?.suggestedTitle as string) || revamp.original_title
   const suggestedMetaDesc = (auditData?.suggestedMetaDescription as string) || null
+
+  // Build serp_data with semantic info for block-writer LSI injection
+  const articleSerpData: Record<string, unknown> = {}
+  if (semanticData.lsiTerms && semanticData.lsiTerms.length > 0) {
+    articleSerpData.semanticAnalysis = { semanticField: semanticData.lsiTerms }
+  }
+  if (semanticData.csvKeywords && semanticData.csvKeywords.length > 0) {
+    articleSerpData.competitorContent = {
+      tfidfKeywords: semanticData.csvKeywords.map(k => ({ term: k.keyword, tfidf: k.volume / 10000, df: 1 })),
+    }
+  }
 
   // If no article_id exists, create a full article for the pipeline
   let articleId = revamp.article_id
@@ -213,6 +256,7 @@ export async function POST(
         persona_id: personaId,
         year_tag: new Date().getFullYear(),
         selected_authority_link: selectedAuthorityLink,
+        ...(Object.keys(articleSerpData).length > 0 ? { serp_data: articleSerpData } : {}),
       })
       .select('id')
       .single()
@@ -227,31 +271,48 @@ export async function POST(
     articleId = newArticle.id
   } else {
     // Update existing article with enriched data
+    const updatePayload: Record<string, unknown> = {
+      search_intent: searchIntent,
+      title: suggestedTitle,
+      seo_title: suggestedTitle,
+      meta_description: suggestedMetaDesc,
+      content_blocks: enrichedBlocks,
+      persona_id: personaId,
+      year_tag: new Date().getFullYear(),
+      selected_authority_link: selectedAuthorityLink,
+    }
+    // Merge semantic data into serp_data
+    if (Object.keys(articleSerpData || {}).length > 0) {
+      // Fetch existing serp_data to merge
+      const { data: existingArticle } = await supabase
+        .from('seo_articles')
+        .select('serp_data')
+        .eq('id', articleId)
+        .single()
+      const existingSerpData = (existingArticle?.serp_data || {}) as Record<string, unknown>
+      updatePayload.serp_data = { ...existingSerpData, ...articleSerpData }
+    }
     await supabase
       .from('seo_articles')
-      .update({
-        search_intent: searchIntent,
-        title: suggestedTitle,
-        seo_title: suggestedTitle,
-        meta_description: suggestedMetaDesc,
-        content_blocks: enrichedBlocks,
-        persona_id: personaId,
-        year_tag: new Date().getFullYear(),
-        selected_authority_link: selectedAuthorityLink,
-      })
+      .update(updatePayload)
       .eq('id', articleId)
   }
 
-  // Update revamp status to approved with enriched blocks
+  // Update revamp status to approved with enriched blocks + semantic data
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const revampUpdate: Record<string, unknown> = {
+    status: 'approved',
+    audit: updatedAudit,
+    article_id: articleId,
+    new_blocks: enrichedBlocks,
+    updated_at: new Date().toISOString(),
+  }
+  if (Object.keys(semanticData).length > 0) {
+    revampUpdate.semantic_data = semanticData
+  }
   await supabase
     .from('seo_revamps')
-    .update({
-      status: 'approved',
-      audit: updatedAudit,
-      article_id: articleId,
-      new_blocks: enrichedBlocks,
-      updated_at: new Date().toISOString(),
-    })
+    .update(revampUpdate)
     .eq('id', revampId)
 
   return new Response(
