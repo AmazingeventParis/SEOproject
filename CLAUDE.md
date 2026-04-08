@@ -7,10 +7,13 @@
 - **Branche** : main
 
 ## Deploiement
-- **Coolify** : auto-deploy sur push GitHub (webhook)
+- **Coolify** : auto-deploy sur push GitHub (webhook manuel)
+- **Coolify App UUID** : `z8oskso4cg484w00s8g0g000`
 - **Serveur SEO** : 217.182.89.133 (OVH)
 - **Git auth** : token GitHub configure dans le remote URL
-- **Workflow** : modifs → commit → `git push` → Coolify build + deploy automatique
+- **Webhook GitHub** : ID 605112680, push → `http://217.182.89.133:8000/webhooks/source/github/events/manual`
+- **Workflow** : modifs → commit → `git push` → webhook GitHub → Coolify build + deploy automatique
+- **Deploy manuel** : `curl -s "http://217.182.89.133:8000/api/v1/deploy?uuid=z8oskso4cg484w00s8g0g000&force=true" -H "Authorization: Bearer 1|FNcssp3CipkrPNVSQyv3IboYwGsP8sjPskoBG3ux98e5a576"`
 
 ## Statut actuel
 Phases 1-4 terminées. Projet en production.
