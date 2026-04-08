@@ -1840,17 +1840,23 @@ export default function ArticleDetailPage() {
               </>
             )}
             {article.status === "writing" && pendingBlocks.length > 0 && (
-              <Button
-                onClick={() => runWriteAll()}
-                disabled={!!actionLoading || !article.persona_id}
-              >
-                {actionLoading === "Redaction" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <PenLine className="mr-2 h-4 w-4" />
-                )}
-                Continuer la redaction
-              </Button>
+              <>
+                <Button
+                  onClick={() => runWriteAll()}
+                  disabled={!!actionLoading || !article.persona_id}
+                  className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+                >
+                  {actionLoading === "Redaction" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <PenLine className="mr-2 h-4 w-4" />
+                  )}
+                  Redaction auto ({pendingBlocks.length} blocs)
+                </Button>
+                <span className="text-xs text-muted-foreground max-w-[200px]">
+                  Modifiez l&apos;intro ou les blocs avant de lancer
+                </span>
+              </>
             )}
             {article.status === "writing" && pendingBlocks.length === 0 && (
               <Button
@@ -1865,6 +1871,20 @@ export default function ArticleDetailPage() {
                   <Image className="mr-2 h-4 w-4" />
                 )}
                 Generer les medias
+              </Button>
+            )}
+            {article.status === "media" && pendingBlocks.length > 0 && (
+              <Button
+                onClick={() => runWriteAll()}
+                disabled={!!actionLoading || !article.persona_id}
+                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+              >
+                {actionLoading === "Redaction" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <PenLine className="mr-2 h-4 w-4" />
+                )}
+                Redaction auto ({pendingBlocks.length} blocs)
               </Button>
             )}
             {(article.status === "media" || article.status === "seo_check") && (
