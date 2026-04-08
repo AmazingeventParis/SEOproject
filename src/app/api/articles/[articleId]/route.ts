@@ -26,6 +26,7 @@ const contentBlockSchema = z.object({
 
 const updateArticleSchema = z.object({
   title: z.string().nullable().optional(),
+  seo_title: z.string().nullable().optional(),
   slug: z.string().nullable().optional(),
   meta_description: z.string().nullable().optional(),
   content_blocks: z.array(contentBlockSchema).optional(),
