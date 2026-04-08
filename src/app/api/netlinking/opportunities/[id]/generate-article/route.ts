@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerClient } from "@/lib/supabase/client";
-import { generateNetlinkingArticle } from "@/lib/netlinking/analyzer";
+import { generateGuestPostArticle } from "@/lib/netlinking/guest-post-generator";
+import type { GuestPostLink } from "@/lib/netlinking/types";
 
 export const maxDuration = 120;
 
@@ -9,13 +10,24 @@ interface RouteContext {
 }
 
 // POST /api/netlinking/opportunities/[id]/generate-article
-export async function POST(_request: NextRequest, { params }: RouteContext) {
+// Body (optional): { links: GuestPostLink[], word_count: number }
+export async function POST(request: NextRequest, { params }: RouteContext) {
   const supabase = getServerClient();
 
+  // Parse optional body for link config
+  let bodyLinks: GuestPostLink[] | undefined;
+  let bodyWordCount: number | undefined;
+  try {
+    const body = await request.json();
+    bodyLinks = body.links;
+    bodyWordCount = body.word_count;
+  } catch {
+    // No body or invalid JSON — use defaults
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: oppRaw, error } = await supabase
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .from("seo_link_opportunities" as any)
+  const { data: oppRaw, error } = await (supabase as any)
+    .from("seo_link_opportunities")
     .select("*, seo_sites!seo_link_opportunities_site_id_fkey(name, domain, niche)")
     .eq("id", params.id)
     .single();
@@ -33,11 +45,24 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
 
   const site = opp.seo_sites as { name: string; domain: string; niche: string | null } | null;
 
+  // Build links array: use body links if provided, otherwise default to single target link
+  const links: GuestPostLink[] = bodyLinks || [
+    {
+      url: opp.target_page,
+      anchorText: opp.target_keyword,
+      type: 'target',
+    },
+  ];
+
+  // Validate at least 1 link
+  if (links.length === 0 || links.length > 3) {
+    return NextResponse.json({ error: "1 a 3 liens maximum" }, { status: 422 });
+  }
+
   // Check existing anchor distribution from purchases
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: purchasesRaw } = await supabase
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .from("seo_link_purchases" as any)
+  const { data: purchasesRaw } = await (supabase as any)
+    .from("seo_link_purchases")
     .select("anchor_type")
     .eq("site_id", opp.site_id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,26 +79,26 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
   }
 
   try {
-    const article = await generateNetlinkingArticle({
+    const article = await generateGuestPostArticle({
       vendorDomain: opp.vendor_domain,
       vendorNiche: opp.niche,
-      targetPageUrl: opp.target_page,
       targetKeyword: opp.target_keyword,
       siteDomain: site?.domain || "",
       siteNiche: site?.niche || "generaliste",
+      links,
+      wordCount: bodyWordCount || 800,
       anchorProfile,
     });
 
     // Save to opportunity
-    const { data: updated, error: updateError } = await supabase
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .from("seo_link_opportunities" as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: updated, error: updateError } = await (supabase as any)
+      .from("seo_link_opportunities")
       .update({
         generated_article: article,
         anchor_suggestions: article.anchors,
         status: "article_generated",
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any)
+      })
       .eq("id", params.id)
       .select()
       .single();

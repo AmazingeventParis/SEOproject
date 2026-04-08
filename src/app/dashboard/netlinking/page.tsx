@@ -109,6 +109,9 @@ export default function NetlinkingPage() {
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const [recommendLoading, setRecommendLoading] = useState(false);
+  const [linkConfigId, setLinkConfigId] = useState<string | null>(null);
+  const [linkConfigData, setLinkConfigData] = useState<{ url: string; anchorText: string; type: 'target' | 'authority' }[]>([]);
+  const [linkConfigWordCount, setLinkConfigWordCount] = useState(800);
   const [profileForm, setProfileForm] = useState({ tf: "", cf: "", da: "", referring_domains: "", total_backlinks: "", organic_traffic: "", organic_keywords: "" });
   const { toast } = useToast();
 
@@ -183,11 +186,19 @@ export default function NetlinkingPage() {
     }
   };
 
-  // Generate article
-  const generateArticle = async (id: string) => {
+  // Generate article with link configuration
+  const generateArticle = async (id: string, linksConfig?: { url: string; anchorText: string; type: 'target' | 'authority' }[], wordCount?: number) => {
     setGeneratingId(id);
     try {
-      const res = await fetch(`/api/netlinking/opportunities/${id}/generate-article`, { method: "POST" });
+      const body: Record<string, unknown> = {};
+      if (linksConfig && linksConfig.length > 0) body.links = linksConfig;
+      if (wordCount) body.word_count = wordCount;
+
+      const res = await fetch(`/api/netlinking/opportunities/${id}/generate-article`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
       if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
       toast({ title: "Article genere" });
       loadData();
@@ -586,7 +597,10 @@ export default function NetlinkingPage() {
                                 toast({ title: "Mot-cle requis", description: "Lancez d'abord la Recommandation IA puis cliquez 'Appliquer cette reco' pour definir le mot-cle cible.", variant: "destructive" });
                                 return;
                               }
-                              generateArticle(opp.id);
+                              // Open link config panel with default target link
+                              setLinkConfigId(opp.id);
+                              setLinkConfigData([{ url: opp.target_page, anchorText: opp.target_keyword, type: 'target' }]);
+                              setLinkConfigWordCount(800);
                             }} disabled={generatingId === opp.id} title={opp.target_keyword ? `Generer article — ${opp.target_keyword}` : "Definissez d'abord le mot-cle cible"}>
                               {generatingId === opp.id ? "..." : <FileText className={`w-4 h-4 ${!opp.target_keyword ? "opacity-40" : ""}`} />}
                             </Button>
@@ -652,11 +666,102 @@ export default function NetlinkingPage() {
           </div>
         </TabsContent>
 
+        {/* === Link Config Panel (modal-like) === */}
+        {linkConfigId && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setLinkConfigId(null)}>
+            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold">Configurer les liens de l&apos;article</h3>
+              <p className="text-sm text-muted-foreground">Definissez les liens a integrer dans l&apos;article (1 a 3 max).</p>
+
+              {linkConfigData.map((link, idx) => (
+                <div key={idx} className="border rounded p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Badge className={link.type === 'target' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}>
+                      {link.type === 'target' ? 'Backlink cible' : 'Lien autorite'}
+                    </Badge>
+                    {idx > 0 && (
+                      <Button size="sm" variant="ghost" className="text-red-500 h-6 px-2" onClick={() => setLinkConfigData(prev => prev.filter((_, i) => i !== idx))}>
+                        Supprimer
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">URL</Label>
+                      <Input
+                        value={link.url}
+                        onChange={e => setLinkConfigData(prev => prev.map((l, i) => i === idx ? { ...l, url: e.target.value } : l))}
+                        placeholder="https://..."
+                        className="text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Texte d&apos;ancre</Label>
+                      <Input
+                        value={link.anchorText}
+                        onChange={e => setLinkConfigData(prev => prev.map((l, i) => i === idx ? { ...l, anchorText: e.target.value } : l))}
+                        placeholder="ancre du lien"
+                        className="text-sm"
+                      />
+                    </div>
+                  </div>
+                  <Select
+                    value={link.type}
+                    onValueChange={(v) => setLinkConfigData(prev => prev.map((l, i) => i === idx ? { ...l, type: v as 'target' | 'authority' } : l))}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="target">Backlink cible (mon site)</SelectItem>
+                      <SelectItem value="authority">Lien d&apos;autorite (source externe)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+
+              {linkConfigData.length < 3 && (
+                <Button variant="outline" size="sm" className="w-full" onClick={() => setLinkConfigData(prev => [...prev, { url: '', anchorText: '', type: 'authority' }])}>
+                  + Ajouter un lien ({3 - linkConfigData.length} restant{3 - linkConfigData.length > 1 ? 's' : ''})
+                </Button>
+              )}
+
+              <div>
+                <Label className="text-xs">Nombre de mots</Label>
+                <Input
+                  type="number"
+                  value={linkConfigWordCount}
+                  onChange={e => setLinkConfigWordCount(parseInt(e.target.value) || 800)}
+                  min={400}
+                  max={2000}
+                  className="w-32 text-sm"
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" onClick={() => setLinkConfigId(null)}>Annuler</Button>
+                <Button
+                  disabled={generatingId === linkConfigId || linkConfigData.some(l => !l.url || !l.anchorText)}
+                  onClick={() => {
+                    const id = linkConfigId;
+                    setLinkConfigId(null);
+                    generateArticle(id, linkConfigData, linkConfigWordCount);
+                  }}
+                >
+                  {generatingId === linkConfigId ? "Generation..." : "Generer l'article"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* === TAB: Generated Articles === */}
         <TabsContent value="articles" className="space-y-4">
           {opportunities.filter(o => o.generated_article).map((opp) => {
-            const article = opp.generated_article as { title?: string; content_html?: string; word_count?: number; anchors?: { type: string; text: string; context_sentence: string }[] } | null;
+            const article = opp.generated_article as { title?: string; content_html?: string; content_text?: string; word_count?: number; anchors?: { type: string; text: string; context_sentence: string }[] } | null;
             if (!article) return null;
+            // Generate plain text fallback if not present
+            const plainText = article.content_text || (article.content_html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
             return (
               <Card key={opp.id}>
                 <CardHeader className="pb-3">
@@ -665,18 +770,26 @@ export default function NetlinkingPage() {
                       <CardTitle className="text-base">{article.title || opp.vendor_domain}</CardTitle>
                       <CardDescription>Pour {opp.vendor_domain} — {article.word_count || 0} mots — Cible: {opp.target_keyword}</CardDescription>
                     </div>
-                    <Button size="sm" variant="outline" onClick={() => {
-                      navigator.clipboard.writeText(article.content_html || "");
-                      toast({ title: "Article copie dans le presse-papier" });
-                    }}>
-                      <Copy className="w-4 h-4 mr-1" /> Copier HTML
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => {
+                        navigator.clipboard.writeText(article.content_html || "");
+                        toast({ title: "HTML copie dans le presse-papier" });
+                      }}>
+                        <Copy className="w-4 h-4 mr-1" /> HTML
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => {
+                        navigator.clipboard.writeText(plainText);
+                        toast({ title: "Texte copie dans le presse-papier" });
+                      }}>
+                        <Copy className="w-4 h-4 mr-1" /> Texte brut
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {article.anchors && article.anchors.length > 0 && (
                     <div>
-                      <p className="font-semibold text-sm mb-2">Variantes d&apos;ancres :</p>
+                      <p className="font-semibold text-sm mb-2">Liens integres :</p>
                       <div className="space-y-2">
                         {article.anchors.map((a, i) => (
                           <div key={i} className="flex items-start gap-2 text-sm p-2 bg-muted/30 rounded">
@@ -690,9 +803,13 @@ export default function NetlinkingPage() {
                       </div>
                     </div>
                   )}
-                  <details className="text-sm">
-                    <summary className="cursor-pointer font-medium text-muted-foreground">Voir l&apos;article complet</summary>
+                  <details className="text-sm" open>
+                    <summary className="cursor-pointer font-medium text-muted-foreground">Apercu HTML</summary>
                     <div className="mt-2 prose prose-sm max-w-none border rounded p-4" dangerouslySetInnerHTML={{ __html: article.content_html || "" }} />
+                  </details>
+                  <details className="text-sm">
+                    <summary className="cursor-pointer font-medium text-muted-foreground">Version texte brut (copier-coller)</summary>
+                    <pre className="mt-2 text-xs bg-muted p-4 rounded whitespace-pre-wrap font-sans">{plainText}</pre>
                   </details>
                 </CardContent>
               </Card>

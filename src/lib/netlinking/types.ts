@@ -25,10 +25,28 @@ export interface AnchorVariant {
 export interface GeneratedArticle {
   title: string
   content_html: string
+  content_text?: string // Plain text version for copy-paste
   word_count: number
   anchors: AnchorVariant[]
   target_url: string
   target_keyword: string
+}
+
+export interface GuestPostLink {
+  url: string
+  anchorText: string
+  type: 'target' | 'authority' // target = your backlink, authority = supporting link
+}
+
+export interface GuestPostConfig {
+  vendorDomain: string
+  vendorNiche: string | null
+  targetKeyword: string
+  siteDomain: string
+  siteNiche: string
+  links: GuestPostLink[] // 1-3 links to insert
+  wordCount?: number // default 800
+  anchorProfile?: { exact: number; broad: number; brand: number }
 }
 
 export interface GapAnalysis {
