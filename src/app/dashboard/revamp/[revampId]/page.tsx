@@ -89,6 +89,8 @@ export default function RevampDetailPage() {
   const [manualInstructions, setManualInstructions] = useState("");
   const [csvText, setCsvText] = useState<string | null>(null);
   const [csvFileName, setCsvFileName] = useState<string | null>(null);
+  const [csvTopKeywords, setCsvTopKeywords] = useState<{ keyword: string; volume: number; position: number }[]>([]);
+  const [suggestedKeyword, setSuggestedKeyword] = useState<string | null>(null);
 
   const fetchRevamp = useCallback(async () => {
     try {
@@ -659,17 +661,76 @@ export default function RevampDetailPage() {
                       const text = await file.text();
                       setCsvText(text);
                       setCsvFileName(file.name);
+                      // Parse CSV client-side to show top keywords + suggestion
+                      try {
+                        const lines = text.trim().split(/\r?\n/);
+                        if (lines.length < 2) return;
+                        const sep = lines[0].includes(';') ? ';' : lines[0].includes('\t') ? '\t' : ',';
+                        const headers = lines[0].split(sep).map(h => h.toLowerCase().replace(/["%]/g, '').trim());
+                        const kwIdx = headers.findIndex(h => h.startsWith('keyword') || h.startsWith('mot'));
+                        const volIdx = headers.findIndex(h => h.startsWith('volume'));
+                        const posIdx = headers.findIndex(h => h.startsWith('position') || h.startsWith('pos'));
+                        if (kwIdx === -1) return;
+                        const parsed: { keyword: string; volume: number; position: number }[] = [];
+                        for (let i = 1; i < Math.min(lines.length, 100); i++) {
+                          const cols = lines[i].split(sep);
+                          const kw = (cols[kwIdx] || '').replace(/"/g, '').trim();
+                          if (!kw) continue;
+                          const vol = parseInt((cols[volIdx] || '0').replace(/[^0-9]/g, '')) || 0;
+                          const pos = parseFloat((cols[posIdx] || '0').replace(/,/g, '.')) || 0;
+                          parsed.push({ keyword: kw, volume: vol, position: pos });
+                        }
+                        const sorted = parsed.sort((a, b) => b.volume - a.volume);
+                        setCsvTopKeywords(sorted.slice(0, 10));
+                        // Suggest best keyword: highest volume that's different from current
+                        const current = revamp?.original_keyword?.toLowerCase() || '';
+                        const best = sorted.find(k => k.keyword.toLowerCase() !== current && k.volume > 0);
+                        if (best && best.volume > 100) {
+                          setSuggestedKeyword(best.keyword);
+                        }
+                      } catch { /* parsing error — silent */ }
                     }
                   }}
                   className="text-sm"
                 />
                 {csvFileName && (
                   <Badge variant="outline" className="text-xs">
-                    {csvFileName}
+                    {csvFileName} — {csvTopKeywords.length > 0 ? `${csvTopKeywords.length} mots-cles` : 'chargement...'}
                   </Badge>
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-1">Les top 30 mots-cles du CSV seront utilises comme termes LSI/secondaires dans la redaction.</p>
+
+              {/* Keyword suggestion from CSV */}
+              {suggestedKeyword && (
+                <div className="mt-2 p-3 border border-blue-200 bg-blue-50 rounded-lg">
+                  <p className="text-sm font-medium text-blue-800">
+                    💡 Le CSV suggere un mot-cle plus porteur : &quot;<strong>{suggestedKeyword}</strong>&quot;
+                    {csvTopKeywords.find(k => k.keyword === suggestedKeyword) && (
+                      <span className="text-xs ml-1">
+                        ({csvTopKeywords.find(k => k.keyword === suggestedKeyword)?.volume.toLocaleString()} recherches/mois)
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Mot-cle actuel : &quot;{revamp?.original_keyword}&quot;. Si vous voulez cibler ce nouveau mot-cle, modifiez-le dans l&apos;audit avant d&apos;approuver.
+                  </p>
+                </div>
+              )}
+
+              {/* Top CSV keywords preview */}
+              {csvTopKeywords.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Top mots-cles du CSV :</p>
+                  <div className="flex flex-wrap gap-1">
+                    {csvTopKeywords.slice(0, 8).map((k, i) => (
+                      <Badge key={i} variant="outline" className="text-xs">
+                        {k.keyword} <span className="ml-1 text-muted-foreground">{k.volume > 0 ? `${k.volume}` : ''}</span>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

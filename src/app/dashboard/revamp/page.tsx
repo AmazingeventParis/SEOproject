@@ -110,6 +110,7 @@ export default function RevampPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedCandidate, setExpandedCandidate] = useState<number | null>(null);
   const [candidateKeywords, setCandidateKeywords] = useState<Record<number, string>>({});
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetch("/api/sites")
@@ -222,6 +223,17 @@ export default function RevampPage() {
         </div>
       </div>
 
+      {/* Search bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Rechercher un article par titre ou mot-cle..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           <AlertTriangle className="mr-2 inline h-4 w-4" />
@@ -230,7 +242,9 @@ export default function RevampPage() {
       )}
 
       {/* Active Revamp Projects */}
-      {revamps.length > 0 && (
+      {(searchQuery ? revamps.filter(r =>
+        r.original_title.toLowerCase().includes(searchQuery.toLowerCase()) || r.original_keyword.toLowerCase().includes(searchQuery.toLowerCase())
+      ) : revamps).length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Projets de revamp</CardTitle>
@@ -238,7 +252,9 @@ export default function RevampPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {revamps.map((revamp) => {
+              {(searchQuery ? revamps.filter(r =>
+                r.original_title.toLowerCase().includes(searchQuery.toLowerCase()) || r.original_keyword.toLowerCase().includes(searchQuery.toLowerCase())
+              ) : revamps).map((revamp) => {
                 const statusInfo = STATUS_LABELS[revamp.status] || { label: revamp.status, color: "bg-gray-500" };
                 return (
                   <div key={revamp.id} className="flex items-center gap-4 rounded-lg border p-4 hover:bg-muted/50 transition-colors">
@@ -276,15 +292,24 @@ export default function RevampPage() {
       )}
 
       {/* Candidates */}
-      {candidates.length > 0 && (
+      {(searchQuery ? candidates.filter(c =>
+        c.title.toLowerCase().includes(searchQuery.toLowerCase()) || (c.bestKeyword || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.topKeywords.some(k => k.query.toLowerCase().includes(searchQuery.toLowerCase()))
+      ) : candidates).length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Articles a revamper ({candidates.length})</CardTitle>
+            <CardTitle className="text-lg">Articles a revamper ({(searchQuery ? candidates.filter(c =>
+              c.title.toLowerCase().includes(searchQuery.toLowerCase()) || (c.bestKeyword || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+              c.topKeywords.some(k => k.query.toLowerCase().includes(searchQuery.toLowerCase()))
+            ) : candidates).length})</CardTitle>
             <CardDescription>Classes par potentiel d&apos;amelioration. Cliquez sur un article pour voir le detail.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {candidates.map((candidate) => {
+              {(searchQuery ? candidates.filter(c =>
+                c.title.toLowerCase().includes(searchQuery.toLowerCase()) || (c.bestKeyword || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                c.topKeywords.some(k => k.query.toLowerCase().includes(searchQuery.toLowerCase()))
+              ) : candidates).map((candidate) => {
                 const isAnalyzing = analyzing === candidate.wpPostId;
                 const alreadyRevamped = revamps.some((r) => r.wp_post_id === candidate.wpPostId);
                 const isExpanded = expandedCandidate === candidate.wpPostId;
