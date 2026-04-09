@@ -2157,25 +2157,51 @@ async function executeSeo(
     )
   }
 
-  // Check heading hierarchy (no H3 without H2 parent, no H4 without H3 parent)
+  // Check and FIX heading hierarchy (no H3 without H2 parent, no H4 without H3 parent)
   let lastH2Seen = false
   let lastH3Seen = false
-  for (const block of updatedBlocks) {
+  for (let bi = 0; bi < updatedBlocks.length; bi++) {
+    const block = updatedBlocks[bi]
+
+    // Strip parasitic heading tags from block content_html (AI sometimes generates <h3> inside a block)
+    if (block.content_html && block.type !== 'faq') {
+      const hasParasiticHn = /<h[2-6][^>]*>/i.test(block.content_html)
+      if (hasParasiticHn) {
+        updatedBlocks[bi] = {
+          ...block,
+          content_html: block.content_html
+            .replace(/<h[2-6][^>]*>(.*?)<\/h[2-6]>/gi, '<p><strong>$1</strong></p>'),
+        }
+        headingIssues.push(
+          `Bloc "${block.heading?.slice(0, 50) || '(intro)'}" contenait des balises Hn parasites — converties en <strong>`
+        )
+      }
+    }
+
+    // Check hierarchy and auto-fix
     if (block.type === 'h2') {
       lastH2Seen = true
       lastH3Seen = false
     } else if (block.type === 'h3') {
       if (!lastH2Seen) {
+        // Auto-fix: promote H3 to H2 if no parent H2
+        updatedBlocks[bi] = { ...block, type: 'h2' as const }
         headingIssues.push(
-          `H3 "${block.heading?.slice(0, 50) || '(sans titre)'}" apparait avant tout H2 (hierarchie cassee)`
+          `H3 "${block.heading?.slice(0, 50) || '(sans titre)'}" promu en H2 (pas de H2 parent)`
         )
+        lastH2Seen = true
+        lastH3Seen = false
+      } else {
+        lastH3Seen = true
       }
-      lastH3Seen = true
     } else if (block.type === 'h4') {
       if (!lastH3Seen) {
+        // Auto-fix: demote H4 to H3 if no parent H3
+        updatedBlocks[bi] = { ...block, type: 'h3' as const }
         headingIssues.push(
-          `H4 "${block.heading?.slice(0, 50) || '(sans titre)'}" apparait sans H3 parent (hierarchie cassee)`
+          `H4 "${block.heading?.slice(0, 50) || '(sans titre)'}" retrogade en H3 (pas de H3 parent)`
         )
+        lastH3Seen = true
       }
     }
   }

@@ -217,6 +217,7 @@ ${params.tfidfTerms.map(t => `- "${t.term}" (importance: ${t.score > 0.01 ? 'hau
 Ecris le contenu de la section en HTML propre.
 N'inclus PAS le tag de titre (h2/h3/h4) - il sera ajoute automatiquement.
 Utilise : <p>, <strong>, <em>, <ul>/<ol>/<li>, <blockquote> si pertinent.
+INTERDIT : ne genere AUCUNE balise <h2>, <h3>, <h4>, <h5>, <h6> dans le contenu HTML de ce bloc. Les headings sont geres par le systeme, pas par toi. Si tu as besoin de sous-titres visuels, utilise <p><strong>Sous-titre</strong></p>.
 
 ### Pour un bloc de type "paragraph"
 Ecris un ou plusieurs paragraphes en HTML.
