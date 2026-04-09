@@ -244,17 +244,29 @@ ${editorialContext.writingDirectives.filter(d => d.checked).map((d, i) => `${i +
 
 Tu DOIS repartir ces directives dans les writing_directive des blocs concernes. Chaque directive cochee doit etre assignee a au moins un bloc. Mentionne explicitement dans la writing_directive du bloc quelle directive appliquer.` : ''}
 
-## DECOUPE H3 DES SECTIONS LONGUES (OBLIGATOIRE)
+## QUAND UTILISER DES H3 SOUS UN H2 (COHERENCE SEMANTIQUE)
 
-Si une section H2 couvre un sujet large qui necessite plus de 400 mots, tu DOIS la decouper en sous-sections H3 :
-- Chaque H3 traite un aspect specifique du sujet du H2 parent
+La decision de creer des H3 ne depend PAS du nombre de mots — elle depend de la STRUCTURE LOGIQUE du sujet.
+
+### QUAND CREER DES H3 (obligatoire) :
+Un H2 doit avoir des H3 si et seulement si le sujet du H2 se decompose en sous-sujets DISTINCTS et IDENTIFIABLES que le lecteur pourrait chercher independamment.
+- Chaque H3 = un sous-sujet autonome que le lecteur peut scanner et trouver directement
+- Le H2 est le "chapitre", les H3 sont les "sections" du chapitre
 - 2-4 H3 par H2 maximum
-- Le H2 reste le "chapeau" thematique, les H3 approfondissent
 - Chaque H3 : 150-300 mots
 - Les H3 ont leur propre writing_directive et format_hint
-- Exemple : H2 "Les meilleurs outils SEO" → H3 "Outils de recherche de mots-cles", H3 "Outils d'analyse technique", H3 "Outils de suivi de positionnement"
 
-NE DECOUPE PAS en H3 si la section H2 est courte (<300 mots) ou si le sujet est unitaire.
+Exemples de bonne utilisation :
+- H2 "Les differents types de pompes a chaleur" → H3 "Pompe air-air", H3 "Pompe air-eau", H3 "Pompe geothermique" (3 sous-sujets distincts)
+- H2 "Comment preparer votre mariage" → H3 "Le budget", H3 "Le lieu de reception", H3 "Les prestataires" (etapes identifiables)
+
+### QUAND NE PAS CREER DE H3 :
+- Le H2 traite un sujet UNITAIRE sans sous-parties logiques (ex: "Pourquoi choisir le bois pour votre terrasse ?" → une argumentation continue, pas de sous-decoupage)
+- Le H2 est court (<250 mots) — pas besoin de chapitrer
+- Les "sous-titres" seraient juste des paragraphes deguises, pas de vrais sous-sujets (ex: H3 "Premier point", H3 "Deuxieme point" = INTERDIT, c'est de la numerotation pas de la structure)
+
+### REGLE GOOGLE : le robot DOIT pouvoir comprendre la structure rien qu'en lisant les Hn
+Si on extrait uniquement les H2 et H3 de l'article, le squelette doit former un SOMMAIRE logique et complet. Chaque Hn repond a la question "de quoi parle cette section ?" de facon specifique et non ambigue.
 
 ## WORD COUNT PAR BLOC — REGLE STRICTE (CRITIQUE)
 
@@ -731,7 +743,7 @@ ${productComparison.products.filter(p => p.affiliate_enabled && p.affiliate_url)
 8. Propose 3 variantes de titre H1 (question, promesse, specifique) + meta description optimisee
 9. WORD COUNT TOTAL — VERIFIE AVANT DE REPONDRE : additionne les word_count de TOUS les blocs. Le total DOIT etre dans la fourchette de la strategie (ex: traffic = 2000-3000 mots). Si le total est inferieur au minimum, AJOUTE des blocs ou AUGMENTE les word_count existants. Un article de 1200 mots sur une intention "traffic" (minimum 2000) est une ERREUR GRAVE.
 10. Au moins 2 H2 doivent contenir le mot-cle principal ou une variante tres proche
-11. DECOUPE H3 : si un H2 necessite plus de 400 mots, decoupe-le en H3 specifiques (2-4 H3 par H2). Les H3 ciblent les variantes longue traine et recherches associees
+11. HIERARCHIE Hn : chaque H3 DOIT avoir un H2 parent. Pas de H3 avant le premier H2. Pas de H4 sans H3 parent. Utilise des H3 UNIQUEMENT si le H2 contient des sous-sujets distincts et identifiables (pas de H3 = "Premier point"). Extrait uniquement les Hn → ils doivent former un sommaire logique et complet
 12. BLOC INTRO OBLIGATOIRE : le PREMIER element de content_blocks doit etre un bloc type "paragraph", heading null, word_count 120, contenant le mot-cle principal. Ce bloc precede le premier H2.
 13. WORD COUNT MINIMUM : chaque bloc H2 DOIT avoir word_count >= 250. Chaque H3 >= 150. JAMAIS de word_count < 120 sauf intro. Un word_count de 30, 50 ou 80 est une ERREUR — le redacteur ne peut rien ecrire de substantiel en si peu de mots.
 14. KEY IDEAS MECE : chaque bloc a un "key_ideas" (3-5 idees) qui definit son perimetre exclusif. AUCUN chevauchement entre sections.
