@@ -120,12 +120,26 @@ IMPORTANT : suggestedTitle et suggestedMetaDescription sont OBLIGATOIRES, ne jam
   ])
 
   try {
-    // Extract JSON from potential markdown code block wrappers
+    // Extract JSON from potential markdown code block wrappers or mixed text
     let jsonStr = response.content.trim()
+
+    // Method 1: markdown code block
     const codeBlockMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
     if (codeBlockMatch) {
       jsonStr = codeBlockMatch[1].trim()
     }
+
+    // Method 2: find the first { and last } (handles text before/after JSON)
+    const firstBrace = jsonStr.indexOf('{')
+    const lastBrace = jsonStr.lastIndexOf('}')
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      jsonStr = jsonStr.slice(firstBrace, lastBrace + 1)
+    }
+
+    // Method 3: fix common JSON issues from AI
+    // Remove trailing commas before } or ]
+    jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1')
+
     const parsed = JSON.parse(jsonStr)
 
     return {
@@ -164,7 +178,47 @@ IMPORTANT : suggestedTitle et suggestedMetaDescription sont OBLIGATOIRES, ne jam
     }
   } catch (err) {
     console.error('[revamp-auditor] JSON parse error:', err)
-    console.error('[revamp-auditor] Raw response (first 500 chars):', response.content.slice(0, 500))
-    throw new Error('Echec du parsing de l\'audit IA. Reponse invalide.')
+    console.error('[revamp-auditor] Raw response (first 1000 chars):', response.content.slice(0, 1000))
+
+    // Last resort: retry with a stricter extraction
+    try {
+      const raw = response.content
+      const start = raw.indexOf('{"overallScore')
+      if (start !== -1) {
+        let depth = 0
+        let end = start
+        for (let i = start; i < raw.length; i++) {
+          if (raw[i] === '{') depth++
+          else if (raw[i] === '}') { depth--; if (depth === 0) { end = i + 1; break } }
+        }
+        const fallbackJson = raw.slice(start, end).replace(/,\s*([}\]])/g, '$1')
+        const parsed = JSON.parse(fallbackJson)
+        console.log('[revamp-auditor] Fallback JSON extraction succeeded')
+        return {
+          overallScore: Number(parsed.overallScore) || 0,
+          blocksToKeep: (parsed.blocksToKeep || []).map((b: Record<string, unknown>) => ({
+            blockIndex: Number(b.blockIndex), heading: b.heading ? String(b.heading) : null, reason: String(b.reason || ''),
+          })),
+          blocksToDelete: (parsed.blocksToDelete || []).map((b: Record<string, unknown>) => ({
+            blockIndex: Number(b.blockIndex), heading: b.heading ? String(b.heading) : null, reason: String(b.reason || ''),
+          })),
+          blocksToRewrite: (parsed.blocksToRewrite || []).map((b: Record<string, unknown>) => ({
+            blockIndex: Number(b.blockIndex), heading: b.heading ? String(b.heading) : null, reason: String(b.reason || ''), directive: String(b.directive || ''),
+          })),
+          newSectionsToAdd: (parsed.newSectionsToAdd || []).map((s: Record<string, unknown>) => ({
+            heading: String(s.heading || ''), type: (s.type === 'h3' ? 'h3' : 'h2') as 'h2' | 'h3',
+            insertAfterIndex: Number(s.insertAfterIndex ?? -1), directive: String(s.directive || ''), keyIdeas: (s.keyIdeas as string[]) || [],
+          })),
+          preservedLinks: (parsed.preservedLinks || preservedLinks).map((l: Record<string, unknown>) => ({
+            url: String(l.url || ''), anchorText: String(l.anchorText || l.anchor || ''), isInternal: Boolean(l.isInternal),
+          })),
+          preservedCTAs: (parsed.preservedCTAs || []) as string[],
+          suggestedTitle: parsed.suggestedTitle ? String(parsed.suggestedTitle) : null,
+          suggestedMetaDescription: parsed.suggestedMetaDescription ? String(parsed.suggestedMetaDescription) : null,
+        }
+      }
+    } catch { /* fallback also failed */ }
+
+    throw new Error('Echec du parsing de l\'audit IA. Reponse invalide. Relancez l\'analyse.')
   }
 }

@@ -145,6 +145,14 @@ Reponds en JSON strict :
     if (codeBlockMatch) {
       jsonStr = codeBlockMatch[1].trim()
     }
+    // Extract JSON object if there's text before/after
+    const firstBrace = jsonStr.indexOf('{')
+    const lastBrace = jsonStr.lastIndexOf('}')
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      jsonStr = jsonStr.slice(firstBrace, lastBrace + 1)
+    }
+    // Fix trailing commas
+    jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1')
     const parsed = JSON.parse(jsonStr)
     return {
       competitors: (parsed.competitors || []).map((c: Record<string, unknown>) => ({
