@@ -380,9 +380,21 @@ Tu DOIS proposer exactement 3 variantes de titre H1, chacune avec une strategie 
 
 Chaque suggestion doit inclure :
 - "title" : le titre H1 visible sur la page (50-65 caracteres ideal)
-- "seo_title" : le Title SEO pour la balise <title> (50-60 caracteres, optimise CTR dans les SERP, peut differer du H1)
+- "seo_title" : la balise <title> pour les SERP (50-60 caracteres, optimise CTR)
 - "slug" : le slug URL correspondant (minuscules, sans accents, tirets, JAMAIS d'annee dans le slug — un slug doit etre intemporel)
 - "seo_rationale" : 1 phrase expliquant pourquoi ce titre est optimise SEO
+
+REGLE ANTI-TRIPTYQUE (CRITIQUE — JAMAIS LE MEME TITRE H1 ET TITLE) :
+Le "title" (H1) et le "seo_title" (balise <title>) DOIVENT etre DIFFERENTS. C'est non negociable.
+- Le H1 est ce que le lecteur voit SUR la page → peut etre plus long, emotionnel, descriptif
+- Le seo_title est ce que Google affiche dans les SERP → doit etre plus court, punchy, optimise CTR
+- Exemples corrects :
+  * H1: "Comment choisir sa pompe a chaleur air-eau : le guide complet" | title: "Pompe a chaleur air-eau : Prix, Aides et Conseils 2026"
+  * H1: "Les 10 meilleurs aspirateurs robots pour poils d'animaux" | title: "Meilleur aspirateur robot poils animaux — Comparatif 2026"
+  * H1: "Anniversaire de mariage : le calendrier des noces de 1 a 100 ans" | title: "Noces de mariage : Liste complete 1-100 ans (2026)"
+- INTERDIT : H1 = "Guide pompe a chaleur" ET title = "Guide pompe a chaleur" (identiques = erreur)
+- Le seo_title peut reorganiser les mots, ajouter l'annee, utiliser des separateurs (: — |)
+- Verifie CHAQUE suggestion : si title === seo_title, reformule le seo_title IMMEDIATEMENT
 
 ## FORMAT DE SORTIE
 Tu DOIS retourner UNIQUEMENT un objet JSON valide, sans texte avant ou apres, sans bloc de code markdown.

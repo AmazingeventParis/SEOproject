@@ -111,9 +111,16 @@ ${opKws || 'Aucun'}
 }
 
 IMPORTANT : suggestedTitle et suggestedMetaDescription sont OBLIGATOIRES, ne jamais retourner null.
-- suggestedTitle : 55-65 caracteres, mot-cle "${keyword}" en debut, chiffres ou annee si pertinent
+- suggestedTitle : c'est la balise <title> (SERP), 50-60 caracteres, mot-cle "${keyword}" en debut, optimise CTR
 - suggestedMetaDescription : 140-155 caracteres, mot-cle inclus, benefice clair, call-to-action implicite
-- overallScore = score de 0 a 100 de l'etat actuel de l'article (100 = excellent, pas besoin de revamp)`
+- overallScore = score de 0 a 100 de l'etat actuel de l'article (100 = excellent, pas besoin de revamp)
+
+REGLE ANTI-TRIPTYQUE (CRITIQUE) :
+Le suggestedTitle (balise <title>) DOIT etre DIFFERENT du titre H1 de l'article ("${title}").
+- Le H1 est ce que le lecteur voit sur la page (plus long, descriptif)
+- Le suggestedTitle est ce que Google affiche dans les SERP (plus court, punchy, CTR)
+- INTERDIT de retourner un suggestedTitle identique au titre H1 actuel
+- Reformule : reorganise les mots, ajoute l'annee ${new Date().getFullYear()}, utilise des separateurs (: — |)`
 
   const response = await routeAI('analyze_serp', [
     { role: 'user', content: prompt },
