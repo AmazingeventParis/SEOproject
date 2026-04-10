@@ -173,8 +173,8 @@ export function WritingDirectivesCard({
                 key={d.id}
                 className={`flex items-start gap-3 p-2 rounded-lg border transition-all ${
                   d.checked
-                    ? "bg-white border-gray-200"
-                    : "bg-gray-50 border-gray-100 opacity-60"
+                    ? "bg-background border-border"
+                    : "bg-muted border-muted opacity-60"
                 }`}
               >
                 <button
@@ -183,7 +183,7 @@ export function WritingDirectivesCard({
                   className={`mt-0.5 flex-shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
                     d.checked
                       ? "bg-emerald-500 border-emerald-500 text-white"
-                      : "border-gray-300 bg-white"
+                      : "border-muted-foreground/30 bg-background"
                   }`}
                 >
                   {d.checked && <Check className="h-3 w-3" />}
@@ -191,7 +191,7 @@ export function WritingDirectivesCard({
                 <div className="flex-1 min-w-0">
                   <p
                     className={`text-sm ${
-                      d.checked ? "" : "line-through text-muted-foreground"
+                      d.checked ? "text-foreground" : "line-through text-muted-foreground"
                     }`}
                   >
                     {d.label}
@@ -216,7 +216,7 @@ export function WritingDirectivesCard({
                 <button
                   type="button"
                   onClick={() => removeDirective(d.id)}
-                  className="flex-shrink-0 p-1 rounded hover:bg-gray-100 text-muted-foreground"
+                  className="flex-shrink-0 p-1 rounded hover:bg-muted text-muted-foreground"
                 >
                   <X className="h-3 w-3" />
                 </button>

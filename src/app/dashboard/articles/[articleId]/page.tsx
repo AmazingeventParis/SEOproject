@@ -45,6 +45,7 @@ import { ModelSelector } from "@/components/articles/model-selector";
 import { ProductComparisonEditor } from "@/components/articles/product-comparison-editor";
 import { ArticleAngleCard } from "@/components/articles/article-angle-card";
 import { WritingDirectivesCard } from "@/components/articles/writing-directives-card";
+import { CompetitorCsvImport } from "@/components/articles/competitor-csv-import";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
@@ -2183,6 +2184,27 @@ export default function ArticleDetailPage() {
                   }
                   return null;
                 })()}
+
+              {/* Competitor CSV Import — shown at analyzing status */}
+              {article.status === "analyzing" && (() => {
+                const sd = article.serp_data as Record<string, unknown> | null;
+                const serp = sd?.serp as { organic?: { title: string; link: string; domain?: string }[] } | undefined;
+                const organic = serp?.organic || [];
+                const csvEnriched = !!(sd?.competitorContent as Record<string, unknown> | undefined)?.csvEnriched;
+                if (organic.length === 0) return null;
+                return (
+                  <CompetitorCsvImport
+                    articleId={articleId as string}
+                    competitors={organic.slice(0, 5).map(r => ({
+                      url: r.link,
+                      domain: r.domain || new URL(r.link).hostname,
+                      title: r.title,
+                    }))}
+                    onImportComplete={() => fetchArticle()}
+                    alreadyImported={csvEnriched}
+                  />
+                );
+              })()}
 
               {/* Article Angle + Writing Directives — shown before plan */}
               {article.status === "analyzing" && (

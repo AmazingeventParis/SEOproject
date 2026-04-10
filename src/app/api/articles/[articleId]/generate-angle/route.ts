@@ -41,6 +41,19 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   const keyDifferentiators = ((semanticAnalysis?.keyDifferentiators as string[]) || [])
     .join(', ')
 
+  // Enriched data from CSV Semrush imports (if available)
+  const competitorContent = serpData?.competitorContent as Record<string, unknown> | null
+  const tfidfKeywords = (competitorContent?.tfidfKeywords as { term: string; tfidf: number; volume?: number }[]) || []
+  const topCsvKeywords = tfidfKeywords
+    .filter(t => t.volume && t.volume > 0)
+    .sort((a, b) => (b.volume || 0) - (a.volume || 0))
+    .slice(0, 15)
+    .map(t => `"${t.term}" (${t.volume} rech/mois)`)
+    .join(', ')
+
+  const csvSources = (competitorContent?.csvSources as { url: string; keywordsFound: number }[]) || []
+  const hasCsvData = csvSources.length > 0
+
   const siteContext = editorialAngle
     ? `\nCONTEXTE DU SITE "${site?.name || ''}" :\n- Description : ${editorialAngle.site_description || 'Non defini'}\n- Ton : ${editorialAngle.tone || 'Non defini'}\n- USP : ${editorialAngle.unique_selling_point || 'Non defini'}\n- Approche contenu : ${editorialAngle.content_approach || 'Non defini'}\n- Audience cible : ${editorialAngle.target_audience || 'Non defini'}`
     : ''
@@ -63,7 +76,12 @@ ${paa || 'Aucune'}
 
 LACUNES DE CONTENU : ${contentGaps || 'Aucune'}
 DIFFERENCIATEURS : ${keyDifferentiators || 'Aucun'}
+${hasCsvData ? `
+MOTS-CLES REELS DES CONCURRENTS (Semrush — par volume de recherche) :
+${topCsvKeywords || 'Aucun'}
 
+Ces mots-cles representent ce que les internautes CHERCHENT VRAIMENT. Utilise-les pour proposer des angles qui repondent a des intentions de recherche reelles, pas des angles theoriques.
+` : ''}
 REGLES :
 - Chaque angle doit DIFFERENCER cet article des 10 concurrents ci-dessus
 - Les angles doivent correspondre au ton et a l'approche du site
