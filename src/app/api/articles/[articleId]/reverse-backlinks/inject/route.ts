@@ -42,10 +42,24 @@ export async function POST(
   const suggestion = suggestions[suggestionIndex]
 
   if (suggestion.status !== 'approved') {
-    return NextResponse.json(
-      { error: 'La suggestion doit etre approuvee avant injection' },
-      { status: 422 }
-    )
+    // Auto-approve if still in 'suggested' status (user clicked inject directly)
+    if (suggestion.status === 'suggested') {
+      suggestions[suggestionIndex] = { ...suggestion, status: 'approved' }
+      await supabase
+        .from('seo_articles')
+        .update({ serp_data: { ...serpData, reverse_backlinks: suggestions } })
+        .eq('id', articleId)
+    } else if (suggestion.status === 'injected') {
+      return NextResponse.json(
+        { error: 'Ce backlink a deja ete injecte' },
+        { status: 422 }
+      )
+    } else {
+      return NextResponse.json(
+        { error: 'La suggestion doit etre approuvee avant injection' },
+        { status: 422 }
+      )
+    }
   }
 
   try {
