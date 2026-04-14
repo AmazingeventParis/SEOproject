@@ -391,6 +391,8 @@ ${buildCtaLireAussiTemplate()}
   * N'aborde JAMAIS de sujet connexe, voisin ou tangentiel meme s'il partage le meme domaine
   * Si la directive d'ecriture ou le heading mentionne un sous-sujet precis, reste STRICTEMENT sur ce sous-sujet
   * Avant de valider chaque paragraphe, verifie : "est-ce que ce paragraphe concerne bien ${keyword} et rien d'autre ?"
+  * INTERDIT de recommander, mentionner ou comparer des PRODUITS ou MARQUES qui n'ont PAS de rapport direct avec le sujet du bloc. Si le sujet est "hydrofuge toiture", ne parle PAS de panneaux solaires. Si le sujet est "broyeur de branches", ne parle PAS de stations solaires. Le fait que le site traite d'habitat durable ne signifie PAS que chaque article doit parler d'energie solaire.
+  * REGLE : si tu es tente de mentionner un produit/marque/service qui n'est pas dans le titre, le heading ou les nuggets assignes a CE bloc → NE LE MENTIONNE PAS
 - AERATION OBLIGATOIRE — ZERO MUR DE TEXTE :
   * JAMAIS plus de 2 paragraphes <p> consecutifs sans un element visuel (liste, tableau, callout)
   * Si tu enumeres 3+ elements, avantages, etapes, criteres ou conseils → utilise une liste <ul> ou <ol> avec <strong> sur le point cle de chaque <li>
