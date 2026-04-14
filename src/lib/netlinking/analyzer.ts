@@ -2,11 +2,15 @@ import { routeAI } from '@/lib/ai/router'
 import type { GapAnalysis, GeneratedArticle } from './types'
 
 function extractJson(raw: string): string {
-  const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-  const start = cleaned.indexOf('{')
-  const end = cleaned.lastIndexOf('}')
+  let text = raw.trim()
+  const fence = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
+  if (fence) text = fence[1].trim()
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
   if (start === -1 || end === -1) throw new Error('Pas de JSON dans la reponse IA')
-  return cleaned.slice(start, end + 1)
+  let json = text.slice(start, end + 1)
+  json = json.replace(/,\s*([}\]])/g, '$1')
+  return json
 }
 
 export async function analyzeGap(params: {

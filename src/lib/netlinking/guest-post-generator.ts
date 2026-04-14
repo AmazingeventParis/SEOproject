@@ -14,11 +14,21 @@ import {
 import type { GeneratedArticle, GuestPostConfig, GuestPostLink } from './types'
 
 function extractJson(raw: string): string {
-  const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-  const start = cleaned.indexOf('{')
-  const end = cleaned.lastIndexOf('}')
-  if (start === -1 || end === -1) throw new Error('Pas de JSON dans la reponse IA')
-  return cleaned.slice(start, end + 1)
+  let text = raw.trim()
+  // Strip markdown code fences
+  const fence = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
+  if (fence) text = fence[1].trim()
+  // Find first { and last }
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start === -1 || end === -1) {
+    console.error('[guest-post] No JSON found in AI response (first 500 chars):', raw.slice(0, 500))
+    throw new Error('Pas de JSON dans la reponse IA')
+  }
+  let json = text.slice(start, end + 1)
+  // Fix trailing commas
+  json = json.replace(/,\s*([}\]])/g, '$1')
+  return json
 }
 
 function htmlToPlainText(html: string): string {
@@ -187,17 +197,29 @@ Retourne UNIQUEMENT un JSON valide, sans texte avant ou apres :
 
 Le content_html doit contenir l'article COMPLET (${wordCount}+ mots) avec H2, p, strong, ul/li, a href, emojis sur les listes.`
 
-  const response = await routeAI('generate_netlinking_article', [
-    { role: 'user', content: userPrompt },
-  ], systemPrompt)
-  const result = JSON.parse(extractJson(response.content)) as GeneratedArticle
+  // Try up to 2 times (AI sometimes returns invalid JSON on first attempt)
+  let lastError: Error | null = null
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await routeAI('generate_netlinking_article', [
+        { role: 'user', content: userPrompt },
+      ], systemPrompt)
 
-  // Add target info
-  result.target_url = config.links.find(l => l.type === 'target')?.url || ''
-  result.target_keyword = config.targetKeyword
+      const result = JSON.parse(extractJson(response.content)) as GeneratedArticle
 
-  // Generate plain text version
-  result.content_text = htmlToPlainText(`<h1>${result.title}</h1>\n${result.content_html}`)
+      // Add target info
+      result.target_url = config.links.find(l => l.type === 'target')?.url || ''
+      result.target_keyword = config.targetKeyword
 
-  return result
+      // Generate plain text version
+      result.content_text = htmlToPlainText(`<h1>${result.title}</h1>\n${result.content_html}`)
+
+      return result
+    } catch (err) {
+      lastError = err as Error
+      console.warn(`[guest-post] Attempt ${attempt + 1} failed: ${lastError.message}`)
+    }
+  }
+
+  throw lastError || new Error('Echec de la generation apres 2 tentatives')
 }
