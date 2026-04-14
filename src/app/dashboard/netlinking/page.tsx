@@ -669,8 +669,8 @@ export default function NetlinkingPage() {
         {/* === Link Config Panel (modal-like) === */}
         {linkConfigId && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setLinkConfigId(null)}>
-            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
-              <h3 className="text-lg font-bold">Configurer les liens de l&apos;article</h3>
+            <div className="bg-background border rounded-lg shadow-xl max-w-lg w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-foreground">Configurer les liens de l&apos;article</h3>
               <p className="text-sm text-muted-foreground">Definissez les liens a integrer dans l&apos;article (1 a 3 max).</p>
 
               {linkConfigData.map((link, idx) => (
