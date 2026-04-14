@@ -6,11 +6,6 @@
 // ============================================================
 
 import { routeAI } from '@/lib/ai/router'
-import {
-  SEO_EEAT_RULES,
-  SEO_ANTI_AI_PATTERNS,
-  SEO_WRITING_STYLE_RULES,
-} from '@/lib/ai/prompts/seo-guidelines'
 import type { GeneratedArticle, GuestPostConfig, GuestPostLink } from './types'
 
 function extractJson(raw: string): string {
@@ -101,57 +96,23 @@ export async function generateGuestPostArticle(
 
   const linksSection = buildLinksSection(config.links)
 
-  const systemPrompt = `Tu es un redacteur web expert en SEO, specialise dans la creation d'articles invites (guest posts) de haute qualite pour le netlinking.
+  const systemPrompt = `Tu es un redacteur web expert en SEO francais specialise dans les articles invites (guest posts) pour le netlinking. Annee en cours : ${currentYear}.
 
-## TON ROLE
-Tu rediges un article qui sera publie sur un site EXTERNE. L'article doit etre suffisamment bon pour que le webmaster l'accepte sans modification. Ce n'est PAS un article promotionnel — c'est un vrai article de valeur avec un lien integre naturellement.
+REGLES CLES :
+- Article de QUALITE pour un site EXTERNE — pas promotionnel, vrai contenu de valeur
+- Style humain : phrases courtes, varie les longueurs, transitions orales ("Du coup,", "Concretement,")
+- Au moins 1 phrase de 4 mots ou moins par section, 2 "vous/votre" par section
+- <strong> sur 2-3 termes importants par paragraphe
+- Au moins 1 nuance "oui, mais..." dans l'article
+- Mot-cle : reformuler naturellement, max 2 occurrences exactes
+- INTERDIT : "il convient de", "force est de constater", "dans cet article", "en resume"
+- Paragraphes courts (2-3 phrases max), listes avec emojis (✅💡⚠️📊)
+- Pas de <h1> dans content_html. Format : <h2>, <p>, <strong>, <ul>/<li>, <a href>
+- Chaque H2 commence par une accroche (chiffre, question, constat) — JAMAIS par "Le/La/Les..."
+- PAS de conclusion "en resume". La derniere section traite un sujet concret.
 
-## ANNEE EN COURS : ${currentYear}
-
-## REGLES DE REDACTION
-
-### Style et qualite
-${SEO_WRITING_STYLE_RULES}
-
-${SEO_ANTI_AI_PATTERNS}
-
-### E-E-A-T
-${SEO_EEAT_RULES}
-
-### MISE EN GRAS STRATEGIQUE (OBLIGATOIRE)
-Chaque paragraphe <p> de 2+ phrases DOIT contenir au moins 1 balise <strong> sur un terme important :
-- Mots-cles, termes techniques, noms de marques, chiffres cles, conseils actionables
-- Ne mets PAS en gras des mots vides — uniquement des GROUPES DE 1 A 4 MOTS significatifs
-- Vise 2-3 occurrences de <strong> par tranche de 150 mots
-
-### NUANCE ET CONTRADICTION — STYLE "OUI, MAIS"
-L'article doit contenir au moins 1 nuance :
-- "C'est vrai dans la majorite des cas, mais attention si..."
-- "Sur le papier c'est seduisant. En pratique, [contrepartie]"
-- "Oui, [avantage]. Mais il faut aussi compter avec [limite]"
-
-### VARIANTES NATURELLES DU MOT-CLE
-- INTERDIT de copier la requete exacte plus de 2 fois dans tout l'article
-- Reformule TOUJOURS en langage naturel avec articles et prepositions
-- Varie les formes : nominale, verbale, adjectivale, interrogative
-
-### STRUCTURE OBLIGATOIRE
-- Titre H1 accrocheur (50-70 caracteres), contient le mot-cle ou une variante
-- Introduction percutante (80-120 mots) : accroche + promesse de valeur. PAS de definition.
-- 4-5 sections H2 avec des titres SEO (mot-cle ou variante + qualificateur concret)
-- Chaque H2 commence par une ACCROCHE (chiffre, question, constat, anecdote) — JAMAIS par "Le/La/Les..."
-- Au moins 2 listes a puces dans l'article (avec emojis sur chaque <li>)
-- Au moins 1 element en gras par paragraphe de prose
-- Paragraphes courts : 2-3 phrases max, jamais de mur de texte
-- Chaque section H2 : au moins 1 phrase de 4 mots ou moins
-- Au moins 2 "vous/votre" par section H2
-- PAS DE CONCLUSION : la derniere section traite un sujet concret, pas un resume
-
-### FORMAT HTML
-- Utilise uniquement : <h2>, <p>, <strong>, <em>, <ul>/<ol>/<li>, <a href="...">
-- PAS de <h1> dans le content_html (le titre H1 est dans le champ "title")
-- Les listes doivent avoir style="font-size:1.125rem;line-height:1.8" et chaque <li> style="margin-bottom:8px;font-size:1.125rem"
-- Chaque <li> commence par un emoji pertinent : ✅, 💡, ⚠️, 📊, 🔧, 💰, 🎯, etc.`
+FORMAT JSON OBLIGATOIRE — retourne UNIQUEMENT ce JSON, rien d'autre :
+{"title":"...","content_html":"<h2>...</h2><p>...</p>","word_count":N,"anchors":[{"type":"exact","text":"...","context_sentence":"..."}]}`
 
   const userPrompt = `## MISSION
 Redige un article de ${wordCount} mots en francais pour publication sur le site "${config.vendorDomain}" (niche : ${config.vendorNiche || 'generaliste'}).
