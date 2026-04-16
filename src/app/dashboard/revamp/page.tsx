@@ -27,6 +27,8 @@ import {
   TrendingDown,
   Target,
   Zap,
+  History,
+  RotateCw,
 } from "lucide-react";
 
 interface Site {
@@ -191,6 +193,29 @@ export default function RevampPage() {
     }
   };
 
+  const rerunRevamp = async (revamp: RevampProject) => {
+    setAnalyzing(revamp.wp_post_id);
+    setError(null);
+    try {
+      const res = await fetch("/api/revamp/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteId: selectedSiteId,
+          wpPostId: revamp.wp_post_id,
+          keyword: revamp.original_keyword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      await fetchRevamps();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAnalyzing(null);
+    }
+  };
+
   const selectedSite = sites.find((s) => s.id === selectedSiteId);
 
   return (
@@ -282,6 +307,22 @@ export default function RevampPage() {
                           <Button variant="outline" size="sm"><ArrowRight className="h-4 w-4" /></Button>
                         </Link>
                       )}
+                      {(revamp.status === "completed" || revamp.status === "failed") && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => rerunRevamp(revamp)}
+                          disabled={analyzing === revamp.wp_post_id}
+                          title="Relancer un nouveau revamp sur cet article avec le meme mot-cle"
+                        >
+                          {analyzing === revamp.wp_post_id ? (
+                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                          ) : (
+                            <RotateCw className="mr-1 h-4 w-4" />
+                          )}
+                          Revamper a nouveau
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
@@ -311,7 +352,12 @@ export default function RevampPage() {
                 c.topKeywords.some(k => k.query.toLowerCase().includes(searchQuery.toLowerCase()))
               ) : candidates).map((candidate) => {
                 const isAnalyzing = analyzing === candidate.wpPostId;
-                const alreadyRevamped = revamps.some((r) => r.wp_post_id === candidate.wpPostId);
+                const hasActiveRevamp = revamps.some(
+                  (r) => r.wp_post_id === candidate.wpPostId && r.status !== "completed" && r.status !== "failed"
+                );
+                const previouslyRevamped = revamps.some(
+                  (r) => r.wp_post_id === candidate.wpPostId && r.status === "completed"
+                );
                 const isExpanded = expandedCandidate === candidate.wpPostId;
                 const scoreColor = candidate.revampScore >= 60 ? "text-red-500" : candidate.revampScore >= 35 ? "text-yellow-500" : "text-green-500";
                 const intentInfo = candidate.searchIntent ? INTENT_LABELS[candidate.searchIntent] : null;
@@ -374,10 +420,15 @@ export default function RevampPage() {
 
                       {/* Keyword + Action */}
                       <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        {alreadyRevamped ? (
-                          <Badge variant="secondary"><CheckCircle2 className="mr-1 h-3 w-3" />Deja analyse</Badge>
+                        {hasActiveRevamp ? (
+                          <Badge variant="secondary"><CheckCircle2 className="mr-1 h-3 w-3" />Revamp en cours</Badge>
                         ) : (
                           <>
+                            {previouslyRevamped && (
+                              <Badge variant="outline" className="text-xs text-muted-foreground" title="Cet article a deja ete revampe — vous pouvez le revamper a nouveau">
+                                <History className="mr-1 h-3 w-3" />Deja revampe
+                              </Badge>
+                            )}
                             <Input
                               value={candidateKeywords[candidate.wpPostId] || ""}
                               onChange={(e) => setCandidateKeywords(prev => ({ ...prev, [candidate.wpPostId]: e.target.value }))}
@@ -386,7 +437,7 @@ export default function RevampPage() {
                             />
                             <Button variant="default" size="sm" onClick={() => analyzeCandidate(candidate)} disabled={isAnalyzing || !candidateKeywords[candidate.wpPostId]?.trim()}>
                               {isAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                              Analyser
+                              {previouslyRevamped ? "Re-analyser" : "Analyser"}
                             </Button>
                           </>
                         )}
