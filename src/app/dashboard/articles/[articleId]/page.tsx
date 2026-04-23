@@ -1570,21 +1570,15 @@ export default function ArticleDetailPage() {
       toast({ title: "Bloc mis a jour", description: "Le contenu a ete sauvegarde." });
       await fetchArticle();
 
-      // Auto-continue writing remaining blocks after saving an edit
+      // Notify user about remaining pending blocks (don't auto-launch write-all)
       const remainingPending = updatedBlocks.filter(
         (b) => b.id !== blockId && b.status === "pending"
       );
-      console.log(`[saveBlockEdit] ${remainingPending.length} blocs pending restants apres sauvegarde`);
-      if (remainingPending.length > 0 && !actionLoading) {
+      if (remainingPending.length > 0) {
         toast({
-          title: "Redaction automatique lancee",
-          description: `Ecriture de ${remainingPending.length} bloc(s) restants en cours...`,
+          title: "Bloc sauvegarde",
+          description: `${remainingPending.length} bloc(s) en attente de redaction. Cliquez sur "Ecrire tous les blocs" pour continuer.`,
         });
-        // Use setTimeout to let React state settle, then launch write-all
-        setTimeout(() => {
-          console.log("[saveBlockEdit] Lancement auto de runWriteAll()");
-          runWriteAll();
-        }, 800);
       }
     } catch {
       toast({ variant: "destructive", title: "Erreur", description: "Impossible de sauvegarder." });

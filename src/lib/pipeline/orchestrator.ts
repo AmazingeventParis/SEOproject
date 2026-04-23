@@ -2923,6 +2923,290 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
     }
   }
 
+  // =====================================================================
+  // AUTO-CORRECTIONS POST-DIAGNOSTIC
+  // =====================================================================
+
+  // Auto-fix 1: Remove broken links from content (pure HTML, no AI)
+  let brokenLinksFixed = 0
+  if (brokenLinksResult && brokenLinksResult.brokenLinks > 0) {
+    const brokenUrls = new Set(
+      brokenLinksResult.results
+        .filter(r => !r.ok)
+        .map(r => r.url)
+    )
+    if (brokenUrls.size > 0) {
+      for (let i = 0; i < updatedBlocks.length; i++) {
+        const block = updatedBlocks[i]
+        if (!block.content_html) continue
+        let html = block.content_html
+        let changed = false
+        for (const brokenUrl of Array.from(brokenUrls)) {
+          const escapedUrl = brokenUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const linkRegex = new RegExp(`<a\\s[^>]*href=["']${escapedUrl}["'][^>]*>(.*?)<\\/a>`, 'gi')
+          const newHtml = html.replace(linkRegex, '$1')
+          if (newHtml !== html) {
+            html = newHtml
+            changed = true
+          }
+        }
+        if (changed) {
+          updatedBlocks[i] = { ...block, content_html: html }
+          brokenLinksFixed++
+        }
+      }
+      if (brokenLinksFixed > 0) {
+        console.log(`[seo-autofix] ${brokenLinksFixed} bloc(s) nettoyes de liens casses`)
+      }
+    }
+  }
+
+  // Auto-fix 2: Inject keyword in intro if missing
+  let keywordIntroFixed = false
+  if (!keywordInIntro && persona) {
+    const introIdx = updatedBlocks.findIndex(
+      (b) => b.type === 'paragraph' && !b.heading && b.content_html && b.status !== 'pending'
+    )
+    if (introIdx !== -1) {
+      try {
+        const introFixPrompt = `Tu es ${persona.name}, ${persona.role}.${persona.tone_description ? ` Ton : ${persona.tone_description}.` : ''}
+
+## MISSION
+Reecris cette introduction pour integrer le mot-cle "${article.keyword}" dans les 100 premiers mots, de facon naturelle et fluide.
+
+## REGLES
+- Le mot-cle "${article.keyword}" DOIT apparaitre dans les 2 premieres phrases
+- Garde le sens, le ton et la longueur (100-140 mots)
+- Conserve TOUS les liens existants (<a href="...">) sans modification
+- Pas de guillemets francais, pas de tirets cadratins
+- Reponds UNIQUEMENT avec le HTML de l'introduction, rien d'autre
+
+## INTRODUCTION ACTUELLE
+${updatedBlocks[introIdx].content_html}`
+
+        const introFixResponse = await routeAI('optimize_blocks', [
+          { role: 'user', content: introFixPrompt },
+        ])
+        const fixedIntro = introFixResponse.content.trim()
+        if (fixedIntro.length > 100 && fixedIntro.includes('<')) {
+          updatedBlocks[introIdx] = {
+            ...updatedBlocks[introIdx],
+            content_html: fixedIntro,
+            word_count: countWords(fixedIntro),
+          }
+          keywordIntroFixed = true
+          keywordInIntro = true
+          console.log(`[seo-autofix] Mot-cle injecte dans l'intro`)
+        }
+      } catch (err) {
+        console.warn('[seo-autofix] Keyword intro injection failed:', err)
+      }
+    }
+  }
+
+  // Auto-fix 3: Correct persona voice drifts
+  let personaDriftsFixed = 0
+  if (personaConsistency && personaConsistency.drifts.length > 0 && persona) {
+    const driftsToFix = personaConsistency.drifts.slice(0, 3)
+    for (const drift of driftsToFix) {
+      const blockIdx = drift.blockIndex
+      if (blockIdx < 0 || blockIdx >= updatedBlocks.length) continue
+      if (blockIdx === introBlockIndex) continue
+      const block = updatedBlocks[blockIdx]
+      if (!block.content_html || block.status === 'pending' || block.type === 'image') continue
+
+      try {
+        const driftFixPrompt = `Tu es ${persona.name}, ${persona.role}.
+${persona.tone_description ? `Ton style : ${persona.tone_description}` : ''}
+${persona.bio ? `Bio : ${persona.bio}` : ''}
+
+## PROBLEME DETECTE
+Ce bloc a un decrochage de voix : "${drift.issue}"
+
+## MISSION
+Reecris ce bloc en corrigeant le ton pour qu'il soit parfaitement coherent avec ta voix de persona. Garde le meme contenu informatif, la meme longueur et les memes liens.
+
+## REGLES
+- Corrige UNIQUEMENT le ton/style, pas le fond
+- Conserve TOUS les liens, tableaux, listes existants
+- Garde la meme longueur approximative
+- Reponds UNIQUEMENT avec le HTML du bloc, rien d'autre
+
+## BLOC A CORRIGER
+${block.content_html}`
+
+        const driftResponse = await routeAI('optimize_blocks', [
+          { role: 'user', content: driftFixPrompt },
+        ])
+        const fixedBlock = driftResponse.content.trim()
+        if (fixedBlock.length > 50 && fixedBlock.includes('<')) {
+          updatedBlocks[blockIdx] = {
+            ...block,
+            content_html: fixedBlock,
+            word_count: countWords(fixedBlock),
+          }
+          personaDriftsFixed++
+        }
+      } catch (err) {
+        console.warn(`[seo-autofix] Persona drift fix failed for block ${blockIdx}:`, err)
+      }
+    }
+    if (personaDriftsFixed > 0) {
+      console.log(`[seo-autofix] ${personaDriftsFixed} bloc(s) corriges pour coherence persona`)
+    }
+  }
+
+  // Auto-fix 4: Fix burstiness (overused connectors + sentence uniformity)
+  let burstinessBlocksFixed = 0
+  if (burstinessResult && burstinessResult.score < 60 && persona) {
+    const overusedList = burstinessResult.overusedConnectors.map(c => c.connector)
+    const blocksWithConnectorIssues: number[] = []
+
+    for (let i = 0; i < updatedBlocks.length; i++) {
+      if (blocksWithConnectorIssues.length >= 4) break
+      const block = updatedBlocks[i]
+      if (!block.content_html || block.status === 'pending' || block.type === 'image' || block.type === 'faq') continue
+      if (i === introBlockIndex) continue
+      const textLower = block.content_html.toLowerCase()
+      const hasOverused = overusedList.some(c => textLower.includes(c))
+      if (hasOverused) {
+        blocksWithConnectorIssues.push(i)
+      }
+    }
+
+    if (blocksWithConnectorIssues.length > 0) {
+      try {
+        const blocksData = blocksWithConnectorIssues.map(idx => ({
+          index: idx,
+          heading: updatedBlocks[idx].heading || '(sans titre)',
+          html: updatedBlocks[idx].content_html,
+        }))
+
+        const burstFixPrompt = `Tu es ${persona.name}, ${persona.role}.${persona.tone_description ? ` Ton : ${persona.tone_description}.` : ''}
+
+## PROBLEME
+Le texte a un score de "burstiness" faible (${burstinessResult.score}/100) — il sonne robotique.
+Connecteurs sur-utilises : ${overusedList.map(c => `"${c}"`).join(', ')}
+
+## MISSION
+Reecris les blocs suivants pour les rendre plus naturels et humains.
+
+## REGLES
+- REMPLACE les connecteurs sur-utilises par des transitions variees ou supprime-les
+- VARIE la longueur des phrases : melange phrases courtes (5-8 mots) et longues (20-30 mots)
+- Ajoute des phrases interrogatives ou exclamatives ponctuellement
+- Conserve TOUS les liens, tableaux, listes existants sans modification
+- Garde le meme contenu informatif et la meme longueur
+- Reponds UNIQUEMENT en JSON : [{ "block_index": N, "new_content_html": "..." }, ...]
+
+## BLOCS A CORRIGER
+${blocksData.map(b => `[Bloc ${b.index}] "${b.heading}"\n${b.html}`).join('\n\n---\n\n')}`
+
+        const burstResponse = await routeAI('optimize_blocks', [
+          { role: 'user', content: burstFixPrompt },
+        ])
+
+        const burstFixes = extractJSON<{ block_index: number; new_content_html: string }[]>(burstResponse.content)
+        if (Array.isArray(burstFixes)) {
+          for (const fix of burstFixes) {
+            if (fix.block_index >= 0 && fix.block_index < updatedBlocks.length && fix.new_content_html) {
+              if (fix.block_index === introBlockIndex) continue
+              updatedBlocks[fix.block_index] = {
+                ...updatedBlocks[fix.block_index],
+                content_html: fix.new_content_html,
+                word_count: countWords(fix.new_content_html),
+              }
+              burstinessBlocksFixed++
+            }
+          }
+        }
+        if (burstinessBlocksFixed > 0) {
+          console.log(`[seo-autofix] ${burstinessBlocksFixed} bloc(s) corriges pour burstiness`)
+        }
+      } catch (err) {
+        console.warn('[seo-autofix] Burstiness fix failed:', err)
+      }
+    }
+  }
+
+  // Auto-fix 5: Inject missing TF-IDF / semantic terms
+  let semanticTermsInjected = 0
+  if (missingTermSuggestions.length > 0 && persona) {
+    const highPriority = missingTermSuggestions.filter(s => s.importance === 'high' || s.importance === 'medium')
+    const termsByBlock = new Map<number, MissingTermSuggestion[]>()
+    for (const suggestion of highPriority) {
+      if (suggestion.suggestedBlockIndex === introBlockIndex) continue
+      const arr = termsByBlock.get(suggestion.suggestedBlockIndex) || []
+      arr.push(suggestion)
+      termsByBlock.set(suggestion.suggestedBlockIndex, arr)
+    }
+
+    const blockEntries = Array.from(termsByBlock.entries()).slice(0, 5)
+    if (blockEntries.length > 0) {
+      try {
+        const blocksData = blockEntries.map(([idx, terms]) => ({
+          index: idx,
+          heading: updatedBlocks[idx]?.heading || '(sans titre)',
+          html: updatedBlocks[idx]?.content_html || '',
+          terms: terms.map(t => t.term),
+        }))
+
+        const semanticFixPrompt = `Tu es ${persona.name}, ${persona.role}.${persona.tone_description ? ` Ton : ${persona.tone_description}.` : ''}
+
+## MISSION
+Integre les termes semantiques manquants dans les blocs indiques. Ces termes sont presents chez les concurrents et absents de notre article.
+
+## REGLES
+- Integre chaque terme NATURELLEMENT dans le texte existant (pas de liste forcee)
+- Un terme peut etre utilise sous forme de variante morphologique (pluriel, verbe, adjectif derive)
+- Ne modifie PAS la structure du bloc (pas d'ajout de paragraphes entiers)
+- Conserve TOUS les liens, tableaux, listes existants
+- Garde la meme longueur approximative (+/- 20 mots max)
+- Reponds UNIQUEMENT en JSON : [{ "block_index": N, "new_content_html": "...", "terms_injected": ["terme1", "terme2"] }, ...]
+
+## BLOCS ET TERMES A INJECTER
+${blocksData.map(b => `[Bloc ${b.index}] "${b.heading}" — Termes manquants : ${b.terms.join(', ')}\n${b.html}`).join('\n\n---\n\n')}`
+
+        const semanticResponse = await routeAI('optimize_blocks', [
+          { role: 'user', content: semanticFixPrompt },
+        ])
+
+        const semanticFixes = extractJSON<{ block_index: number; new_content_html: string; terms_injected?: string[] }[]>(semanticResponse.content)
+        if (Array.isArray(semanticFixes)) {
+          for (const fix of semanticFixes) {
+            if (fix.block_index >= 0 && fix.block_index < updatedBlocks.length && fix.new_content_html) {
+              if (fix.block_index === introBlockIndex) continue
+              updatedBlocks[fix.block_index] = {
+                ...updatedBlocks[fix.block_index],
+                content_html: fix.new_content_html,
+                word_count: countWords(fix.new_content_html),
+              }
+              semanticTermsInjected += (fix.terms_injected?.length || 1)
+            }
+          }
+        }
+        if (semanticTermsInjected > 0) {
+          console.log(`[seo-autofix] ${semanticTermsInjected} termes semantiques injectes dans ${blockEntries.length} bloc(s)`)
+        }
+      } catch (err) {
+        console.warn('[seo-autofix] Semantic terms injection failed:', err)
+      }
+    }
+  }
+
+  // Track all auto-fixes applied
+  const autoFixes = {
+    brokenLinksFixed,
+    keywordIntroFixed,
+    personaDriftsFixed,
+    burstinessBlocksFixed,
+    semanticTermsInjected,
+  }
+  const totalAutoFixes = brokenLinksFixed + (keywordIntroFixed ? 1 : 0) + personaDriftsFixed + burstinessBlocksFixed + semanticTermsInjected
+  if (totalAutoFixes > 0) {
+    console.log(`[seo-autofix] Total: ${totalAutoFixes} auto-corrections appliquees`)
+  }
+
   // Build seo_audit object
   const seoAudit = {
     auditedAt: new Date().toISOString(),
@@ -3013,6 +3297,7 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
       status: citationDensity.status,
     },
     ...(claimReviews.length > 0 ? { claimReviewCount: claimReviews.length } : {}),
+    ...(totalAutoFixes > 0 ? { autoFixes } : {}),
   }
 
   // 6. Update article
@@ -3104,6 +3389,7 @@ ${blocksToCondense.map(b => `[Bloc ${b.originalIndex}] ${b.type} | "${b.heading 
         reverseBacklinks: reverseBacklinksResult.length > 0 ? {
           count: reverseBacklinksResult.length,
         } : null,
+        autoFixes: totalAutoFixes > 0 ? autoFixes : null,
       },
     },
   }
