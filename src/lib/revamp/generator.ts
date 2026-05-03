@@ -253,6 +253,9 @@ export async function pushToWordPress(
       .eq('id', revampId)
   }
 
+  // Clean literal \n sequences from AI output or JSON serialization
+  contentHtml = contentHtml.replace(/([^\\])\\n/g, '$1\n').replace(/^\\n/g, '\n')
+
   // Normalize old margin divs to Gutenberg spacers
   contentHtml = contentHtml
     .replace(/<div\s+style="margin-top:\s*50px"[^>]*><\/div>/gi,

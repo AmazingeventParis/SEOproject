@@ -1063,8 +1063,10 @@ async function executeWriteBlock(
     throw new Error(`L'IA n'a retourne aucun contenu pour le bloc ${blockIndex} (modele: ${aiResponse.model || 'inconnu'})`)
   }
 
-  // Post-process: fix expert callout avatars — AI often generates letter fallback instead of <img>
+  // Post-process: strip literal \n sequences from AI output (Gemini sometimes returns escaped newlines)
   let processedHtml = aiResponse.content
+    .replace(/\\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
   if (processedHtml.includes('expert-callout') && persona?.avatar_reference_url) {
     // Replace letter-circle fallback with actual persona avatar image
     processedHtml = processedHtml.replace(
@@ -3629,6 +3631,9 @@ async function executePublish(
 
   // Repair any truncated HTML tables/tags before publishing
   fullHtml = repairTruncatedHtml(fullHtml)
+
+  // Clean literal \n sequences that may have leaked from AI responses or JSON serialization
+  fullHtml = fullHtml.replace(/([^\\])\\n/g, '$1\n').replace(/^\\n/g, '\n')
 
   // 2. Extract intro as excerpt (first paragraph block without heading)
   const introBlock = contentBlocks.find(b => b.type === 'paragraph' && !b.heading && b.content_html)
