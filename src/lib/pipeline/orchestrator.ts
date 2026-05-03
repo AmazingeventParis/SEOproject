@@ -3429,6 +3429,25 @@ const WP_TABLE_CSS = `<style>
 @media(max-width:640px){.seo-table-wrap table{font-size:.85rem}.seo-table-wrap th,.seo-table-wrap td{padding:10px 12px}}
 </style>`
 
+const WP_PROSE_CSS = `<style>
+.entry-content,.post-content,article,.wp-block-post-content{font-size:1.05rem;line-height:1.8;color:#1e293b;word-wrap:break-word;overflow-wrap:break-word}
+.entry-content p,.post-content p,article p{margin-bottom:1.25em;font-size:1.05rem;line-height:1.8}
+.entry-content h2,.post-content h2,article h2{font-size:1.6rem;font-weight:700;color:#0f172a;margin:2.5rem 0 1rem;line-height:1.3;letter-spacing:-0.01em}
+.entry-content h3,.post-content h3,article h3{font-size:1.3rem;font-weight:600;color:#1e293b;margin:2rem 0 0.75rem;line-height:1.35}
+.entry-content h4,.post-content h4,article h4{font-size:1.15rem;font-weight:600;color:#334155;margin:1.5rem 0 0.5rem}
+.entry-content strong,.post-content strong{color:#0f172a;font-weight:600}
+.entry-content a,.post-content a,article a{color:#2563eb;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px;transition:color .15s}
+.entry-content a:hover,.post-content a:hover{color:#1d4ed8}
+.entry-content blockquote,.post-content blockquote{border-left:4px solid #10b981;background:#f0fdf4;padding:16px 24px;margin:24px 0;border-radius:0 8px 8px 0;font-style:italic;color:#334155}
+.entry-content blockquote p{margin-bottom:0.5em}
+.entry-content ul,.entry-content ol,.post-content ul,.post-content ol{margin:1.25em 0;padding-left:1.5em}
+.entry-content li,.post-content li{margin-bottom:0.5em;line-height:1.7}
+.entry-content img,.post-content img{max-width:100%;height:auto;border-radius:8px}
+.entry-content figure,.post-content figure{margin:1.5em 0}
+.entry-content figcaption,.post-content figcaption{font-size:0.875rem;color:#64748b;text-align:center;margin-top:0.5em}
+@media(max-width:640px){.entry-content,.post-content,article{font-size:1rem;line-height:1.7}.entry-content h2,.post-content h2{font-size:1.35rem}.entry-content h3,.post-content h3{font-size:1.15rem}.entry-content p,.post-content p{margin-bottom:1em}}
+</style>`
+
 /**
  * Convert raw HTML to Gutenberg block comments so each element is editable in WP editor.
  * Splits content into: paragraphs, lists, tables, figures, blockquotes, custom HTML.
@@ -3589,6 +3608,9 @@ async function executePublish(
   // Prepend CSS as a single <style> block
   let fullHtml = gutenbergParts.join('\n\n')
   const cssBlocks: string[] = []
+  // Always inject prose CSS for consistent typography
+  const proseRules = WP_PROSE_CSS.replace(/<\/?style>/g, '').trim()
+  cssBlocks.push(proseRules)
   if (needsTableCss) {
     const tableRules = WP_TABLE_CSS.replace(/<\/?style>/g, '').trim()
     cssBlocks.push(tableRules)
@@ -3597,10 +3619,8 @@ async function executePublish(
     const faqRules = WP_FAQ_CSS.replace(/<\/?style>/g, '').trim()
     cssBlocks.push(faqRules)
   }
-  if (cssBlocks.length > 0) {
-    const mergedCss = `<style>\n${cssBlocks.join('\n')}\n</style>`
-    fullHtml = `<!-- wp:html -->\n${mergedCss}\n<!-- /wp:html -->\n\n` + fullHtml
-  }
+  const mergedCss = `<style>\n${cssBlocks.join('\n')}\n</style>`
+  fullHtml = `<!-- wp:html -->\n${mergedCss}\n<!-- /wp:html -->\n\n` + fullHtml
 
   // Strip Elementor wrapper markup from kept blocks (imported WP articles retain old markup)
   if (fullHtml.includes('elementor')) {

@@ -273,16 +273,16 @@ Si on extrait uniquement les H2 et H3 de l'article, le squelette doit former un 
 ⚠️ Le word_count de chaque bloc est le NOMBRE DE MOTS que le redacteur devra ecrire. Ce n'est PAS un nombre de caracteres.
 Un paragraphe de 200 mots fait environ 8-10 lignes de texte. 50 mots = 2 lignes = BEAUCOUP TROP COURT.
 
-MINIMUMS ABSOLUS (jamais en dessous) :
-- Bloc intro (paragraph, heading null) : word_count = 120 (100-140 mots)
-- Bloc H2 SANS sous-sections H3 : word_count entre 250 et 500 (MINIMUM 250)
-- Bloc H3 : word_count entre 150 et 300 (MINIMUM 150)
-- Bloc FAQ : word_count entre 300 et 600 (MINIMUM 300, chaque Q/R = 40-80 mots)
-- Bloc list : word_count entre 200 et 400 (MINIMUM 200)
+CIBLES DE MOTS (MAXIMUMS A NE PAS DEPASSER) :
+- Bloc intro (paragraph, heading null) : word_count = 120 (100-140 mots MAX)
+- Bloc H2 SANS sous-sections H3 : word_count entre 200 et 400 (MAXIMUM 400). Si l'info tient en 200 mots, c'est PARFAIT.
+- Bloc H3 : word_count entre 120 et 250 (MAXIMUM 250)
+- Bloc FAQ : word_count entre 250 et 500 (chaque Q/R = 30-60 mots, CONCIS)
+- Bloc list : word_count entre 150 et 300 (MAXIMUM 300)
 
-INTERDIT : un word_count inferieur a 120 sur un bloc de contenu (sauf intro). Si tu generes un bloc H2 avec word_count de 50 ou 80, c'est une ERREUR GRAVE.
+REGLE D'OR : le word_count est un PLAFOND, pas un plancher. Un bloc qui transmet toute la valeur en moins de mots est MEILLEUR qu'un bloc qui atteint la cible en diluant. Zero phrase de remplissage pour atteindre un nombre de mots.
 
-TOTAL ARTICLE : respecte la fourchette indiquee dans la strategie (typiquement 1500-3000 mots). La SOMME de tous les word_count doit etre dans cette fourchette.
+TOTAL ARTICLE : respecte la fourchette indiquee dans la strategie (typiquement 1500-2800 mots). Prefere le bas de la fourchette si le sujet ne justifie pas plus.
 
 ## PYRAMIDE INVERSEE DU WORD_COUNT — CONDENSATION PROGRESSIVE (OBLIGATOIRE)
 
@@ -290,8 +290,8 @@ Le lecteur est venu pour la REPONSE PRINCIPALE (premier H2). Plus on descend dan
 
 **Regle de condensation :**
 - **Premier tiers** (intro + 1-2 premiers H2) : word_count MAXIMUM — c'est le coeur de l'article, la reponse principale. Les blocs les plus longs vont ici.
-- **Deuxieme tiers** (H2 intermediaires) : word_count MOYEN — approfondissement, mais plus concentre. Reduis de ~20% par rapport au premier tiers.
-- **Dernier tiers** (derniers H2 avant FAQ) : word_count REDUIT — va a l'essentiel, pas de remplissage. Reduis de ~30-40% par rapport au premier tiers. Un H2 qui faisait 400 mots en premier tiers ne devrait faire que 200-280 mots ici.
+- **Deuxieme tiers** (H2 intermediaires) : word_count MOYEN — approfondissement, mais plus concentre. Reduis de ~30% par rapport au premier tiers.
+- **Dernier tiers** (derniers H2 avant FAQ) : word_count MINIMAL — va droit au but, listes a puces, zero prose inutile. Reduis de ~50% par rapport au premier tiers. Un H2 qui faisait 400 mots en premier tiers ne devrait faire que 150-200 mots ici. Le lecteur scanne — donne-lui l'essentiel en un clin d'oeil.
 - **FAQ** : toujours courte (reponses de 2-4 phrases, jamais de longs developpements)
 
 **Exemple concret pour un article de 2500 mots (6 sections + FAQ) :**
@@ -299,9 +299,9 @@ Le lecteur est venu pour la REPONSE PRINCIPALE (premier H2). Plus on descend dan
 - H2 #1 (reponse principale) : 400-450 mots
 - H2 #2 (approfondissement) : 350-400 mots
 - H2 #3 (details complementaires) : 300-350 mots
-- H2 #4 (aspects secondaires) : 250-300 mots
-- H2 #5 (erreurs/conseils) : 200-250 mots ← plus court car dernier tiers
-- FAQ : 300-400 mots
+- H2 #4 (aspects secondaires) : 200-250 mots
+- H2 #5 (erreurs/conseils) : 150-200 mots ← dernier tiers, listes a puces
+- FAQ : 250-350 mots
 
 Le word_count doit DIMINUER de section en section (pas necessairement de facon lineaire, mais la tendance doit etre a la baisse). Un article ou le dernier H2 est plus long que le premier est une ERREUR DE STRUCTURE.
 

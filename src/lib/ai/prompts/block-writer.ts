@@ -108,7 +108,7 @@ Tu dois ecrire EXACTEMENT comme cette personne parlerait - avec sa voix, son exp
 - Integre des tournures personnelles : "dans mon experience", "ce que je constate souvent", "un piege classique"
 - JAMAIS de formulations generiques de chatbot : "Il convient de", "Force est de constater", "Dans un premier temps"
 - Si le persona a un style direct, sois direct. Si c'est un style pedagogique, explique pas a pas.
-- ANCRAGE BIO OBLIGATOIRE : si la bio du persona mentionne un contexte precis (type de logement, situation, parcours, localisation), tu DOIS y faire reference au moins 1 fois dans l'article. Ce vecu concret est la preuve de l'expertise E-E-A-T.
+- ANCRAGE BIO : si la bio du persona mentionne un contexte precis (type de logement, situation, parcours, localisation), fais-y reference 1 fois MAX dans l'article entier, de maniere naturelle et pertinente. Ne force pas la mention si elle n'apporte rien au propos de cette section.
 
 ## REGLES DE REDACTION
 
@@ -346,23 +346,17 @@ Si ce bloc cible un featured snippet, la PREMIERE chose que tu ecris doit etre l
 - **steps** : une liste numerotee <ol> avec chaque etape en <strong>. Format "Etape N : [Action]". PUIS developpe chaque etape.
 - **none** : pas de ciblage snippet, ecris normalement.
 
-## EMOJIS SUR LES LISTES A PUCES (OBLIGATOIRE)
-Chaque item <li> DOIT commencer par un emoji pertinent lie au contenu de l'item, suivi d'un espace.
-Exemples :
-- <li>✅ <strong>Avantage principal</strong> : description...</li>
-- <li>⚠️ <strong>Point de vigilance</strong> : description...</li>
-- <li>💡 <strong>Astuce</strong> : description...</li>
-- <li>📊 <strong>Donnee cle</strong> : description...</li>
-- <li>🔧 <strong>Outil recommande</strong> : description...</li>
-- <li>💰 <strong>Budget</strong> : description...</li>
-- <li>🎯 <strong>Objectif</strong> : description...</li>
-- <li>🏠 <strong>Pour la maison</strong> : description...</li>
-Varie les emojis au sein d'une meme liste. INTERDIT d'utiliser le meme emoji pour tous les items.
+## LISTES A PUCES${searchIntent && ['review', 'comparison', 'lead_gen'].includes(searchIntent) ? `
+**PAS D'EMOJIS** pour l'intention "${searchIntent}" — les listes doivent rester sobres et professionnelles.
+- Chaque <li> commence directement par <strong>Point cle</strong> : description
+- Pas d'emoji, pas de symbole. Lisibilite professionnelle.` : `
+**EMOJIS THEMATIQUES** : Chaque item <li> DOIT commencer par un emoji pertinent lie au contenu, suivi d'un espace.
+- Varie les emojis au sein d'une meme liste. INTERDIT d'utiliser le meme emoji pour tous les items.
+- Exemples : ✅ avantage, ⚠️ vigilance, 💡 astuce, 📊 donnee, 🔧 outil, 💰 budget`}
 
-**TAILLE MEDIUM (OBLIGATOIRE)** : toutes les listes doivent avoir une taille de police plus grande pour une meilleure lisibilite sur WordPress.
+**TAILLE MEDIUM (OBLIGATOIRE)** : toutes les listes doivent avoir une taille de police lisible sur WordPress.
 - Chaque <ul> et <ol> DOIT avoir : style="font-size:1.125rem;line-height:1.8"
 - Chaque <li> DOIT avoir : style="margin-bottom:8px;font-size:1.125rem"
-- Exemple complet : <ul style="font-size:1.125rem;line-height:1.8"><li style="margin-bottom:8px;font-size:1.125rem">💡 <strong>Point cle</strong> : description...</li></ul>
 
 ## CTA "A LIRE AUSSI" (MAILLAGE INTERNE VISUEL)
 Si des liens internes sont fournis pour ce bloc, insere UN encart "A lire aussi" apres le contenu principal du bloc (avant la fin de la section).
@@ -381,7 +375,7 @@ ${buildCtaLireAussiTemplate()}
 
 ## REGLES STRICTES
 - Retourne UNIQUEMENT du HTML propre, sans markdown, sans blocs de code
-- Le nombre de mots indique est un OBJECTIF MINIMUM STRICT. Tu DOIS ecrire au moins ce nombre de mots. Ecris plus si le sujet le merite, mais JAMAIS moins. Un bloc de 250 mots qui n'en produit que 120 est une ERREUR GRAVE. Ne t'arrete PAS tant que tu n'as pas atteint l'objectif minimum.
+- Le nombre de mots indique est un PLAFOND, pas un plancher. Si tu transmets toute la valeur en moins de mots, ARRETE-TOI. Un bloc de 200 mots ultra-dense est MEILLEUR qu'un bloc de 350 mots dilue. Ne rajoute JAMAIS de phrases pour atteindre un nombre de mots. Quand il n'y a plus rien d'utile a dire, ferme le bloc.
 - N'invente PAS de statistiques ou de chiffres - sois honnete
 - Pas d'introduction du style "Voyons maintenant..." ou "Dans cette section..."
 - Va droit au sujet
@@ -627,21 +621,30 @@ Pour les produits SANS lien d'affiliation, NE PAS generer de CTA.`
     }
   }
 
-  user += `\n\n## 5 REGLES STRICTES
-**REGLE 1 — ACCROCHE D'OUVERTURE** : La premiere phrase de chaque section H2 doit etre une ACCROCHE, pas une definition ou un contexte plat. Choisis UNE technique parmi :
+  user += `\n\n## 8 REGLES STRICTES
+**REGLE 1 — ACCROCHE D'OUVERTURE** : La premiere phrase de chaque section H2 doit etre une ACCROCHE, pas une definition ou un contexte plat. Choisis UNE technique parmi (VARIE d'une section a l'autre, ne repete JAMAIS la meme technique 2 fois dans le meme article) :
   - Chiffre-choc : "85% des installations presentent ce defaut."
   - Question directe : "Vous pensez que votre isolation est suffisante ?"
   - Constat terrain : "Ce que je vois chez 9 clients sur 10, c'est toujours la meme erreur."
   - Affirmation contre-intuitive : "Le modele le plus cher n'est pas le plus rentable."
   - Micro-anecdote : "La semaine derniere, un client m'a appele en panique."
+  - Comparaison inattendue : "C'est comme acheter une voiture sans regarder le moteur."
+  - Faux consensus puis rupture : "Tout le monde dit que c'est simple. C'est faux."
+  - Mise en situation : "Imaginez : vous ouvrez votre facture et le montant a double."
+  - Citation ou verbatim : "Mon installateur m'a dit : laissez tomber ce modele."
+  - Fait peu connu : "Moins de 12% des Francais savent que cette aide existe."
+  - Interpellation directe : "Vous allez probablement faire cette erreur. Tout le monde la fait."
 JAMAIS commencer un H2 par "Le/La/Les [nom]..." ou une definition Wikipedia. Le lecteur doit etre ACCROCHE des la premiere ligne.
 **REGLE 2 — ZERO REDITE** : Ne repete AUCUN argument, exemple, chiffre ou conseil deja present dans les sections precedentes (voir le plan et le texte de la section precedente). Si un point a deja ete traite, passe-le. Apporte uniquement des idees NOUVELLES.
 **REGLE 3 — PAS DE CONCLUSION** : Ne conclus PAS cette section. Pas de phrase de synthese en fin de section ("En resume...", "Ainsi...", "En definitive..."). La derniere phrase doit rester dans le vif du sujet ou ouvrir vers la section suivante.
-**REGLE 4 — DENSITE MAXIMALE** : Chaque phrase doit apporter une information NOUVELLE ou une valeur concrete. Supprime mentalement toute phrase qui ne fait que "remplir" ou reformuler ce qui a deja ete dit dans le meme bloc. Un paragraphe de 2-3 lignes percutantes vaut mieux qu'un paragraphe de 6 lignes dilue. Objectif : zero phrase inutile.
-**REGLE 5 — RYTHME HUMAIN** : Relis ton bloc avant de le valider. Verifie : (a) au moins 1 phrase de ≤4 mots, (b) au moins 2 "vous/votre", (c) au moins 1 paragraphe d'une seule phrase, (d) aucune sequence de 3 paragraphes de meme taille. Si un de ces criteres manque, corrige avant de retourner le HTML.
+**REGLE 4 — TEST DE SUPPRESSION** : Avant de valider chaque phrase, demande-toi : "Si je supprime cette phrase, le lecteur perd-il une information concrete ?" Si NON → supprime-la. Chaque phrase doit apporter un fait, un chiffre, un exemple, une astuce ou un argument NOUVEAU. Les phrases de transition vides ("Il est donc essentiel de...", "N'oublions pas que...", "Il ne faut pas negliger...") echouent ce test — supprime-les.
+**REGLE 5 — REGLE DE SPECIFICITE** : Chaque affirmation doit etre accompagnee d'un element concret : chiffre, exemple, source, prix, duree, pourcentage ou comparaison. "C'est important" → INTERDIT. "Ca represente 40% du budget" → CORRECT. "Les performances sont bonnes" → INTERDIT. "Il consomme 3.2 kWh/m2, soit 30% de moins que la moyenne" → CORRECT. Pas de phrase vague ou generique — le lecteur veut du concret.
+**REGLE 6 — ANTI-EVIDENCE** : Interdiction absolue des phrases qui enoncent une evidence. Exemples interdits : "Il est crucial de bien choisir", "N'oubliez pas de comparer", "Il est recommande de faire appel a un professionnel", "La qualite est un critere important", "Il est essentiel de prendre en compte vos besoins". Si TOUT LE MONDE sait ca, ne le dis pas. A la place, donne l'info que le lecteur ne connait PAS.
+**REGLE 7 — RYTHME HUMAIN** : Relis ton bloc avant de le valider. Verifie : (a) au moins 1 phrase de ≤4 mots, (b) au moins 2 "vous/votre", (c) au moins 1 paragraphe d'une seule phrase, (d) aucune sequence de 3 paragraphes de meme taille. Si un de ces criteres manque, corrige avant de retourner le HTML.
+**REGLE 8 — ZERO FLUFF ABSOLU** : Phrases interdites qui ne disent rien : "Voyons cela en detail", "C'est un element a ne pas negliger", "Il existe de nombreuses options", "Plusieurs facteurs entrent en jeu", "Il y a des avantages et des inconvenients", "Cela depend de plusieurs criteres". Ces phrases GASPILLENT le temps du lecteur. Supprime-les et attaque directement le contenu.
 
 ## RAPPEL
-- Objectif : ~${block.word_count} mots — c'est une CIBLE, pas un minimum. Si tu peux transmettre toute l'info en moins de mots, FAIS-LE. Un bloc concis et dense est meilleur qu'un bloc long et dilue.
+- MAXIMUM : ~${block.word_count} mots — c'est un PLAFOND. Arrete-toi quand tu as tout dit. Un bloc concis et dense est meilleur qu'un bloc long et dilue.
 - Type de bloc : ${block.type}${block.format_hint ? ` (format: ${block.format_hint})` : ''}
 - Retourne UNIQUEMENT du HTML propre
 - Ecris en tant que ${persona.name} (${persona.role})

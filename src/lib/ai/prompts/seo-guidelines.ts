@@ -283,6 +283,9 @@ export const SEO_WRITING_STYLE_RULES = `- Ecris dans un style naturel, fluide et
 - Pas de formulations generiques ou bateaux
 - Pas de repetitions excessives, pas de style monotone
 - Zero fluff : chaque phrase doit apporter de l'information ou de la valeur. Supprime tout remplissage.
+- TEST DE SUPPRESSION : pour chaque phrase, demande-toi "si je la supprime, le lecteur perd-il une info concrete ?" Si non, supprime-la.
+- REGLE DE SPECIFICITE : chaque affirmation doit etre accompagnee d'un chiffre, exemple, prix, duree ou comparaison. "C'est important" est INTERDIT. "Ca coute 1200 EUR en moyenne" est CORRECT.
+- ANTI-EVIDENCE : n'enonce jamais ce que tout le monde sait ("il est crucial de bien choisir", "la qualite est importante"). Donne l'info que le lecteur ne connait PAS.
 - RYTHME VISUEL OBLIGATOIRE — ZERO MUR DE TEXTE :
   * Alterne SYSTEMATIQUEMENT : prose courte (2-3 lignes) → liste a puces OU tableau → prose courte → element visuel. Le lecteur ne doit JAMAIS voir plus de 4 lignes de prose continue sans respiration visuelle.
   * REGLE DES 150 MOTS : tout passage de prose depassant 150 mots DOIT etre coupe par une liste a puces (<ul>/<ol>) ou un tableau recapitulatif. Pas d'exception.
@@ -290,14 +293,11 @@ export const SEO_WRITING_STYLE_RULES = `- Ecris dans un style naturel, fluide et
   * LISTES A PUCES : des que tu enumeres 3+ elements (avantages, etapes, criteres, conseils), utilise une liste <ul> ou <ol> avec <strong> sur le point cle. JAMAIS de liste "cachee" dans un paragraphe de prose.
   * Le lecteur doit pouvoir SCANNER la page en 10 secondes et comprendre les points cles grace aux elements visuels (tableaux, listes, mots en gras).
 
-- EMOJIS SUR LES LISTES A PUCES :
-  * Chaque item <li> DOIT commencer par un emoji pertinent suivi d'un espace avant le texte
-  * Choisis des emojis THEMATIQUES lies au contenu de l'item (pas toujours le meme emoji)
-  * Exemples : "✅ <strong>Avantage cle</strong> : ...", "⚠️ <strong>Point d'attention</strong> : ...", "💡 <strong>Astuce</strong> : ...", "📊 <strong>Chiffre cle</strong> : ...", "🔧 <strong>Outil</strong> : ...", "💰 <strong>Budget</strong> : ..."
-  * Pour les listes <ol> numerotees, l'emoji vient APRES le numero automatique : "<li>🎯 <strong>Etape 1</strong> : ..."
-  * Varie les emojis au sein d'une meme liste — INTERDIT d'utiliser le meme emoji pour tous les items
-  * Les emojis rendent la liste scannable et ajoutent de la couleur visuelle sur mobile
-  * TAILLE MEDIUM OBLIGATOIRE : chaque <ul> et <ol> DOIT avoir style="font-size:1.125rem;line-height:1.8" et chaque <li> DOIT avoir style="margin-bottom:8px;font-size:1.125rem". Cela correspond a la taille "Medium" de WordPress pour une meilleure lisibilite.
+- LISTES A PUCES :
+  * Les emojis sont CONDITIONNELS selon l'intention de recherche : utilise-les pour traffic, informational, discover, opinion. NE PAS les utiliser pour review, comparison, lead_gen (ton professionnel sobre).
+  * Quand les emojis sont utilises : chaque <li> commence par un emoji thematique varie, suivi d'un espace.
+  * Quand PAS d'emojis : chaque <li> commence directement par <strong>Point cle</strong> : description.
+  * TAILLE MEDIUM OBLIGATOIRE : chaque <ul> et <ol> DOIT avoir style="font-size:1.125rem;line-height:1.8" et chaque <li> DOIT avoir style="margin-bottom:8px;font-size:1.125rem".
 
 Style humain et accessible :
 - Ecris comme un humain expert qui parle a un autre humain
