@@ -21,50 +21,13 @@ import { callOpenAI } from './openai'
  * - Gemini Flash: fast, cheap tasks (title gen, meta, keyword extraction, summarization)
  */
 const TASK_ROUTING: Record<AITask, ModelConfig> = {
+  // --- Gemini 3.1 Pro: structured JSON analysis ---
   plan_article: {
     provider: 'google',
     model: 'gemini-3.1-pro-preview',
     maxTokens: 16384,
     temperature: 0.7,
     jsonMode: true,
-  },
-  write_block: {
-    provider: 'google',
-    model: 'gemini-3.1-flash-preview',
-    maxTokens: 8192,
-    temperature: 0.7,
-    topP: 0.8,
-    thinkingLevel: 'LOW',
-  },
-  critique: {
-    provider: 'google',
-    model: 'gemini-3-flash-preview',
-    maxTokens: 2048,
-    temperature: 0.3,
-  },
-  generate_title: {
-    provider: 'google',
-    model: 'gemini-3-flash-preview',
-    maxTokens: 512,
-    temperature: 0.7,
-  },
-  generate_meta: {
-    provider: 'google',
-    model: 'gemini-3-flash-preview',
-    maxTokens: 512,
-    temperature: 0.5,
-  },
-  extract_keywords: {
-    provider: 'google',
-    model: 'gemini-3-flash-preview',
-    maxTokens: 1024,
-    temperature: 0.2,
-  },
-  summarize: {
-    provider: 'google',
-    model: 'gemini-3-flash-preview',
-    maxTokens: 1024,
-    temperature: 0.3,
   },
   analyze_serp: {
     provider: 'google',
@@ -73,6 +36,66 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     temperature: 0.3,
     jsonMode: true,
   },
+  // --- Claude Sonnet 4.6: quality writing & creative tasks ---
+  write_block: {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-6',
+    maxTokens: 8192,
+    temperature: 0.7,
+    topP: 0.8,
+  },
+  critique: {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-6',
+    maxTokens: 2048,
+    temperature: 0.3,
+  },
+  generate_title: {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-6',
+    maxTokens: 512,
+    temperature: 0.7,
+  },
+  generate_meta: {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-6',
+    maxTokens: 512,
+    temperature: 0.5,
+  },
+  optimize_blocks: {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-6',
+    maxTokens: 16384,
+    temperature: 0.5,
+    topP: 0.85,
+  },
+  generate_netlinking_article: {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-6',
+    maxTokens: 8192,
+    temperature: 0.7,
+  },
+  // --- Claude Haiku 4.5: lightweight tasks ---
+  extract_keywords: {
+    provider: 'anthropic',
+    model: 'claude-haiku-4-5-20251001',
+    maxTokens: 1024,
+    temperature: 0.2,
+  },
+  summarize: {
+    provider: 'anthropic',
+    model: 'claude-haiku-4-5-20251001',
+    maxTokens: 1024,
+    temperature: 0.3,
+  },
+  check_persona_consistency: {
+    provider: 'anthropic',
+    model: 'claude-haiku-4-5-20251001',
+    maxTokens: 2048,
+    temperature: 0.2,
+    jsonMode: true,
+  },
+  // --- Gemini Flash: fast JSON/analysis tasks ---
   analyze_competitor_content: {
     provider: 'google',
     model: 'gemini-3-flash-preview',
@@ -116,33 +139,12 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     maxTokens: 2048,
     temperature: 0.3,
   },
-  optimize_blocks: {
-    provider: 'google',
-    model: 'gemini-3.1-pro-preview',
-    maxTokens: 16384,
-    temperature: 0.5,
-    topP: 0.85,
-    jsonMode: true,
-  },
-  check_persona_consistency: {
-    provider: 'google',
-    model: 'gemini-3-flash-preview',
-    maxTokens: 2048,
-    temperature: 0.2,
-    jsonMode: true,
-  },
   analyze_link_gap: {
     provider: 'google',
     model: 'gemini-3-flash-preview',
     maxTokens: 4096,
     temperature: 0.3,
     jsonMode: true,
-  },
-  generate_netlinking_article: {
-    provider: 'google',
-    model: 'gemini-3.1-pro-preview',
-    maxTokens: 8192,
-    temperature: 0.7,
   },
   generate_article_angle: {
     provider: 'google',
@@ -163,13 +165,13 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
 // ---- Cross-provider fallback map ----
 
 const FALLBACK_MODEL: Record<string, { provider: AIProvider; model: string }> = {
-  'claude-sonnet-4-20250514': { provider: 'google', model: 'gemini-3-flash-preview' },
+  'claude-sonnet-4-6': { provider: 'google', model: 'gemini-3.1-pro-preview' },
   'claude-haiku-4-5-20251001': { provider: 'google', model: 'gemini-3-flash-preview' },
   'gpt-4o': { provider: 'google', model: 'gemini-3-flash-preview' },
   'gpt-4o-mini': { provider: 'google', model: 'gemini-3-flash-preview' },
-  'gemini-3.1-pro-preview': { provider: 'google', model: 'gemini-3-flash-preview' },
+  'gemini-3.1-pro-preview': { provider: 'anthropic', model: 'claude-sonnet-4-6' },
   'gemini-3.1-flash-preview': { provider: 'google', model: 'gemini-3.1-pro-preview' },
-  'gemini-3-flash-preview': { provider: 'google', model: 'gemini-3.1-pro-preview' },
+  'gemini-3-flash-preview': { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
 }
 
 // ---- Retry / fallback helpers ----

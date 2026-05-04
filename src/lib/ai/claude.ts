@@ -68,7 +68,7 @@ export async function callClaude(options: {
   const anthropic = await getClient()
 
   const response = await anthropic.messages.create({
-    model: options.model || 'claude-sonnet-4-20250514',
+    model: options.model || 'claude-sonnet-4-6',
     max_tokens: options.maxTokens || 4096,
     temperature: options.temperature ?? 0.7,
     cache_control: { type: 'ephemeral' },
@@ -123,7 +123,7 @@ export function streamClaude(options: {
       try {
         anthropic = await getClient()
         const stream = anthropic.messages.stream({
-          model: options.model || 'claude-sonnet-4-20250514',
+          model: options.model || 'claude-sonnet-4-6',
           max_tokens: options.maxTokens || 4096,
           temperature: options.temperature ?? 0.7,
           cache_control: { type: 'ephemeral' },
