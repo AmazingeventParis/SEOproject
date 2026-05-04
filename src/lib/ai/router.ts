@@ -75,22 +75,22 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
     maxTokens: 8192,
     temperature: 0.7,
   },
-  // --- Claude Haiku 4.5: lightweight tasks ---
+  // --- Gemini Flash: lightweight tasks ---
   extract_keywords: {
-    provider: 'anthropic',
-    model: 'claude-haiku-4-5-20251001',
+    provider: 'google',
+    model: 'gemini-3-flash-preview',
     maxTokens: 1024,
     temperature: 0.2,
   },
   summarize: {
-    provider: 'anthropic',
-    model: 'claude-haiku-4-5-20251001',
+    provider: 'google',
+    model: 'gemini-3-flash-preview',
     maxTokens: 1024,
     temperature: 0.3,
   },
   check_persona_consistency: {
-    provider: 'anthropic',
-    model: 'claude-haiku-4-5-20251001',
+    provider: 'google',
+    model: 'gemini-3-flash-preview',
     maxTokens: 2048,
     temperature: 0.2,
     jsonMode: true,
