@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { DollarSign, TrendingUp, Zap, BarChart3, AlertTriangle } from "lucide-react"
+import { Euro, TrendingUp, Zap, BarChart3, AlertTriangle } from "lucide-react"
 import type {
   CostSummary,
   DailyCost,
@@ -46,8 +46,14 @@ function getStepLabel(step: string): string {
 
 // ---- Formatting helpers ----
 
-function formatUsd(value: number): string {
-  return `$${value.toFixed(2)}`
+// USD → EUR conversion. Internal cost estimates are computed in USD (provider
+// pricing is published in USD); we display in EUR for parity with the
+// Google Cloud billing numbers the user sees in the Cloud Console.
+const USD_TO_EUR = 0.92
+
+function formatEur(usdValue: number): string {
+  const eur = usdValue * USD_TO_EUR
+  return `${eur.toFixed(2)} €`
 }
 
 function formatTokens(value: number): string {
@@ -183,10 +189,10 @@ export default function AnalyticsPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Cout total</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <Euro className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatUsd(data.summary.totalCostUsd)}</div>
+                <div className="text-2xl font-bold">{formatEur(data.summary.totalCostUsd)}</div>
                 <p className="text-xs text-muted-foreground">
                   {data.summary.totalRuns} executions
                 </p>
@@ -199,7 +205,7 @@ export default function AnalyticsPage() {
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatUsd(data.summary.avgCostPerArticle)}</div>
+                <div className="text-2xl font-bold">{formatEur(data.summary.avgCostPerArticle)}</div>
                 <p className="text-xs text-muted-foreground">
                   Par article traite
                 </p>
@@ -251,7 +257,7 @@ export default function AnalyticsPage() {
               <CardContent className="space-y-2">
                 <p className="text-sm text-orange-700 dark:text-orange-400">
                   Vous avez utilise {formatPercent(data.budget.percentUsed)} de votre budget mensuel
-                  ({formatUsd(data.budget.currentSpend)} / {formatUsd(data.budget.budget)}).
+                  ({formatEur(data.budget.currentSpend)} / {formatEur(data.budget.budget)}).
                 </p>
                 <Progress
                   value={Math.min(data.budget.percentUsed, 100)}
@@ -285,7 +291,7 @@ export default function AnalyticsPage() {
                           <Badge variant="outline">{row.model}</Badge>
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatUsd(row.cost)}
+                          {formatEur(row.cost)}
                         </TableCell>
                         <TableCell className="text-right">{row.runs}</TableCell>
                         <TableCell className="text-right">{formatTokens(row.tokensIn)}</TableCell>
@@ -319,7 +325,7 @@ export default function AnalyticsPage() {
                       <TableRow key={row.step}>
                         <TableCell>{getStepLabel(row.step)}</TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatUsd(row.cost)}
+                          {formatEur(row.cost)}
                         </TableCell>
                         <TableCell className="text-right">{row.runs}</TableCell>
                         <TableCell className="text-right">
@@ -364,7 +370,7 @@ export default function AnalyticsPage() {
                           {article.title ?? "-"}
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatUsd(article.totalCost)}
+                          {formatEur(article.totalCost)}
                         </TableCell>
                         <TableCell className="text-right">{article.runCount}</TableCell>
                       </TableRow>

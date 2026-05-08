@@ -6,6 +6,8 @@
 // transient errors (429, 503, 529).
 // ============================================================
 
+import { AsyncLocalStorage } from 'node:async_hooks'
+
 import type { AITask, AIMessage, AIResponse, AIProvider, ModelConfig } from './types'
 import { callClaude, streamClaude } from './claude'
 import { callGemini } from './gemini'
@@ -315,7 +317,9 @@ export async function routeAI(
   system?: string
 ): Promise<AIResponse> {
   const config = TASK_ROUTING[task]
-  return callWithRetryAndFallback(config, messages, system)
+  const response = await callWithRetryAndFallback(config, messages, system)
+  costStorage.getStore()?.add(response, task)
+  return response
 }
 
 /**
@@ -369,7 +373,9 @@ export async function routeAIWithOverrides(
   overrides?: Partial<ModelConfig>
 ): Promise<AIResponse> {
   const config = { ...TASK_ROUTING[task], ...overrides }
-  return callWithRetryAndFallback(config, messages, system)
+  const response = await callWithRetryAndFallback(config, messages, system)
+  costStorage.getStore()?.add(response, task)
+  return response
 }
 
 /**
@@ -403,14 +409,38 @@ export function getAllRoutingConfigs(): Record<AITask, ModelConfig> {
  * Gemini thinking tokens are billed separately and often dominate total cost.
  */
 const COST_PER_1K_TOKENS: Record<string, { input: number; output: number; thinking?: number }> = {
+  // Claude — current Anthropic SDK returns ids with date suffix; we keep both forms
+  'claude-sonnet-4-6': { input: 0.003, output: 0.015 },
   'claude-sonnet-4-20250514': { input: 0.003, output: 0.015 },
+  'claude-haiku-4-5': { input: 0.001, output: 0.005 },
   'claude-haiku-4-5-20251001': { input: 0.001, output: 0.005 },
+  'claude-opus-4-7': { input: 0.015, output: 0.075 },
+  // Gemini
   'gemini-3.1-pro-preview': { input: 0.00125, output: 0.01, thinking: 0.0035 },
   'gemini-3.1-flash-preview': { input: 0.0001, output: 0.0004, thinking: 0.00035 },
   'gemini-3-flash-preview': { input: 0.0001, output: 0.0004, thinking: 0.00035 },
   'gemini-2.5-flash': { input: 0.00015, output: 0.0006, thinking: 0.00125 },
+  // OpenAI
   'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
   'gpt-4o': { input: 0.0025, output: 0.01 },
+}
+
+/**
+ * Look up pricing for a model id. Anthropic returns full ids like
+ * `claude-sonnet-4-6-20250929`, so we fall back to stripping the date suffix.
+ * Logs a warning for unknown models so missing pricing surfaces in dev.
+ */
+function lookupPricing(model: string): { input: number; output: number; thinking?: number } | null {
+  const exact = COST_PER_1K_TOKENS[model]
+  if (exact) return exact
+  // Strip trailing "-YYYYMMDD" date suffix
+  const stripped = model.replace(/-\d{8}$/, '')
+  if (stripped !== model) {
+    const match = COST_PER_1K_TOKENS[stripped]
+    if (match) return match
+  }
+  console.warn(`[ai-router] No pricing found for model "${model}" — cost tracked as $0`)
+  return null
 }
 
 /**
@@ -486,7 +516,7 @@ export function modelIdToOverride(modelId: string): Partial<ModelConfig> | undef
  * @returns        Estimated cost in USD
  */
 export function estimateCost(response: AIResponse): number {
-  const pricing = COST_PER_1K_TOKENS[response.model]
+  const pricing = lookupPricing(response.model)
   if (!pricing) return 0
 
   const inputCost = (response.tokensIn / 1000) * pricing.input
@@ -526,7 +556,7 @@ export function estimateTaskCost(
   estimatedTokens: number
 ): { min: number; max: number; model: string } {
   const config = TASK_ROUTING[task]
-  const pricing = COST_PER_1K_TOKENS[config.model]
+  const pricing = lookupPricing(config.model)
   if (!pricing) return { min: 0, max: 0, model: config.model }
 
   const inputCost = (estimatedTokens / 1000) * pricing.input
@@ -539,4 +569,90 @@ export function estimateTaskCost(
     max: Math.round((inputCost + maxOutputCost) * 1000000) / 1000000,
     model: config.model,
   }
+}
+
+// ---- Automatic cost tracking via AsyncLocalStorage ----
+
+/**
+ * Per-call breakdown captured by the accumulator. Useful for debugging
+ * runaway steps and feeding the analytics dashboard with granular data.
+ */
+export interface AICallRecord {
+  task: AITask
+  model: string
+  provider: AIProvider
+  tokensIn: number
+  tokensOut: number
+  thinkingTokens: number
+  costUsd: number
+  durationMs: number
+  timestamp: number
+}
+
+export interface AggregatedCost {
+  costUsd: number
+  tokensIn: number
+  tokensOut: number
+  thinkingTokens: number
+  callCount: number
+  primaryModel: string | null
+  calls: AICallRecord[]
+}
+
+/**
+ * Accumulates AI call costs within an async context. Created by
+ * `withCostTracking` and pushed to via the `routeAI` wrapper.
+ */
+export class CostAccumulator {
+  private state: AggregatedCost = {
+    costUsd: 0,
+    tokensIn: 0,
+    tokensOut: 0,
+    thinkingTokens: 0,
+    callCount: 0,
+    primaryModel: null,
+    calls: [],
+  }
+
+  add(response: AIResponse, task: AITask): void {
+    const cost = estimateCost(response)
+    const thinking = response.thinkingTokens || 0
+    this.state.costUsd += cost
+    this.state.tokensIn += response.tokensIn
+    this.state.tokensOut += response.tokensOut
+    this.state.thinkingTokens += thinking
+    this.state.callCount += 1
+    if (!this.state.primaryModel) {
+      this.state.primaryModel = response.model
+    }
+    this.state.calls.push({
+      task,
+      model: response.model,
+      provider: response.provider,
+      tokensIn: response.tokensIn,
+      tokensOut: response.tokensOut,
+      thinkingTokens: thinking,
+      costUsd: cost,
+      durationMs: response.durationMs,
+      timestamp: Date.now(),
+    })
+  }
+
+  get total(): AggregatedCost {
+    return { ...this.state, calls: [...this.state.calls] }
+  }
+}
+
+const costStorage = new AsyncLocalStorage<CostAccumulator>()
+
+/**
+ * Run `fn` with an active cost-tracking context. Every routeAI call
+ * inside (including nested awaits) accumulates into the same accumulator.
+ * The accumulator is also passed as the function argument for convenience.
+ */
+export async function withCostTracking<T>(
+  fn: (costs: CostAccumulator) => Promise<T>,
+): Promise<T> {
+  const acc = new CostAccumulator()
+  return costStorage.run(acc, () => fn(acc))
 }

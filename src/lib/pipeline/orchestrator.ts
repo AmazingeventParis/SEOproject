@@ -12,7 +12,7 @@ import { analyzeSERP, extractCompetitorInsights } from '@/lib/seo/serper'
 import { checkCannibalization } from '@/lib/seo/anti-cannibal'
 import { analyzeCompetitorContent, buildCompetitorAnalysisPrompt } from '@/lib/seo/competitor-scraper'
 import type { CompetitorContentAnalysis } from '@/lib/seo/competitor-scraper'
-import { routeAI, routeAIWithOverrides, modelIdToOverride, estimateCost as estimateResponseCost } from '@/lib/ai/router'
+import { routeAI, routeAIWithOverrides, modelIdToOverride, estimateCost as estimateResponseCost, withCostTracking } from '@/lib/ai/router'
 import type { ModelConfig } from '@/lib/ai/types'
 import { buildPlanArchitectPrompt } from '@/lib/ai/prompts/plan-architect'
 import { buildBlockWriterPrompt } from '@/lib/ai/prompts/block-writer'
@@ -199,36 +199,52 @@ export async function executeStep(
     || await resolveDefaultModel(step)
 
   try {
-    let result: PipelineRunResult
+    // Wrap the step dispatch in a cost-tracking context so every routeAI call
+    // (anywhere down the call stack) is automatically captured. The accumulator's
+    // totals override the manually-tracked values in the inner functions, ensuring
+    // executeSeo/executeMedia/executePublish (which previously returned no cost)
+    // are now fully accounted for.
+    const result = await withCostTracking(async (costs) => {
+      let inner: PipelineRunResult
 
-    switch (step) {
-      case 'analyze':
-        result = await executeAnalyze(article as ArticleWithRelations)
-        break
-      case 'plan':
-        result = await executePlan(article as ArticleWithRelations, modelOverride)
-        break
-      case 'write_block':
-        result = await executeWriteBlock(article as ArticleWithRelations, input, modelOverride)
-        break
-      case 'media':
-        result = await executeMedia(article as ArticleWithRelations, input)
-        break
-      case 'seo':
-        result = await executeSeo(article as ArticleWithRelations)
-        break
-      case 'publish':
-        result = await executePublish(article as ArticleWithRelations)
-        break
-      case 'publish_gds':
-        result = await executeGdsPublish(article as ArticleWithRelations)
-        break
-      case 'refresh':
-        result = await executeRefresh(article as ArticleWithRelations, input)
-        break
-      default:
-        result = { success: false, runId: run.id, error: `Step "${step}" non implemente` }
-    }
+      switch (step) {
+        case 'analyze':
+          inner = await executeAnalyze(article as ArticleWithRelations)
+          break
+        case 'plan':
+          inner = await executePlan(article as ArticleWithRelations, modelOverride)
+          break
+        case 'write_block':
+          inner = await executeWriteBlock(article as ArticleWithRelations, input, modelOverride)
+          break
+        case 'media':
+          inner = await executeMedia(article as ArticleWithRelations, input)
+          break
+        case 'seo':
+          inner = await executeSeo(article as ArticleWithRelations)
+          break
+        case 'publish':
+          inner = await executePublish(article as ArticleWithRelations)
+          break
+        case 'publish_gds':
+          inner = await executeGdsPublish(article as ArticleWithRelations)
+          break
+        case 'refresh':
+          inner = await executeRefresh(article as ArticleWithRelations, input)
+          break
+        default:
+          inner = { success: false, runId: run.id, error: `Step "${step}" non implemente` }
+      }
+
+      const totals = costs.total
+      return {
+        ...inner,
+        tokensIn: totals.tokensIn || inner.tokensIn || 0,
+        tokensOut: totals.tokensOut || inner.tokensOut || 0,
+        costUsd: totals.costUsd || inner.costUsd || 0,
+        modelUsed: totals.primaryModel ?? inner.modelUsed ?? undefined,
+      }
+    })
 
     // Update pipeline run
     const duration = Date.now() - startTime
