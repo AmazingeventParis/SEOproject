@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { getBrowserClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,24 +17,49 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
 
-    const supabase = getBrowserClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-    if (authError) {
-      console.error("[login] Auth error:", authError.message, authError)
-      setError(
-        authError.message.includes("Invalid login credentials") || authError.message.includes("invalid")
-          ? "Email ou mot de passe incorrect"
-          : `Erreur: ${authError.message}`
-      )
+      const res = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": supabaseAnonKey,
+        },
+        body: JSON.stringify({ email, password }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        console.error("[login] Supabase error:", data)
+        setError(
+          data?.error_description || data?.msg || data?.error?.message || "Email ou mot de passe incorrect"
+        )
+        setLoading(false)
+        return
+      }
+
+      // Set auth cookies for middleware to read
+      const maxAge = data.expires_in || 3600
+      document.cookie = `sb-access-token=${data.access_token}; path=/; max-age=${maxAge}; SameSite=Lax`
+      document.cookie = `sb-refresh-token=${data.refresh_token}; path=/; max-age=${maxAge * 24}; SameSite=Lax`
+
+      // Also init the Supabase client with the session so @supabase/ssr picks it up
+      const { createBrowserClient } = await import("@supabase/ssr")
+      const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
+      await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      })
+
+      window.location.href = "/dashboard"
+    } catch (err) {
+      console.error("[login] Error:", err)
+      setError("Erreur de connexion")
       setLoading(false)
-      return
     }
-
-    window.location.href = "/dashboard"
   }
 
   return (
