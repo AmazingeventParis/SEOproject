@@ -39,7 +39,14 @@ function getClient(): BigQuery | null {
 
   try {
     if (inlineKey) {
-      const credentials = JSON.parse(inlineKey)
+      // The value is base64-encoded JSON when injected via Coolify env vars
+      // (avoids shell escaping issues with the JSON's quotes/newlines). We
+      // also accept raw JSON for local-dev convenience.
+      const trimmed = inlineKey.trim()
+      const decoded = trimmed.startsWith('{')
+        ? trimmed
+        : Buffer.from(trimmed, 'base64').toString('utf8')
+      const credentials = JSON.parse(decoded)
       cachedClient = new BigQuery({
         projectId: credentials.project_id ?? PROJECT_ID,
         credentials,
