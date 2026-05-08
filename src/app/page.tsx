@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { getAuthClient } from "@/lib/supabase/client"
+import { getAuthClient } from "@/lib/supabase/server"
 
 export default async function Home() {
   const supabase = await getAuthClient()
