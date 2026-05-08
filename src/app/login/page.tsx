@@ -27,15 +27,17 @@ export default function LoginPage() {
     })
 
     if (authError) {
-      setError(authError.message === "Invalid login credentials"
-        ? "Email ou mot de passe incorrect"
-        : authError.message)
+      console.error("[login] Auth error:", authError.message, authError)
+      setError(
+        authError.message.includes("Invalid login credentials") || authError.message.includes("invalid")
+          ? "Email ou mot de passe incorrect"
+          : `Erreur: ${authError.message}`
+      )
       setLoading(false)
       return
     }
 
-    router.push("/dashboard")
-    router.refresh()
+    window.location.href = "/dashboard"
   }
 
   return (
