@@ -18,45 +18,22 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-      const res = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+      const res = await fetch("/auth/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": supabaseAnonKey,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       })
 
       const data = await res.json()
 
       if (!res.ok) {
-        console.error("[login] Supabase error:", data)
-        setError(
-          data?.error_description || data?.msg || data?.error?.message || "Email ou mot de passe incorrect"
-        )
+        setError(data.error || "Erreur de connexion")
         setLoading(false)
         return
       }
 
-      // Set auth cookies for middleware to read
-      const maxAge = data.expires_in || 3600
-      document.cookie = `sb-access-token=${data.access_token}; path=/; max-age=${maxAge}; SameSite=Lax`
-      document.cookie = `sb-refresh-token=${data.refresh_token}; path=/; max-age=${maxAge * 24}; SameSite=Lax`
-
-      // Also init the Supabase client with the session so @supabase/ssr picks it up
-      const { createBrowserClient } = await import("@supabase/ssr")
-      const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
-      await supabase.auth.setSession({
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-      })
-
       window.location.href = "/dashboard"
-    } catch (err) {
-      console.error("[login] Error:", err)
+    } catch {
       setError("Erreur de connexion")
       setLoading(false)
     }
