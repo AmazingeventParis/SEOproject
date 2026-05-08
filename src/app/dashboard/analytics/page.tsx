@@ -99,7 +99,7 @@ function periodToApiParam(period: PeriodValue): string {
   }
 }
 
-// ---- API response type ----
+// ---- API response types ----
 
 interface AnalyticsResponse {
   summary: CostSummary
@@ -108,11 +108,65 @@ interface AnalyticsResponse {
   budget: BudgetAlert | null
 }
 
+interface GcpBillingStatus {
+  configured: boolean
+  tablesReady: boolean
+  detailedTable: string | null
+  standardTable: string | null
+  message: string
+}
+
+interface GcpDailyCost {
+  date: string
+  costEur: number
+}
+
+interface GcpServiceCost {
+  service: string
+  costEur: number
+  usageAmount: number | null
+  usageUnit: string | null
+}
+
+interface GcpSkuCost {
+  service: string
+  sku: string
+  costEur: number
+  usageAmount: number | null
+  usageUnit: string | null
+}
+
+interface GcpBillingResponse {
+  status: GcpBillingStatus
+  daily: GcpDailyCost[]
+  byService: GcpServiceCost[]
+  bySku: GcpSkuCost[]
+}
+
+function formatEurDirect(value: number): string {
+  return `${value.toFixed(2)} €`
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(value)
+}
+
 // ---- Page component ----
+
+function periodToDays(period: PeriodValue): number {
+  switch (period) {
+    case "7": return 7
+    case "30": return 30
+    case "90": return 90
+    case "all": return 365
+    default: return 30
+  }
+}
 
 export default function AnalyticsPage() {
   const [period, setPeriod] = useState<PeriodValue>("30")
   const [data, setData] = useState<AnalyticsResponse | null>(null)
+  const [gcpData, setGcpData] = useState<GcpBillingResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -121,15 +175,27 @@ export default function AnalyticsPage() {
     setError(null)
     try {
       const apiPeriod = periodToApiParam(period)
-      const res = await fetch(`/api/analytics?period=${apiPeriod}`)
-      if (!res.ok) {
-        const body = await res.json().catch(() => null)
+      const days = periodToDays(period)
+      const [internalRes, gcpRes] = await Promise.all([
+        fetch(`/api/analytics?period=${apiPeriod}`),
+        fetch(`/api/analytics/gcp-billing?days=${days}`),
+      ])
+      if (!internalRes.ok) {
+        const body = await internalRes.json().catch(() => null)
         throw new Error(
-          (body as { error?: string } | null)?.error ?? `Erreur HTTP ${res.status}`
+          (body as { error?: string } | null)?.error ?? `Erreur HTTP ${internalRes.status}`
         )
       }
-      const json: AnalyticsResponse = await res.json()
-      setData(json)
+      const internalJson: AnalyticsResponse = await internalRes.json()
+      setData(internalJson)
+
+      // GCP billing is best-effort: if it fails or isn't ready, we just don't show it
+      if (gcpRes.ok) {
+        const gcpJson: GcpBillingResponse = await gcpRes.json()
+        setGcpData(gcpJson)
+      } else {
+        setGcpData(null)
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erreur inconnue"
       setError(message)
@@ -177,6 +243,160 @@ export default function AnalyticsPage() {
         <Card className="border-destructive">
           <CardContent className="pt-6">
             <p className="text-destructive">{error}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* GCP billing section — authoritative cost from BigQuery export */}
+      {gcpData && !loading && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Euro className="h-4 w-4" />
+              Couts reels Google Cloud
+              {gcpData.status.tablesReady && (
+                <Badge variant="outline" className="ml-2 text-xs">
+                  Source: BigQuery export
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!gcpData.status.tablesReady ? (
+              <div className="rounded-md bg-muted/50 p-4 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Donnees pas encore disponibles</p>
+                <p className="mt-1">{gcpData.status.message}</p>
+              </div>
+            ) : (
+              <>
+                {/* Total over selected period */}
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="rounded-md border p-3">
+                    <p className="text-xs text-muted-foreground">Total facture (periode)</p>
+                    <p className="text-2xl font-bold">
+                      {formatEurDirect(
+                        gcpData.daily.reduce((sum, d) => sum + d.costEur, 0),
+                      )}
+                    </p>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <p className="text-xs text-muted-foreground">Pic journalier</p>
+                    <p className="text-2xl font-bold">
+                      {gcpData.daily.length > 0
+                        ? formatEurDirect(Math.max(...gcpData.daily.map((d) => d.costEur)))
+                        : '—'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {gcpData.daily.length > 0
+                        ? gcpData.daily.reduce((max, d) => (d.costEur > max.costEur ? d : max)).date
+                        : ''}
+                    </p>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <p className="text-xs text-muted-foreground">Cout moyen / jour</p>
+                    <p className="text-2xl font-bold">
+                      {gcpData.daily.length > 0
+                        ? formatEurDirect(
+                            gcpData.daily.reduce((sum, d) => sum + d.costEur, 0) /
+                              gcpData.daily.length,
+                          )
+                        : '—'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Daily timeline */}
+                {gcpData.daily.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">Evolution journaliere</p>
+                    <div className="space-y-1">
+                      {gcpData.daily.slice().reverse().slice(0, 14).map((d) => {
+                        const max = Math.max(...gcpData.daily.map((x) => x.costEur))
+                        const widthPct = max > 0 ? (d.costEur / max) * 100 : 0
+                        return (
+                          <div key={d.date} className="flex items-center gap-3 text-sm">
+                            <div className="w-24 text-muted-foreground text-xs">{d.date}</div>
+                            <div className="flex-1 h-5 bg-muted rounded-sm overflow-hidden relative">
+                              <div
+                                className="absolute inset-y-0 left-0 bg-primary"
+                                style={{ width: `${widthPct}%` }}
+                              />
+                            </div>
+                            <div className="w-20 text-right text-xs font-medium">
+                              {formatEurDirect(d.costEur)}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* By service */}
+                {gcpData.byService.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">Par service GCP</p>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Service</TableHead>
+                          <TableHead className="text-right">Cout</TableHead>
+                          <TableHead className="text-right">Usage</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {gcpData.byService.slice(0, 10).map((s) => (
+                          <TableRow key={s.service}>
+                            <TableCell>{s.service}</TableCell>
+                            <TableCell className="text-right font-medium">
+                              {formatEurDirect(s.costEur)}
+                            </TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground">
+                              {s.usageAmount != null
+                                ? `${formatNumber(s.usageAmount)} ${s.usageUnit ?? ''}`.trim()
+                                : '—'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+
+                {/* By SKU (detailed export only) */}
+                {gcpData.bySku.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">Par SKU (top 10)</p>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Service</TableHead>
+                          <TableHead>SKU</TableHead>
+                          <TableHead className="text-right">Cout</TableHead>
+                          <TableHead className="text-right">Usage</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {gcpData.bySku.slice(0, 10).map((s) => (
+                          <TableRow key={`${s.service}-${s.sku}`}>
+                            <TableCell className="text-xs">{s.service}</TableCell>
+                            <TableCell className="text-xs">{s.sku}</TableCell>
+                            <TableCell className="text-right font-medium">
+                              {formatEurDirect(s.costEur)}
+                            </TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground">
+                              {s.usageAmount != null
+                                ? `${formatNumber(s.usageAmount)} ${s.usageUnit ?? ''}`.trim()
+                                : '—'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
       )}
