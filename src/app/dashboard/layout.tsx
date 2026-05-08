@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   FileText,
@@ -18,7 +18,9 @@ import {
   RefreshCw,
   Link2,
   Search,
+  LogOut,
 } from "lucide-react";
+import { getBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -140,10 +142,23 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* Footer */}
       <Separator />
-      <div className="p-4">
+      <div className="p-4 flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
           SEO Content Studio v0.1
         </p>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+          title="Se deconnecter"
+          onClick={async () => {
+            const supabase = getBrowserClient()
+            await supabase.auth.signOut()
+            window.location.href = '/login'
+          }}
+        >
+          <LogOut className="h-4 w-4" />
+        </Button>
       </div>
     </div>
   );
