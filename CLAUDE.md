@@ -15,10 +15,61 @@
 - **Workflow** : modifs → commit → `git push` → webhook GitHub → Coolify build + deploy automatique
 - **Deploy manuel** : `curl -s "http://217.182.89.133:8000/api/v1/deploy?uuid=z8oskso4cg484w00s8g0g000&force=true" -H "Authorization: Bearer 1|FNcssp3CipkrPNVSQyv3IboYwGsP8sjPskoBG3ux98e5a576"`
 
+## Infrastructure GCP (cout monitoring)
+- **Compte authentifie** : `aureliedumas75@gmail.com` (owner sur les 4 projets)
+- **Projets** :
+  - `gen-lang-client-0271962854` (Default Gemini Project) — **principal** pour les appels Gemini API du SEO project (cle "Default Gemini API Key" du 2026-01-18)
+  - `gen-lang-client-0078876474` (IA Vulcan Project) — secondaire
+  - `shootnbox` — Search Console + Indexing API (gratuites) + dataset BigQuery `billing_export`
+  - `shootnbox-app` — sans billing (inactif)
+- **Billing account actif** : `01AE3A-25AB35-6F9C08`
+- **Budget mensuel** : `9c7b64d3-3749-4bdc-8587-c1948cb88a1e` — 50€/mois sur les 2 projets Gemini, alertes 50/90/100% aux admins du billing
+- **Export Billing → BigQuery** : actif sur `shootnbox:billing_export` (Standard + Detailed). Push Google quotidien, delai 4-24h apres activation pour les premieres tables.
+- **Service account analytics** : `seo-analytics-reader@shootnbox.iam.gserviceaccount.com`
+  - Roles : `BigQuery Data Viewer` sur dataset `billing_export` + `BigQuery Job User` au niveau projet
+  - Cle JSON : `/home/coder/.config/gcloud/seo-analytics-reader-key.json` (chmod 600, hors repo)
+  - Env var Coolify : `GCP_SERVICE_ACCOUNT_KEY` (base64-encoded, `is_buildtime: false`, `is_runtime: true`)
+- **gcloud CLI** : installe dans `/home/coder/google-cloud-sdk/`, PATH dans `~/.zshrc`. ADC stocke quota project `shootnbox`.
+
+## Coolify API
+- **Token** : `1|FNcssp3CipkrPNVSQyv3IboYwGsP8sjPskoBG3ux98e5a576`
+- **Base URL** : `http://217.182.89.133:8000`
+- **Endpoints utiles** :
+  - `GET /api/v1/applications/{uuid}/envs` — liste env vars
+  - `POST /api/v1/applications/{uuid}/envs` — cree (champs : `key`, `value`, `is_preview`, `is_buildtime`, `is_runtime`, `is_literal`, `is_multiline`)
+  - `PATCH /api/v1/applications/{uuid}/envs` — upsert (meme body)
+  - `GET /api/v1/deploy?uuid={uuid}&force=true` — trigger deploy
+  - `GET /api/v1/deployments/{deployment_uuid}` — statut + logs
+- **Piege** : `is_build_time` (avec underscore) est rejete. La bonne syntaxe est `is_buildtime` (un seul mot).
+- **Piege Dockerfile** : Coolify injecte les env vars `is_buildtime: true` comme `ARG` directement dans le Dockerfile. Une valeur contenant des guillemets non echappes (JSON) casse la syntaxe Docker. Solution : encoder en base64 et decoder a runtime.
+
 ## Statut actuel
 Phases 1-4 terminées. Projet en production.
 
 ## Progressions
+
+### 2026-05-08
+- Investigation pic 545€ sur Gemini API du 7 mai (apres alerte Google Cloud)
+  - **Cause racine** : cascade de fallback Claude Sonnet -> Gemini 3.1 Pro pendant un rate limit Anthropic. 20 901 requetes Gemini Pro concentrees entre 18h-19h Paris (~6 req/s pendant 1h).
+  - Avant le fix : le fallback de `claude-sonnet-4-6` etait `gemini-3.1-pro-preview` (12-25x plus cher que Flash). Avec retries de 1+2s seulement, le rate limit Anthropic declenchait massivement le fallback.
+- 3 fixes anti-cost-spike dans `src/lib/ai/router.ts` (commit `30d6455`)
+  - **Fallback Sonnet → Flash** : `claude-sonnet-4-6` -> `gemini-3-flash-preview` (au lieu de Pro). Idem `gemini-3.1-flash-preview`. Reduit l'impact d'un fallback massif de ~25x.
+  - **Retries plus longs** : `[1s, 2s]` -> `[5s, 15s, 30s]` (50s total). Laisse le temps au rate limit Anthropic de se reset (typiquement 30-60s) avant de fallback.
+  - **Hard cap fallbacks** : 50 fallbacks/min max via `checkFallbackRateLimit()` (timestamps en memoire avec fenetre glissante 60s). Au-dela, throw avec message explicite "primary provider likely down" pour stopper la cascade.
+- Phase 1 — Tracking complet des couts internes (commit `94e7fa4`)
+  - **Pricing manquant** : ajout de `claude-sonnet-4-6`, `claude-haiku-4-5`, `claude-opus-4-7` dans `COST_PER_1K_TOKENS`. Avant : tous les appels Sonnet 4.6 etaient comptes a $0 (33 executions "inconnu" sur le dashboard).
+  - **Normalisation model id** : nouveau `lookupPricing()` qui strip le suffix date (`-YYYYMMDD`) car Anthropic SDK retourne le full id `claude-sonnet-4-6-20250929`.
+  - **AsyncLocalStorage** : nouvelle classe `CostAccumulator` + helper `withCostTracking(fn)`. Le wrapping est fait une seule fois dans `executeStep` de l'orchestrator. Toutes les fonctions internes (executeSeo avec ses 12 appels routeAI, executeMedia, executePublish, executeRefresh) sont automatiquement comptees sans modification de code. Avant : ces 4 fonctions retournaient `costUsd: undefined` -> $0 dans `seo_pipeline_runs`.
+  - **Page analytics en EUR** : conversion USD → EUR (taux 0.92 hardcode), icone `Euro` au lieu de `DollarSign`. Permet la parite avec les chiffres Google Cloud Console.
+- Phase 2 — Integration BigQuery billing export (commits `a840260`, `249c80f`)
+  - **Module `src/lib/analytics/bq-billing.ts`** : client BigQuery avec auth via `GCP_SERVICE_ACCOUNT_KEY` (base64) ou `GOOGLE_APPLICATION_CREDENTIALS`. 4 fonctions : `getBqExportStatus`, `getDailyGcpCosts`, `getCostByService`, `getCostBySku`. Resilience : retourne `[]` si tables pas encore creees (delai 4-24h Google).
+  - **Discovery automatique des tables** : `gcp_billing_export_resource_v1_*` (detailed) et `gcp_billing_export_v1_*` (standard). Cache 5 min.
+  - **Route API `/api/analytics/gcp-billing`** : expose status + daily + byService + bySku.
+  - **Section dashboard "Couts reels Google Cloud"** : affiche total periode, pic journalier, moyenne/jour, timeline 14 derniers jours (barres horizontales), top 10 services GCP, top 10 SKU. Affiche un message d'attente si tables pas encore disponibles.
+  - **Hotfix base64** : la JSON de la cle SA contient des guillemets qui cassaient le Docker ARG. Solution : encoder en base64 + decoder cote app (avec backward compat raw JSON pour dev local).
+- Setup infrastructure GCP (voir section "Infrastructure GCP" en haut)
+  - Installation gcloud CLI, auth interactive, creation projet/dataset BQ, service account read-only avec least-privilege, configuration env var Coolify via API (sans manipulation manuelle).
+  - Budget 50€/mois alerte automatique avant que la facture explose.
 
 ### 2026-03-29
 - 4 optimisations de performance ecriture
