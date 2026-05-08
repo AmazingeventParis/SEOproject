@@ -165,12 +165,12 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
 // ---- Cross-provider fallback map ----
 
 const FALLBACK_MODEL: Record<string, { provider: AIProvider; model: string }> = {
-  'claude-sonnet-4-6': { provider: 'google', model: 'gemini-3.1-pro-preview' },
+  'claude-sonnet-4-6': { provider: 'google', model: 'gemini-3-flash-preview' },
   'claude-haiku-4-5-20251001': { provider: 'google', model: 'gemini-3-flash-preview' },
   'gpt-4o': { provider: 'google', model: 'gemini-3-flash-preview' },
   'gpt-4o-mini': { provider: 'google', model: 'gemini-3-flash-preview' },
   'gemini-3.1-pro-preview': { provider: 'anthropic', model: 'claude-sonnet-4-6' },
-  'gemini-3.1-flash-preview': { provider: 'google', model: 'gemini-3.1-pro-preview' },
+  'gemini-3.1-flash-preview': { provider: 'google', model: 'gemini-3-flash-preview' },
   'gemini-3-flash-preview': { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
 }
 
@@ -189,6 +189,27 @@ function isRetryableError(error: unknown): boolean {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Hard cap on cross-provider fallbacks to prevent runaway cost spikes when the
+// primary provider has a sustained outage (e.g. Anthropic rate-limiting an entire batch).
+const FALLBACK_RATE_LIMIT = 50
+const FALLBACK_WINDOW_MS = 60_000
+const fallbackTimestamps: number[] = []
+
+function checkFallbackRateLimit(): void {
+  const now = Date.now()
+  const cutoff = now - FALLBACK_WINDOW_MS
+  while (fallbackTimestamps.length > 0 && fallbackTimestamps[0] < cutoff) {
+    fallbackTimestamps.shift()
+  }
+  if (fallbackTimestamps.length >= FALLBACK_RATE_LIMIT) {
+    throw new Error(
+      `[ai-router] Fallback rate limit exceeded: ${fallbackTimestamps.length} fallbacks in last 60s. ` +
+        `Aborting to prevent cost spike — primary provider likely down.`,
+    )
+  }
+  fallbackTimestamps.push(now)
 }
 
 /**
@@ -226,7 +247,7 @@ async function callWithRetryAndFallback(
   system?: string,
 ): Promise<AIResponse> {
   let lastError: unknown
-  const retryDelays = [1000, 2000] // fast retries — fallback handles persistent failures
+  const retryDelays = [5000, 15000, 30000] // longer backoff — avoid premature fallback to expensive Gemini Pro during transient rate limits
 
   // --- Attempt 1: original model ---
   try {
@@ -256,6 +277,8 @@ async function callWithRetryAndFallback(
   // --- Attempt 4: cross-provider fallback ---
   const fb = FALLBACK_MODEL[config.model]
   if (!fb) throw lastError // no fallback configured
+
+  checkFallbackRateLimit()
 
   const fallbackConfig: ModelConfig = {
     ...config,
