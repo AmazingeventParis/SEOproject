@@ -40,13 +40,51 @@
   - `PATCH /api/v1/applications/{uuid}/envs` — upsert (meme body)
   - `GET /api/v1/deploy?uuid={uuid}&force=true` — trigger deploy
   - `GET /api/v1/deployments/{deployment_uuid}` — statut + logs
+  - `POST /api/v1/applications/{uuid}/stop` — stoppe le container immediatement
+  - `GET /api/v1/applications/{uuid}/logs` — logs runtime du container (stdout)
 - **Piege** : `is_build_time` (avec underscore) est rejete. La bonne syntaxe est `is_buildtime` (un seul mot).
 - **Piege Dockerfile** : Coolify injecte les env vars `is_buildtime: true` comme `ARG` directement dans le Dockerfile. Une valeur contenant des guillemets non echappes (JSON) casse la syntaxe Docker. Solution : encoder en base64 et decoder a runtime.
 
 ## Statut actuel
-Phases 1-4 terminées. Projet en production.
+Phases 1-4 terminees. App en pause depuis 2026-05-10 :
+- Cle API Anthropic a 0 credits (HTTP 400 `credit_balance_too_low`).
+- 4 cles Gemini API verrouillees a 127.0.0.1 (verrou belt+suspenders, pas de fallback possible).
+- Pipeline coupe par defaut : `PIPELINE_ENABLED` non defini = endpoints actifs, mais le pre-flight retourne 402 ANTHROPIC_CREDITS_EXHAUSTED tant que les credits Anthropic = 0.
+- Procedure de redemarrage : voir bloc 2026-05-10 ci-dessous.
 
 ## Progressions
+
+### 2026-05-10
+- Investigation 3 prelevements Google de 500EUR (~1500EUR total)
+  - **Cause racine** : suite directe du pic du 7 mai. Apres le fix `30d6455` qui a redirige le fallback Anthropic→Gemini Pro vers Flash, la cause profonde (concurrence trop elevee saturant le rate-limit Anthropic) n'a pas ete adressee. Les 9 et 10 mai, Gemini Flash a brule **40-50M tokens output/jour** (~200-260$/jour de sortie + input + 13M tokens d'images = ~500EUR/jour) en absorbant tous les fallback de write_block.
+  - **Decouverte** : les credits Anthropic ont fini par s'epuiser pendant le spike. L'API Anthropic retourne maintenant HTTP 400 `"Your credit balance is too low to access the Anthropic API"`. Cette erreur n'est pas retryable et pas matchee par le regex de `isRetryableError`, donc l'app plantait directement sans relancer Gemini — mais avant ca, des milliers d'appels avaient deja fallback.
+- Coupure d'urgence (avant tout fix code)
+  - **App Coolify stoppee** via `POST /api/v1/applications/{uuid}/stop` (statut `exited:unhealthy`, HTTP 503)
+  - **4 cles API Gemini verrouillees a 127.0.0.1** via `gcloud services api-keys update <UID> --allowed-ips=127.0.0.1` (3 cles sur projet `gen-lang-client-0271962854` + 1 sur `gen-lang-client-0078876474`). Empeche tout appel Gemini depuis la prod meme si du code zombie tournait.
+  - **Verification** : zero trafic Gemini sur 5 min (Cloud Monitoring `serviceruntime.googleapis.com/api/request_count`).
+- Round 1 — 5 garde-fous concurrence + budget (commit `4880704`)
+  - **`WRITE_BATCH_SIZE: 3 → 1`** dans `write-all/route.ts` et `autopilot/route.ts`. Ecriture des blocs sequentielle, plus de batches paralleles.
+  - **Queue concurrency default `2 → 1`** dans `queue/route.ts` (max 3 reste possible si l'utilisateur le passe explicitement).
+  - **`FALLBACK_RATE_LIMIT: 50 → 10` /min** dans `router.ts` (50/min permettait jusqu'a ~360M tokens/jour de fallback Flash, beaucoup trop large).
+  - **`NO_FALLBACK_TASKS`** Set ajoute dans `router.ts` : `write_block`, `plan_article`, `analyze_serp`, `optimize_blocks`, `generate_netlinking_article` ne fallback plus jamais (taches a fort volume de tokens).
+  - **Circuit breaker queue** : abort apres 5 echecs consecutifs + cap par article 5$ + cap queue 30$ (object `costBudget` partage entre toutes les iterations, propage via `accumulate(result.costUsd)` dans `runArticlePipeline`).
+- Round 2 — 5 couches defense en profondeur apres decouverte 0 credits (commit `92ef63f`)
+  - **A. Suppression totale du fallback cross-provider** dans `router.ts` : `FALLBACK_MODEL`, `NO_FALLBACK_TASKS`, `checkFallbackRateLimit`, `fallbackTimestamps` supprimes. `callWithRetryAndFallback` renommee en `callWithRetry`. Une erreur Anthropic = exception remontee, point. Plus aucune voie pour Gemini en backup.
+  - **B. AIError structure** : nouveau `src/lib/ai/errors.ts` avec `kind: OUT_OF_CREDITS | RATE_LIMIT | OVERLOADED | AUTH | OTHER`. `claude.ts` wrap les erreurs SDK dans try/catch et rethrow `classifyAnthropicError(err)` qui matche 400 + "credit balance is too low" → `OUT_OF_CREDITS` (non-retryable).
+  - **C. Pre-flight credit check** : nouveau `src/lib/ai/preflight.ts`. `pipelinePreflight()` ping Anthropic Haiku 4.5 (1 token, ~$0.000005) avant chaque demarrage de pipeline. Retourne 402 + `ANTHROPIC_CREDITS_EXHAUSTED` + URL de recharge si 0 credits, 401 si auth invalide, 503 + `PIPELINE_DISABLED` si kill switch off. Wired dans `queue/route.ts`, `autopilot/route.ts`, `write-all/route.ts` POST handlers.
+  - **D. Boot health check** : nouveau `src/instrumentation.ts` + `experimental.instrumentationHook: true` dans `next.config.mjs` (Next 14, stable en Next 15). Affiche `[boot] Anthropic credits: OK` ou detail `OUT_OF_CREDITS` au demarrage de l'app dans les logs Coolify. Confirme en prod : `[boot] Anthropic check FAILED — kind=OUT_OF_CREDITS`.
+  - **E. Kill switch env var** `PIPELINE_ENABLED=false` : si defini, `pipelinePreflight()` court-circuite tous les endpoints lourds avec 503 `PIPELINE_DISABLED` sans rebuild. Modifiable en 30s via API Coolify pour reagir a un incident.
+- Procedure de redemarrage du pipeline (a faire dans cet ordre)
+  1. **Recharger les credits Anthropic** sur https://console.anthropic.com/settings/plans. Configurer aussi des **budget alerts** (50EUR / 100EUR / 200EUR) comme on a deja sur GCP.
+  2. **Lever les restrictions IP Gemini** :
+     ```
+     gcloud services api-keys update 3b7d22c5-0429-4a56-ac1f-b7408a09d33a --project=gen-lang-client-0271962854 --clear-allowed-ips
+     gcloud services api-keys update 497607ae-5eb0-43f7-842f-c010b4e0fa0e --project=gen-lang-client-0271962854 --clear-allowed-ips
+     gcloud services api-keys update fff063e7-3867-4f02-a1dd-d6b576b23446 --project=gen-lang-client-0271962854 --clear-allowed-ips
+     gcloud services api-keys update 4cf879bd-925a-4594-b2f9-9adccf162934 --project=gen-lang-client-0078876474 --clear-allowed-ips
+     ```
+  3. **Verifier les logs boot Coolify** : doit afficher `[boot] Anthropic credits: OK`.
+  4. **Test** : lancer une queue avec **1 article** pour valider que le preflight passe et que tout marche.
 
 ### 2026-05-08
 - Investigation pic 545€ sur Gemini API du 7 mai (apres alerte Google Cloud)
