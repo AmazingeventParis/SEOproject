@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerClient } from "@/lib/supabase/client";
 import { executeStep } from "@/lib/pipeline/orchestrator";
 import { modelIdToOverride } from "@/lib/ai/router";
+import { pipelinePreflight } from "@/lib/ai/preflight";
 import type { ContentBlock } from "@/lib/supabase/types";
 import { checkKeyIdeasCoverage } from "@/lib/pipeline/quality-checks";
 import { detectOverusedPhrases } from "@/lib/seo/phrase-dedup";
@@ -23,6 +24,10 @@ export async function POST(
   _request: NextRequest,
   { params }: RouteContext
 ) {
+  // Guard: kill switch + Anthropic credits.
+  const blocked = await pipelinePreflight();
+  if (blocked) return blocked;
+
   const supabase = getServerClient();
   const { articleId } = params;
 

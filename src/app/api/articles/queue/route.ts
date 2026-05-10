@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getServerClient } from "@/lib/supabase/client";
 import { executeStep } from "@/lib/pipeline/orchestrator";
 import { modelIdToOverride } from "@/lib/ai/router";
+import { pipelinePreflight } from "@/lib/ai/preflight";
 import type { ContentBlock, TitleSuggestion, ArticleStatus } from "@/lib/supabase/types";
 import type { PipelineRunResult } from "@/lib/pipeline/types";
 import { detectOverusedPhrases } from "@/lib/seo/phrase-dedup";
@@ -215,6 +216,12 @@ async function runArticlePipeline(
  *   - Queue-wide cost cap QUEUE_MAX_COST_USD
  */
 export async function POST(_request: NextRequest) {
+  // Guard: kill switch + Anthropic credits. Returns 503 / 402 / 401 with a
+  // structured body if anything is off, so the UI can show a clear message
+  // instead of letting the pipeline start and fail mid-flight.
+  const blocked = await pipelinePreflight();
+  if (blocked) return blocked;
+
   let body: unknown;
   try {
     body = await _request.json();

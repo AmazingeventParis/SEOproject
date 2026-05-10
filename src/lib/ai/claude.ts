@@ -6,6 +6,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { AIMessage, AIResponse } from './types'
 import { getServerClient } from '@/lib/supabase/client'
+import { classifyAnthropicError } from './errors'
 
 // ---- Client factory ----
 
@@ -67,17 +68,22 @@ export async function callClaude(options: {
   const start = Date.now()
   const anthropic = await getClient()
 
-  const response = await anthropic.messages.create({
-    model: options.model || 'claude-sonnet-4-6',
-    max_tokens: options.maxTokens || 4096,
-    temperature: options.temperature ?? 0.7,
-    cache_control: { type: 'ephemeral' },
-    system: options.system || undefined,
-    messages: options.messages.map((m) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    })),
-  })
+  let response: Awaited<ReturnType<typeof anthropic.messages.create>>
+  try {
+    response = await anthropic.messages.create({
+      model: options.model || 'claude-sonnet-4-6',
+      max_tokens: options.maxTokens || 4096,
+      temperature: options.temperature ?? 0.7,
+      cache_control: { type: 'ephemeral' },
+      system: options.system || undefined,
+      messages: options.messages.map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      })),
+    })
+  } catch (err) {
+    throw classifyAnthropicError(err)
+  }
 
   // Extract text from the response content blocks
   const textContent = response.content.find((c) => c.type === 'text')

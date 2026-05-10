@@ -2,8 +2,14 @@
 // AI Model Router
 // Routes AI tasks to the appropriate provider/model based on
 // task type, cost optimization, and capability requirements.
-// Includes automatic retry + cross-provider fallback on
-// transient errors (429, 503, 529).
+// Includes automatic retry on transient errors (429, 503, 529).
+//
+// CROSS-PROVIDER FALLBACK IS DISABLED. After two cost incidents
+// (2026-05-07 and 2026-05-09/10) where Anthropic rate-limit /
+// credit-exhaustion triggered runaway Gemini fallback for
+// 1500EUR+ in 48h, the fallback path was removed entirely.
+// Errors now propagate to the caller with a structured AIError
+// kind so the UI/route can react (e.g. show "recharge Anthropic").
 // ============================================================
 
 import { AsyncLocalStorage } from 'node:async_hooks'
@@ -164,19 +170,7 @@ const TASK_ROUTING: Record<AITask, ModelConfig> = {
   },
 }
 
-// ---- Cross-provider fallback map ----
-
-const FALLBACK_MODEL: Record<string, { provider: AIProvider; model: string }> = {
-  'claude-sonnet-4-6': { provider: 'google', model: 'gemini-3-flash-preview' },
-  'claude-haiku-4-5-20251001': { provider: 'google', model: 'gemini-3-flash-preview' },
-  'gpt-4o': { provider: 'google', model: 'gemini-3-flash-preview' },
-  'gpt-4o-mini': { provider: 'google', model: 'gemini-3-flash-preview' },
-  'gemini-3.1-pro-preview': { provider: 'anthropic', model: 'claude-sonnet-4-6' },
-  'gemini-3.1-flash-preview': { provider: 'google', model: 'gemini-3-flash-preview' },
-  'gemini-3-flash-preview': { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' },
-}
-
-// ---- Retry / fallback helpers ----
+// ---- Retry helpers (cross-provider fallback removed — see header comment) ----
 
 function isRetryableError(error: unknown): boolean {
   // SDK errors with a numeric status code (Anthropic APIError, OpenAI APIError, etc.)
@@ -193,39 +187,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-// Hard cap on cross-provider fallbacks to prevent runaway cost spikes when the
-// primary provider has a sustained outage (e.g. Anthropic rate-limiting an entire batch).
-// Why 10/min: 50/min allowed up to ~360M tokens/day in Flash fallback, which is what we observed
-// during the 2026-05-09/10 spike. 10/min = ~14k fallbacks/day max, hard ceiling against runaway cost.
-const FALLBACK_RATE_LIMIT = 10
-const FALLBACK_WINDOW_MS = 60_000
-const fallbackTimestamps: number[] = []
-
-// Tasks that must NEVER cross-provider fallback. These are high-token writes where
-// a Flash fallback can still burn 4-8k output tokens × thousands of calls during an
-// Anthropic outage. Better to fail loudly than silently swap providers and rack up cost.
-const NO_FALLBACK_TASKS = new Set<AITask>([
-  'write_block',
-  'plan_article',
-  'analyze_serp',
-  'optimize_blocks',
-  'generate_netlinking_article',
-])
-
-function checkFallbackRateLimit(): void {
-  const now = Date.now()
-  const cutoff = now - FALLBACK_WINDOW_MS
-  while (fallbackTimestamps.length > 0 && fallbackTimestamps[0] < cutoff) {
-    fallbackTimestamps.shift()
-  }
-  if (fallbackTimestamps.length >= FALLBACK_RATE_LIMIT) {
-    throw new Error(
-      `[ai-router] Fallback rate limit exceeded: ${fallbackTimestamps.length} fallbacks in last 60s. ` +
-        `Aborting to prevent cost spike — primary provider likely down.`,
-    )
-  }
-  fallbackTimestamps.push(now)
-}
 
 /**
  * Call a provider with the given config and messages.
@@ -249,34 +210,35 @@ function callProvider(
 }
 
 /**
- * Attempt an AI call with exponential backoff retries then cross-provider fallback:
+ * Attempt an AI call with exponential backoff retries on transient errors.
+ * Cross-provider fallback was removed (see file header). On non-retryable
+ * errors (auth, out-of-credits, etc.) the AIError propagates immediately so
+ * routes can return a structured response instead of swapping providers.
+ *
  *  1. Initial try
- *  2. If retryable error → wait 2 s → retry
- *  3. If still failing → wait 5 s → retry
- *  4. If still failing → call fallback model (different provider)
- *  5. If fallback also fails → throw original error
+ *  2. If retryable error  → wait 5 s → retry
+ *  3. If still retryable  → wait 15 s → retry
+ *  4. If still retryable  → wait 30 s → retry
+ *  5. Throw the last error
  */
-async function callWithRetryAndFallback(
+async function callWithRetry(
   config: ModelConfig,
   messages: AIMessage[],
   system?: string,
-  task?: AITask,
 ): Promise<AIResponse> {
   let lastError: unknown
-  const retryDelays = [5000, 15000, 30000] // longer backoff — avoid premature fallback to expensive Gemini Pro during transient rate limits
+  const retryDelays = [5000, 15000, 30000]
 
-  // --- Attempt 1: original model ---
   try {
     return await callProvider(config, messages, system)
   } catch (err) {
     lastError = err
     if (!isRetryableError(err)) throw err
     console.warn(
-      `[ai-router] ${config.model} failed with retryable error, retrying in ${retryDelays[0] / 1000} s…`,
+      `[ai-router] ${config.model} retryable error, retrying in ${retryDelays[0] / 1000} s…`,
     )
   }
 
-  // --- Attempts 2-3: retry same model with backoff ---
   for (let i = 0; i < retryDelays.length; i++) {
     await sleep(retryDelays[i])
     try {
@@ -284,36 +246,12 @@ async function callWithRetryAndFallback(
     } catch (err) {
       lastError = err
       if (!isRetryableError(err)) throw err
-      console.warn(
-        `[ai-router] ${config.model} retry ${i + 2} failed${i < retryDelays.length - 1 ? `, retrying in ${retryDelays[i + 1] / 1000} s…` : ', falling back…'}`,
-      )
+      const next = i < retryDelays.length - 1 ? `, retrying in ${retryDelays[i + 1] / 1000} s…` : ', giving up.'
+      console.warn(`[ai-router] ${config.model} retry ${i + 2} failed${next}`)
     }
   }
 
-  // --- Attempt 4: cross-provider fallback ---
-  if (task && NO_FALLBACK_TASKS.has(task)) {
-    console.warn(`[ai-router] Task "${task}" is no-fallback — failing instead of swapping provider`)
-    throw lastError
-  }
-  const fb = FALLBACK_MODEL[config.model]
-  if (!fb) throw lastError // no fallback configured
-
-  checkFallbackRateLimit()
-
-  const fallbackConfig: ModelConfig = {
-    ...config,
-    provider: fb.provider,
-    model: fb.model,
-  }
-  console.warn(
-    `[ai-router] Falling back to ${fb.model} (${fb.provider})`,
-  )
-  try {
-    return await callProvider(fallbackConfig, messages, system)
-  } catch {
-    // Fallback also failed — throw the *original* error
-    throw lastError
-  }
+  throw lastError
 }
 
 // ---- Main routing functions ----
@@ -335,7 +273,7 @@ export async function routeAI(
   system?: string
 ): Promise<AIResponse> {
   const config = TASK_ROUTING[task]
-  const response = await callWithRetryAndFallback(config, messages, system, task)
+  const response = await callWithRetry(config, messages, system)
   costStorage.getStore()?.add(response, task)
   return response
 }
@@ -391,7 +329,7 @@ export async function routeAIWithOverrides(
   overrides?: Partial<ModelConfig>
 ): Promise<AIResponse> {
   const config = { ...TASK_ROUTING[task], ...overrides }
-  const response = await callWithRetryAndFallback(config, messages, system, task)
+  const response = await callWithRetry(config, messages, system)
   costStorage.getStore()?.add(response, task)
   return response
 }
