@@ -9,8 +9,10 @@ import { fetchTemporalContext } from "@/lib/seo/serper";
 
 export const maxDuration = 300;
 
-// Write blocks in parallel batches of 3 for ~3x speedup
-const WRITE_BATCH_SIZE = 3;
+// Sequential writing (1 block at a time) to keep Anthropic concurrency low.
+// Why: parallel batches stacked with queue concurrency caused chronic 429s on
+// the same Anthropic key, triggering massive Gemini Flash fallback (40M tokens/day on 2026-05-09/10).
+const WRITE_BATCH_SIZE = 1;
 
 interface RouteContext {
   params: { articleId: string };

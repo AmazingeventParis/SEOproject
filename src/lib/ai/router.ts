@@ -195,9 +195,22 @@ function sleep(ms: number): Promise<void> {
 
 // Hard cap on cross-provider fallbacks to prevent runaway cost spikes when the
 // primary provider has a sustained outage (e.g. Anthropic rate-limiting an entire batch).
-const FALLBACK_RATE_LIMIT = 50
+// Why 10/min: 50/min allowed up to ~360M tokens/day in Flash fallback, which is what we observed
+// during the 2026-05-09/10 spike. 10/min = ~14k fallbacks/day max, hard ceiling against runaway cost.
+const FALLBACK_RATE_LIMIT = 10
 const FALLBACK_WINDOW_MS = 60_000
 const fallbackTimestamps: number[] = []
+
+// Tasks that must NEVER cross-provider fallback. These are high-token writes where
+// a Flash fallback can still burn 4-8k output tokens × thousands of calls during an
+// Anthropic outage. Better to fail loudly than silently swap providers and rack up cost.
+const NO_FALLBACK_TASKS = new Set<AITask>([
+  'write_block',
+  'plan_article',
+  'analyze_serp',
+  'optimize_blocks',
+  'generate_netlinking_article',
+])
 
 function checkFallbackRateLimit(): void {
   const now = Date.now()
@@ -247,6 +260,7 @@ async function callWithRetryAndFallback(
   config: ModelConfig,
   messages: AIMessage[],
   system?: string,
+  task?: AITask,
 ): Promise<AIResponse> {
   let lastError: unknown
   const retryDelays = [5000, 15000, 30000] // longer backoff — avoid premature fallback to expensive Gemini Pro during transient rate limits
@@ -277,6 +291,10 @@ async function callWithRetryAndFallback(
   }
 
   // --- Attempt 4: cross-provider fallback ---
+  if (task && NO_FALLBACK_TASKS.has(task)) {
+    console.warn(`[ai-router] Task "${task}" is no-fallback — failing instead of swapping provider`)
+    throw lastError
+  }
   const fb = FALLBACK_MODEL[config.model]
   if (!fb) throw lastError // no fallback configured
 
@@ -317,7 +335,7 @@ export async function routeAI(
   system?: string
 ): Promise<AIResponse> {
   const config = TASK_ROUTING[task]
-  const response = await callWithRetryAndFallback(config, messages, system)
+  const response = await callWithRetryAndFallback(config, messages, system, task)
   costStorage.getStore()?.add(response, task)
   return response
 }
@@ -373,7 +391,7 @@ export async function routeAIWithOverrides(
   overrides?: Partial<ModelConfig>
 ): Promise<AIResponse> {
   const config = { ...TASK_ROUTING[task], ...overrides }
-  const response = await callWithRetryAndFallback(config, messages, system)
+  const response = await callWithRetryAndFallback(config, messages, system, task)
   costStorage.getStore()?.add(response, task)
   return response
 }

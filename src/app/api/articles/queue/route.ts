@@ -17,6 +17,18 @@ const queueSchema = z.object({
   autoSelectTitle: z.number().int().min(0).max(2).optional(),
 });
 
+// Circuit breaker: abort the whole queue if this many articles fail in a row.
+// Why: an Anthropic outage was making every article fail-then-fallback to Flash, racking up
+// thousands of euros before anyone noticed. Better to halt early than burn the whole list.
+const QUEUE_MAX_CONSECUTIVE_FAILURES = 5;
+
+// Per-article cost guardrail. Aborts the article mid-flight if its cumulative cost exceeds this.
+// Tuned at 5$ — a normal article should cost well under 1$, so 5$ means something is very wrong.
+const ARTICLE_MAX_COST_USD = 5;
+
+// Queue-wide cumulative cost guardrail. Hard stop on the whole batch.
+const QUEUE_MAX_COST_USD = 30;
+
 function sendSSE(
   controller: ReadableStreamDefaultController,
   encoder: TextEncoder,
@@ -38,9 +50,23 @@ async function runArticlePipeline(
   articleId: string,
   modelOverride?: Record<string, unknown>,
   autoSelectTitle = 0,
-): Promise<{ success: boolean; error?: string; stepsCompleted: string[] }> {
+  costBudget: { total: number; abort: () => boolean } = { total: 0, abort: () => false },
+): Promise<{ success: boolean; error?: string; stepsCompleted: string[]; costUsd: number }> {
   const supabase = getServerClient();
   const stepsCompleted: string[] = [];
+  let articleCost = 0;
+  const accumulate = (c?: number) => {
+    if (c) {
+      articleCost += c;
+      costBudget.total += c;
+    }
+    if (articleCost > ARTICLE_MAX_COST_USD) {
+      throw new Error(`Article cost guardrail exceeded: $${articleCost.toFixed(2)} > $${ARTICLE_MAX_COST_USD}`);
+    }
+    if (costBudget.abort()) {
+      throw new Error(`Queue cost guardrail exceeded: $${costBudget.total.toFixed(2)} > $${QUEUE_MAX_COST_USD}`);
+    }
+  };
 
   // Fetch article
   const { data: article } = await supabase
@@ -49,15 +75,16 @@ async function runArticlePipeline(
     .eq("id", articleId)
     .single();
 
-  if (!article) return { success: false, error: "Article non trouve", stepsCompleted };
-  if (!article.persona_id) return { success: false, error: "Aucun persona assigne", stepsCompleted };
+  if (!article) return { success: false, error: "Article non trouve", stepsCompleted, costUsd: articleCost };
+  if (!article.persona_id) return { success: false, error: "Aucun persona assigne", stepsCompleted, costUsd: articleCost };
 
   let status = article.status as ArticleStatus;
 
   // Step 1: Analyze (if draft)
   if (status === "draft") {
     const result = await executeStep(articleId, "analyze");
-    if (!result.success) return { success: false, error: `Analyse: ${result.error}`, stepsCompleted };
+    accumulate(result.costUsd);
+    if (!result.success) return { success: false, error: `Analyse: ${result.error}`, stepsCompleted, costUsd: articleCost };
     stepsCompleted.push("analyze");
     status = "analyzing";
   }
@@ -65,7 +92,8 @@ async function runArticlePipeline(
   // Step 2: Plan (if analyzing)
   if (status === "analyzing") {
     const result = await executeStep(articleId, "plan", modelOverride);
-    if (!result.success) return { success: false, error: `Plan: ${result.error}`, stepsCompleted };
+    accumulate(result.costUsd);
+    if (!result.success) return { success: false, error: `Plan: ${result.error}`, stepsCompleted, costUsd: articleCost };
     stepsCompleted.push("plan");
     status = "planning";
   }
@@ -133,18 +161,17 @@ async function runArticlePipeline(
         }
       } catch { /* continue without tics/temporal detection */ }
       for (const blockIndex of pendingIndices) {
-        try {
-          const result: PipelineRunResult = await executeStep(
-            articleId,
-            "write_block",
-            { blockIndex, usedNuggetIds, detectedTics, temporalContext, ...modelOverride }
-          );
-          if (result.success) {
-            const nuggetIds = (result.output?.nuggetIdsUsed as string[]) || [];
-            usedNuggetIds.push(...nuggetIds);
-          }
-        } catch {
-          // Continue writing other blocks on error
+        const result: PipelineRunResult = await executeStep(
+          articleId,
+          "write_block",
+          { blockIndex, usedNuggetIds, detectedTics, temporalContext, ...modelOverride }
+        );
+        // Always accumulate cost (even on failure — partial token usage is real cost).
+        // accumulate() throws if guardrails are tripped, which propagates up to abort the article.
+        accumulate(result.costUsd);
+        if (result.success) {
+          const nuggetIds = (result.output?.nuggetIdsUsed as string[]) || [];
+          usedNuggetIds.push(...nuggetIds);
         }
       }
     }
@@ -155,7 +182,8 @@ async function runArticlePipeline(
   // Step 5: Media
   if (status === "writing") {
     const result = await executeStep(articleId, "media");
-    if (!result.success) return { success: false, error: `Media: ${result.error}`, stepsCompleted };
+    accumulate(result.costUsd);
+    if (!result.success) return { success: false, error: `Media: ${result.error}`, stepsCompleted, costUsd: articleCost };
     stepsCompleted.push("media");
     status = "media";
   }
@@ -163,11 +191,12 @@ async function runArticlePipeline(
   // Step 6: SEO
   if (status === "media" || status === "seo_check") {
     const result = await executeStep(articleId, "seo");
-    if (!result.success) return { success: false, error: `SEO: ${result.error}`, stepsCompleted };
+    accumulate(result.costUsd);
+    if (!result.success) return { success: false, error: `SEO: ${result.error}`, stepsCompleted, costUsd: articleCost };
     stepsCompleted.push("seo");
   }
 
-  return { success: true, stepsCompleted };
+  return { success: true, stepsCompleted, costUsd: articleCost };
 }
 
 /**
@@ -177,7 +206,13 @@ async function runArticlePipeline(
  * Streams SSE events for each article's progress.
  *
  * Body:
- *   { articleIds: string[], model?: string, concurrency?: number (1-3, default 2), autoSelectTitle?: number }
+ *   { articleIds: string[], model?: string, concurrency?: number (1-3, default 1), autoSelectTitle?: number }
+ *
+ * Safety guardrails:
+ *   - Default concurrency 1 (was 2) to keep Anthropic key well below rate limit
+ *   - Circuit breaker after QUEUE_MAX_CONSECUTIVE_FAILURES consecutive failures
+ *   - Per-article cost cap ARTICLE_MAX_COST_USD
+ *   - Queue-wide cost cap QUEUE_MAX_COST_USD
  */
 export async function POST(_request: NextRequest) {
   let body: unknown;
@@ -198,7 +233,7 @@ export async function POST(_request: NextRequest) {
     );
   }
 
-  const { articleIds, model, concurrency = 2, autoSelectTitle = 0 } = parsed.data;
+  const { articleIds, model, concurrency = 1, autoSelectTitle = 0 } = parsed.data;
 
   let modelOverride: Record<string, unknown> | undefined;
   if (model) {
@@ -217,13 +252,21 @@ export async function POST(_request: NextRequest) {
       let completed = 0;
       let succeeded = 0;
       let failed = 0;
+      let consecutiveFailures = 0;
+      let abortReason: string | null = null;
+
+      // Shared cost budget across all articles in this queue run.
+      const costBudget = {
+        total: 0,
+        abort: () => costBudget.total > QUEUE_MAX_COST_USD,
+      };
 
       // Process articles with limited concurrency using a semaphore pattern
       const queue = [...articleIds];
       const running = new Set<Promise<void>>();
 
       async function processNext() {
-        if (queue.length === 0) return;
+        if (queue.length === 0 || abortReason) return;
         const artId = queue.shift()!;
 
         sendSSE(controller, encoder, "article_start", {
@@ -233,46 +276,62 @@ export async function POST(_request: NextRequest) {
         });
 
         try {
-          const result = await runArticlePipeline(artId, modelOverride, autoSelectTitle);
+          const result = await runArticlePipeline(artId, modelOverride, autoSelectTitle, costBudget);
 
           completed++;
-          if (result.success) succeeded++;
-          else failed++;
+          if (result.success) {
+            succeeded++;
+            consecutiveFailures = 0;
+          } else {
+            failed++;
+            consecutiveFailures++;
+          }
 
           sendSSE(controller, encoder, "article_done", {
             articleId: artId,
             success: result.success,
             error: result.error,
             stepsCompleted: result.stepsCompleted,
+            costUsd: result.costUsd,
+            queueCostUsd: costBudget.total,
             completed,
             total: articleIds.length,
           });
         } catch (err) {
           completed++;
           failed++;
+          consecutiveFailures++;
           sendSSE(controller, encoder, "article_done", {
             articleId: artId,
             success: false,
             error: err instanceof Error ? err.message : String(err),
             stepsCompleted: [],
+            queueCostUsd: costBudget.total,
             completed,
             total: articleIds.length,
           });
         }
+
+        // Trip the breakers AFTER processing this article so we don't leave it in a half-state.
+        if (consecutiveFailures >= QUEUE_MAX_CONSECUTIVE_FAILURES) {
+          abortReason = `Circuit breaker: ${consecutiveFailures} echecs consecutifs`;
+        } else if (costBudget.total > QUEUE_MAX_COST_USD) {
+          abortReason = `Budget queue depasse: $${costBudget.total.toFixed(2)} > $${QUEUE_MAX_COST_USD}`;
+        }
       }
 
       // Start initial batch
-      while (running.size < concurrency && queue.length > 0) {
+      while (running.size < concurrency && queue.length > 0 && !abortReason) {
         const p = processNext().then(() => { running.delete(p); });
         running.add(p);
       }
 
       // Process remaining articles as slots free up
-      while (running.size > 0 || queue.length > 0) {
+      while (running.size > 0 || (queue.length > 0 && !abortReason)) {
         if (running.size > 0) {
           await Promise.race(running);
         }
-        while (running.size < concurrency && queue.length > 0) {
+        while (running.size < concurrency && queue.length > 0 && !abortReason) {
           const p = processNext().then(() => { running.delete(p); });
           running.add(p);
         }
@@ -282,6 +341,9 @@ export async function POST(_request: NextRequest) {
         totalArticles: articleIds.length,
         succeeded,
         failed,
+        abortReason,
+        skipped: queue.length,
+        totalCostUsd: costBudget.total,
       });
       try { controller.close(); } catch { /* Already closed */ }
     },

@@ -9,8 +9,9 @@ import { fetchTemporalContext } from "@/lib/seo/serper";
 
 export const maxDuration = 600; // 10 minutes for full pipeline
 
-// Write blocks in parallel batches of 3 for ~3x speedup
-const WRITE_BATCH_SIZE = 3;
+// Sequential writing (1 block at a time). See write-all/route.ts for the full rationale —
+// stacked parallelism was a primary contributor to the 2026-05-09/10 Anthropic rate-limit cascade.
+const WRITE_BATCH_SIZE = 1;
 
 interface RouteContext {
   params: { articleId: string };
