@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { getServerClient } from '@/lib/supabase/client'
 import { analyzeSERP } from '@/lib/seo/serper'
 import { routeAI } from '@/lib/ai/router'
+import { pipelinePreflight } from '@/lib/ai/preflight'
 import { isAuthorityDomain } from '@/lib/seo/authority-domains'
 import type {
   RevampAuthorityLinkSuggestion,
@@ -21,6 +22,9 @@ export async function POST(
   _request: NextRequest,
   { params }: RouteContext
 ) {
+  const blocked = await pipelinePreflight()
+  if (blocked) return blocked
+
   const supabase = getServerClient()
   const { revampId } = params
 

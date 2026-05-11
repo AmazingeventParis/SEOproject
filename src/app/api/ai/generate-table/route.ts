@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { routeAI } from "@/lib/ai/router";
+import { pipelinePreflight } from "@/lib/ai/preflight";
 
 const schema = z.object({
   text: z.string().min(1, "Texte requis").max(5000),
@@ -34,6 +35,9 @@ const SYSTEM_PROMPT = `Tu es un expert en mise en forme de donnees. Ta mission :
 - N'ajoute PAS de classes supplementaires`;
 
 export async function POST(request: NextRequest) {
+  const blocked = await pipelinePreflight();
+  if (blocked) return blocked;
+
   let body: unknown;
   try {
     body = await request.json();

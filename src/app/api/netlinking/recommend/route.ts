@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getServerClient } from "@/lib/supabase/client";
 import { routeAI } from "@/lib/ai/router";
+import { pipelinePreflight } from "@/lib/ai/preflight";
 
 export const maxDuration = 60;
 
@@ -19,6 +20,9 @@ function extractJson(raw: string): string {
 
 // POST /api/netlinking/recommend — AI recommendation for which link to buy and what content to create
 export async function POST(request: NextRequest) {
+  const blocked = await pipelinePreflight();
+  if (blocked) return blocked;
+
   const supabase = getServerClient();
 
   let body: unknown;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerClient } from "@/lib/supabase/client";
 import { routeAI } from "@/lib/ai/router";
+import { pipelinePreflight } from "@/lib/ai/preflight";
 import { analyzeSERP } from "@/lib/seo/serper";
 import { isAuthorityDomain } from "@/lib/seo/authority-domains";
 import type { AuthorityLinkSuggestion } from "@/lib/supabase/types";
@@ -15,6 +16,9 @@ export async function POST(
   _request: NextRequest,
   { params }: RouteContext
 ) {
+  const blocked = await pipelinePreflight();
+  if (blocked) return blocked;
+
   const supabase = getServerClient();
 
   // Fetch article

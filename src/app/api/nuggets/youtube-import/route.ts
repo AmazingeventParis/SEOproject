@@ -3,6 +3,7 @@ import { z } from "zod";
 import { YoutubeTranscript } from "youtube-transcript";
 import { GoogleGenAI } from "@google/genai";
 import { routeAI } from "@/lib/ai/router";
+import { pipelinePreflight } from "@/lib/ai/preflight";
 import { getServerClient } from "@/lib/supabase/client";
 
 // Allow up to 180s for transcript fetch + AI extraction
@@ -303,6 +304,9 @@ function parseNuggetsFromAIResponse(content: string): { content: string; tags: s
 
 // POST /api/nuggets/youtube-import — Extract nuggets from a YouTube video
 export async function POST(request: NextRequest) {
+  const blocked = await pipelinePreflight();
+  if (blocked) return blocked;
+
   let body: unknown;
   try {
     body = await request.json();

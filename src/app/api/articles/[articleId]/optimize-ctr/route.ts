@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerClient } from "@/lib/supabase/client";
 import { routeAI } from "@/lib/ai/router";
+import { pipelinePreflight } from "@/lib/ai/preflight";
 
 export const maxDuration = 60;
 
@@ -14,6 +15,9 @@ export async function POST(
   _request: NextRequest,
   { params }: RouteContext
 ) {
+  const blocked = await pipelinePreflight();
+  if (blocked) return blocked;
+
   const supabase = getServerClient();
   const { articleId } = params;
 

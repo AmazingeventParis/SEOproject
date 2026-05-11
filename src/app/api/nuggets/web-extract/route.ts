@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { routeAI } from "@/lib/ai/router";
+import { pipelinePreflight } from "@/lib/ai/preflight";
 
 export const maxDuration = 120;
 
@@ -67,6 +68,9 @@ function extractJsonFromText(text: string): string {
 
 // POST /api/nuggets/web-extract — Extract nuggets from web page content
 export async function POST(request: NextRequest) {
+  const blocked = await pipelinePreflight();
+  if (blocked) return blocked;
+
   let body: unknown;
   try {
     body = await request.json();

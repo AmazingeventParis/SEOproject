@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getServerClient } from "@/lib/supabase/client";
 import { executeStep } from "@/lib/pipeline/orchestrator";
 import { modelIdToOverride } from "@/lib/ai/router";
+import { pipelinePreflight } from "@/lib/ai/preflight";
 import type { ContentBlock } from "@/lib/supabase/types";
 
 export const maxDuration = 120;
@@ -21,6 +22,9 @@ export async function POST(
   request: NextRequest,
   { params }: RouteContext
 ) {
+  const blocked = await pipelinePreflight();
+  if (blocked) return blocked;
+
   const { articleId } = params;
 
   let body: unknown;

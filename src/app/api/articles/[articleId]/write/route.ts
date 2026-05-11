@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { executeStep } from "@/lib/pipeline/orchestrator";
+import { pipelinePreflight } from "@/lib/ai/preflight";
 
 export const maxDuration = 120;
 
@@ -17,6 +18,9 @@ export async function POST(
   request: NextRequest,
   { params }: RouteContext
 ) {
+  const blocked = await pipelinePreflight();
+  if (blocked) return blocked;
+
   const { articleId } = params;
 
   let body: unknown;

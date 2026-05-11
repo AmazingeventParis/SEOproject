@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerClient } from '@/lib/supabase/client'
 import { routeAI } from '@/lib/ai/router'
+import { pipelinePreflight } from '@/lib/ai/preflight'
 
 interface RouteContext {
   params: { articleId: string }
 }
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
+  const blocked = await pipelinePreflight()
+  if (blocked) return blocked
+
   const supabase = getServerClient()
 
   const { data: article, error } = await supabase
